@@ -81,6 +81,7 @@ public class LocalPersist implements NeedCleanUp {
     private byte netWorkers;
     private short slotNumber;
     private SnowFlake[] snowFlakes;
+    private boolean binlogOn;
 
     // runtime worker binding, populated by initSlotRuntimeBindings(...) / initSlotTaskRunnables(...)
     private Eventloop[] slotWorkerEventloopArray;
@@ -147,7 +148,7 @@ public class LocalPersist implements NeedCleanUp {
         }
 
         var i = slot % netWorkers;
-        var oneSlot = new OneSlot(slot, slotNumber, snowFlakes[i], persistDir, persistConfig);
+        var oneSlot = new OneSlot(slot, slotNumber, snowFlakes[i], persistDir, binlogOn);
         oneSlot.initFds();
         if (isDebugMode) {
             oneSlot.debugMode();
@@ -323,6 +324,7 @@ public class LocalPersist implements NeedCleanUp {
         this.snowFlakes = snowFlakes;
 
         ConfVolumeDirsForSlot.initFromConfig(persistConfig, slotNumber);
+        binlogOn = persistConfig.get(ofBoolean(), "binlogOn", false);
         isHashSaveMemberTogether = persistConfig.get(ofBoolean(), "isHashSaveMemberTogether", true);
 
         this.oneSlots = new OneSlot[slotNumber];
@@ -759,6 +761,7 @@ public class LocalPersist implements NeedCleanUp {
         netWorkers = 0;
         slotNumber = 0;
         snowFlakes = null;
+        binlogOn = false;
         slotWorkerEventloopArray = null;
         requestHandlerArray = null;
         slotWorkerThreadIds = null;

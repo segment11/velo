@@ -148,6 +148,24 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
                    @NotNull SnowFlake snowFlake,
                    @NotNull File persistDir,
                    @NotNull Config persistConfig) throws IOException {
+        this(slot, slotNumber, snowFlake, persistDir, persistConfig.get(ofBoolean(), "binlogOn", false));
+    }
+
+    /**
+     * Production constructor for slots created after startup. ActiveJ's protected Config cannot be
+     * read at that point, so startup code passes the already-resolved settings.
+     *
+     * @param slot       the slot index
+     * @param slotNumber the total number of slots
+     * @param snowFlake  the snowflake ID generator
+     * @param persistDir the root persist directory
+     * @param binlogOn   whether binlog should be enabled for this slot
+     * @throws IOException if any component cannot be initialized
+     */
+    public OneSlot(short slot, short slotNumber,
+                   @NotNull SnowFlake snowFlake,
+                   @NotNull File persistDir,
+                   boolean binlogOn) throws IOException {
         this.chunkSegmentLength = ConfForSlot.global.confChunk.segmentLength;
 
         this.slot = slot;
@@ -184,7 +202,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             dynConfig.setMasterUuid(masterUuid);
         }
 
-        this.dynConfig.setBinlogOn(persistConfig.get(ofBoolean(), "binlogOn", false));
+        this.dynConfig.setBinlogOn(binlogOn);
         log.warn("Binlog on={}", this.dynConfig.isBinlogOn());
 
         this.walGroupNumber = Wal.calcWalGroupNumber();

@@ -750,8 +750,7 @@ public class XGroup extends BaseCommand {
                 HashMap<Short, HashMap<String, Wal.V>> groupedBySlot = new HashMap<>();
                 HashMap<Short, HashMap<String, Wal.V>> groupedShortValueBySlot = new HashMap<>();
                 firstWal.fromMasterExistsOneWalGroupBytes(contentBytes, ((isShortValue, key, v) -> {
-                    var keyHash = KeyHash.hash(Wal.keyBytes(key));
-                    var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                    var slotInner = targetSlotForReplKey(key);
                     if (isShortValue) {
                         groupedShortValueBySlot.computeIfAbsent(slotInner, k -> new HashMap<>()).put(key, v);
                     } else {
@@ -931,6 +930,16 @@ public class XGroup extends BaseCommand {
         }
     }
 
+    @VisibleForTesting
+    static short targetSlotForReplKey(@NotNull String key) {
+        if (ConfForGlobal.clusterEnabled) {
+            return BaseCommand.slot(Wal.keyBytes(key), ConfForGlobal.slotNumber).slot();
+        }
+
+        var keyHash = KeyHash.hash(Wal.keyBytes(key));
+        return BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+    }
+
     private Reply s_exists_chunk_segments(short slot, byte[] contentBytes) {
         // client received from server
         var buffer = ByteBuffer.wrap(contentBytes);
@@ -1008,8 +1017,7 @@ public class XGroup extends BaseCommand {
                             return;
                         }
 
-                        var keyHash = KeyHash.hash(Wal.keyBytes(key));
-                        var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                        var slotInner = targetSlotForReplKey(key);
                         putGroupedCvIfSeqBigger(groupedBySlot, slotInner, key, cv);
                     });
                 }
@@ -1019,8 +1027,7 @@ public class XGroup extends BaseCommand {
                         return;
                     }
 
-                    var keyHash = KeyHash.hash(Wal.keyBytes(key));
-                    var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                    var slotInner = targetSlotForReplKey(key);
                     putGroupedCvIfSeqBigger(groupedBySlot, slotInner, key, cv);
                 });
             }
@@ -1405,7 +1412,7 @@ public class XGroup extends BaseCommand {
 
         HashMap<Short, HashMap<String, CompressedValue>> groupedBySlot = new HashMap<>();
         KeyLoader.decodeShortStringListFromBuf(slice, (keyHash, expireAt, seq, key, valueBytes) -> {
-            var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+            var slotInner = targetSlotForReplKey(key);
             var cv = CompressedValue.decode(valueBytes, Wal.keyBytes(key), keyHash);
             putGroupedCvIfSeqBigger(groupedBySlot, slotInner, key, cv);
         });

@@ -1061,6 +1061,13 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             // delete my self node from cluster, reset as master
             resetMySelfAsMaster = true
         } else {
+            try {
+                ensureLocalShardSlotsInitialized(mySelfShard)
+            } catch (Exception e) {
+                log.error('Init local slots for setnodes failed', e)
+                return new ErrorReply('error when init local slots: ' + e.message)
+            }
+
             def mySelfNode = mySelfShard.mySelfNode()
             if (mySelfNode.master) {
                 resetMySelfAsMaster = true
@@ -1118,6 +1125,23 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         }
 
         OK
+    }
+
+    private void ensureLocalShardSlotsInitialized(Shard mySelfShard) throws IOException {
+        def ranges = mySelfShard.multiSlotRange.list
+        if (ranges.isEmpty()) {
+            return
+        }
+
+        int step = MultiShard.TO_CLIENT_SLOT_NUMBER.intdiv(ConfForGlobal.slotNumber)
+        ranges.each { SlotRange range ->
+            int firstBoundary = ((range.begin + step - 1).intdiv(step)) * step
+            for (int toClientSlot = firstBoundary; toClientSlot <= range.end; toClientSlot += step) {
+                short innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
+                localPersist.ensureOneSlotInitialized(innerSlot)
+            }
+        }
+        localPersist.initSlotsAgainAfterMultiShardLoadedOrChanged()
     }
 
     /**

@@ -17,6 +17,7 @@ import io.velo.reply.AsyncReply
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.NilReply
+import redis.clients.jedis.util.JedisClusterCRC16
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -54,6 +55,34 @@ class XGroupTest extends Specification {
 
         then:
         groupedBySlot[slot][key].seq == 12L
+    }
+
+    def 'test replication target slot uses redis cluster slot when cluster enabled'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+
+        expect:
+        XGroup.targetSlotForReplKey(findKeyForClientSlot(0)) == 0
+        XGroup.targetSlotForReplKey(findKeyForClientSlot(4096)) == 1
+        XGroup.targetSlotForReplKey(findKeyForClientSlot(8192)) == 2
+        XGroup.targetSlotForReplKey(findKeyForClientSlot(12288)) == 3
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        ConfForGlobal.slotNumber = savedSlotNumber
+    }
+
+    private static String findKeyForClientSlot(int clientSlot) {
+        for (int i = 0; i < 200000; i++) {
+            def key = "xgroup-repl-slot-${clientSlot}-${i}"
+            if (JedisClusterCRC16.getSlot(key) == clientSlot) {
+                return key
+            }
+        }
+        throw new IllegalStateException("No key found for client slot ${clientSlot}")
     }
 
     private ReplRequest mockReplRequest(ReplPair replPair, ReplType replType, ReplContent content) {

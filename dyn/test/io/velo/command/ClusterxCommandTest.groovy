@@ -1075,6 +1075,49 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setnodes initializes local assigned inner slots'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+
+        def leaderSelector = LeaderSelector.instance
+        def oldMocked = leaderSelector.masterAddressLocalMocked
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
+
+        def data4 = new byte[4][]
+        data4[1] = 'setnodes'.bytes
+        data4[2] = 'node-0 localhost 7380 master - 0-4095\nnode-1 localhost 7379 master - 4096-8191\n'.bytes
+        data4[3] = '11'.bytes
+        def cGroup = new CGroup('cluster', data4, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        expect:
+        !localPersist.isOneSlotInitialized((short) 1)
+
+        when:
+        def reply = clusterx.setnodes()
+
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        localPersist.isOneSlotInitialized((short) 1)
+
+        cleanup:
+        leaderSelector.masterAddressLocalMocked = oldMocked
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test setslot does not persist ownership when local slot init fails'() {
         given:
         def data1 = new byte[1][]
