@@ -128,4 +128,61 @@ class MultiShardTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test cluster version rejects stale updates'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.shards << new Shard(nodes: [new Node(master: true, host: 'localhost', port: 7380)])
+
+        when: 'advance the epoch to 5'
+        multiShard.updateClusterVersion(5)
+        then:
+        multiShard.clusterCurrentEpoch == 5
+
+        when: 'a stale (lower) version is ignored'
+        multiShard.updateClusterVersion(3)
+        then:
+        multiShard.clusterCurrentEpoch == 5
+
+        when: 'an equal version is accepted as an idempotent no-op (epoch unchanged)'
+        multiShard.updateClusterVersion(5)
+        then:
+        multiShard.clusterCurrentEpoch == 5
+
+        when: 'version 0 leaves the epoch unchanged but still bumps my epoch (persist)'
+        def myEpochBefore = multiShard.clusterMyEpoch
+        multiShard.updateClusterVersion(0)
+        then:
+        multiShard.clusterCurrentEpoch == 5
+        multiShard.clusterMyEpoch == myEpochBefore + 1
+
+        when: 'a newer version is applied'
+        multiShard.updateClusterVersion(6)
+        then:
+        multiShard.clusterCurrentEpoch == 6
+
+        when: 'refreshAllShards with a stale version is rejected and shards are unchanged'
+        def sizeBefore = multiShard.shards.size()
+        def other = [new Shard(nodes: [new Node(master: true, host: 'localhost', port: 9999)])] as ArrayList<Shard>
+        def refreshedStale = multiShard.refreshAllShards(other, 4)
+        then:
+        !refreshedStale
+        multiShard.clusterCurrentEpoch == 6
+        multiShard.shards.size() == sizeBefore
+
+        when: 'refreshAllShards with a newer version applies the new shard list'
+        def refreshedNew = multiShard.refreshAllShards(other, 7)
+        then:
+        refreshedNew
+        multiShard.clusterCurrentEpoch == 7
+        multiShard.shards.size() == 1
+        multiShard.shards[0].nodes[0].port == 9999
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
 }

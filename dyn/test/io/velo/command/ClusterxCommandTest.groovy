@@ -1350,6 +1350,107 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setslot ignores stale cluster version'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+
+        and:
+        def multiShard = localPersist.multiShard
+        def shards = multiShard.shards
+        def mySelfShard = shards[0]
+        mySelfShard.multiSlotRange.addSingle(0, 16383)
+        shards << new Shard()
+        shards[1].nodes << new Node(master: true, nodeIdFix: 'new_node_id', host: 'localhost', port: 7379)
+        multiShard.updateClusterVersion(10) // advance epoch to 10
+
+        and: 'the old source has repl pairs open that a real cutover would tear down'
+        def oldSlavePair = oneSlot.createReplPairAsSlave('localhost', 6380)
+        def oldMasterPair = oneSlot.createIfNotExistReplPairAsMaster(123L, 'localhost', 7399)
+
+        and: 'a stale setslot (version 5 < current epoch 10) targeting the other shard'
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = shards[1].nodes[0].nodeId().bytes
+        data6[5] = '5'.bytes
+        clusterx.data = data6
+
+        when:
+        def reply = clusterx.setslot()
+
+        then: 'the stale version is ignored synchronously, with no teardown and no ownership change'
+        reply == ClusterxCommand.OK
+        !oldSlavePair.sendBye
+        !oldMasterPair.sendBye
+        multiShard.clusterCurrentEpoch == 10
+        mySelfShard.multiSlotRange.contains(0)
+        !shards[1].multiSlotRange.contains(0)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test setnodes ignores stale cluster version'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+
+        def leaderSelector = LeaderSelector.instance
+        def oldMocked = leaderSelector.masterAddressLocalMocked
+        leaderSelector.masterAddressLocalMocked = 'localhost:7379'
+
+        def multiShard = localPersist.multiShard
+        multiShard.updateClusterVersion(20) // advance epoch to 20
+        def shardsSizeBefore = multiShard.shards.size()
+
+        def data4 = new byte[4][]
+        data4[1] = 'setnodes'.bytes
+        data4[2] = 'node-0 localhost 7380 master - 0-4095\nnode-1 localhost 7379 master - 4096-8191\n'.bytes
+        data4[3] = '11'.bytes // stale: 11 < current epoch 20
+        def cGroup = new CGroup('cluster', data4, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        when:
+        def reply = clusterx.setnodes()
+
+        then: 'the stale setnodes is ignored synchronously, topology and epoch unchanged'
+        reply == ClusterxCommand.OK
+        multiShard.clusterCurrentEpoch == 20
+        multiShard.shards.size() == shardsSizeBefore
+
+        cleanup:
+        leaderSelector.masterAddressLocalMocked = oldMocked
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test countkeysinslot returns 0 for uninitialized slot'() {
         given:
         def data3 = new byte[3][]

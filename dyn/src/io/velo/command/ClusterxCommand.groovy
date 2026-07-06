@@ -1050,6 +1050,13 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         def multiShard = localPersist.multiShard
 
+        // Reject a stale (strictly older) topology broadcast before any repl role change, so a
+        // reordered/delayed controller broadcast cannot roll this node's topology back.
+        if (clusterVersion < multiShard.clusterCurrentEpoch) {
+            log.warn 'clusterx setnodes ignore stale cluster version={}, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
+            return OK
+        }
+
         boolean resetMySelfAsMaster = false
         boolean resetMySelfAsSlave = false
 
@@ -1160,6 +1167,15 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         def multiShard = localPersist.multiShard
         def shards = multiShard.shards
+
+        // Reject a stale (strictly older) setslot before mutating slot ranges or repl pairs, so a
+        // reordered/delayed controller broadcast cannot roll this node's ownership back. A zero version
+        // means "leave the epoch unchanged" and is not treated as stale.
+        if (clusterVersion != 0 && clusterVersion < multiShard.clusterCurrentEpoch) {
+            log.warn 'clusterx setslot ignore stale cluster version={}, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
+            return OK
+        }
+
         def toShard = shards.find { ss ->
             ss.nodes.find { nn ->
                 nn.nodeId() == nodeId

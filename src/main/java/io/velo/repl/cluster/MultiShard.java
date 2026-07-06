@@ -170,26 +170,42 @@ vars currentEpoch 0 lastVoteEpoch 0
 
     /**
      * Replaces all shards with the provided list and updates the cluster version.
+     * The update is applied only if {@code clusterVersion} is not older than the current epoch; a strictly
+     * lower version is ignored so a reordered/delayed controller broadcast cannot roll topology back. An
+     * equal version is accepted (idempotent) so a duplicate or retried broadcast still applies cleanly.
      *
-     * @param shardsNew     the new list of shards
+     * @param shardsNew      the new list of shards
      * @param clusterVersion the new cluster version (current epoch)
+     * @return true if applied, false if ignored as stale
      * @throws IOException if saving metadata fails
      */
-    public synchronized void refreshAllShards(@NotNull ArrayList<Shard> shardsNew, int clusterVersion) throws IOException {
+    public synchronized boolean refreshAllShards(@NotNull ArrayList<Shard> shardsNew, int clusterVersion) throws IOException {
+        if (clusterVersion < clusterCurrentEpoch) {
+            log.warn("Repl clusterx ignore stale setnodes cluster version={}, current epoch={}", clusterVersion, clusterCurrentEpoch);
+            return false;
+        }
+
         shards.clear();
         shards.addAll(shardsNew);
         clusterCurrentEpoch = clusterVersion;
         saveMeta();
+        return true;
     }
 
     /**
-     * Updates the cluster version and persists metadata.
+     * Updates the cluster version and persists metadata. A non-zero version is applied only if it is not
+     * older than the current epoch; a strictly lower non-zero version is ignored. A zero version leaves
+     * the epoch unchanged (but still persists, bumping {@code clusterMyEpoch}).
      *
      * @param clusterVersion the new cluster version, or 0 to leave it unchanged
      * @throws IOException if saving metadata fails
      */
     public synchronized void updateClusterVersion(int clusterVersion) throws IOException {
         if (clusterVersion != 0) {
+            if (clusterVersion < clusterCurrentEpoch) {
+                log.warn("Repl clusterx ignore stale setslot cluster version={}, current epoch={}", clusterVersion, clusterCurrentEpoch);
+                return;
+            }
             clusterCurrentEpoch = clusterVersion;
         }
 

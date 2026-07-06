@@ -81,6 +81,21 @@ public synchronized void updateClusterVersion(int clusterVersion) throws IOExcep
 }
 ```
 
+**Status update (fixed 2026-07-06):** receiver-side guard added. `refreshAllShards`
+and `updateClusterVersion` now reject a **strictly lower** non-zero version
+(`clusterVersion < clusterCurrentEpoch`); equal and higher are accepted. The
+command layer (`ClusterxCommand.setnodes` / `setslot`) rejects the stale version
+**before** any repl-role change or slot-range mutation, so a stale broadcast has no
+side effects. Equal is accepted deliberately: the controller broadcasts one version
+to N nodes and may retry, so duplicate/retried deliveries must remain idempotent
+(and `test nodes` legitimately re-applies distinct topologies at the same version).
+Tests: `MultiShardTest 'test cluster version rejects stale updates'`,
+`ClusterxCommandTest 'test setslot ignores stale cluster version'` /
+`'test setnodes ignores stale cluster version'`. **59a (controller sending the
+version) is still open** — until it lands, the controller's real broadcast still
+omits the version (FORMAT error), so this guard is currently exercised only by the
+harness/tests, not the live controller.
+
 **Root cause:** neither method compares the incoming `clusterVersion` against the
 stored `clusterCurrentEpoch`. Any version — lower, equal, or higher — is accepted
 and overwrites the epoch.
