@@ -75,6 +75,64 @@ class XGroupTest extends Specification {
         ConfForGlobal.slotNumber = savedSlotNumber
     }
 
+    def 'test exists big string replay uses redis cluster slot when cluster enabled'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+
+        and:
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def replPairAsMaster = ctx.replPairAsMaster
+        def masterUuid = ctx.masterUuid
+        def x = ctx.x
+
+        and:
+        localPersist.ensureOneSlotInitialized((short) 1)
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        oneSlot.onlyOneReplPairAsSlave.setRemoteReplProperties(ConfForSlot.global.generateReplProperties())
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+
+        and:
+        def key = findKeyForClientSlot(4096)
+        def sKey = BaseCommand.slot(key.bytes, ConfForGlobal.slotNumber)
+        def uuid = 11L
+        def bigStringBytes = 'cluster-big-string'.bytes
+        def keyBytes = key.bytes
+        def contentBytes = new byte[4 + 4 + 1 + 8 + 8 + 4 + keyBytes.length + 4 + bigStringBytes.length]
+        def requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(1)
+        requestBuffer.put((byte) 1)
+        requestBuffer.putLong(uuid)
+        requestBuffer.putLong(sKey.keyHash())
+        requestBuffer.putInt(keyBytes.length)
+        requestBuffer.put(keyBytes)
+        requestBuffer.putInt(bigStringBytes.length)
+        requestBuffer.put(bigStringBytes)
+        def replRequest = new ReplRequest(replPairAsMaster.slaveUuid, slot, ReplType.s_exists_big_string,
+                contentBytes, contentBytes.length)
+
+        when:
+        ReplReply r = x.handleRepl(replRequest) as ReplReply
+
+        then:
+        r.isReplType(ReplType.exists_big_string)
+        localPersist.oneSlot((short) 1).bigStringFiles.getBigStringBytes(uuid, sKey.bucketIndex(), sKey.keyHash()) == bigStringBytes
+        oneSlot.bigStringFiles.getBigStringBytes(uuid, sKey.bucketIndex(), sKey.keyHash()) == null
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     private static String findKeyForClientSlot(int clientSlot) {
         for (int i = 0; i < 200000; i++) {
             def key = "xgroup-repl-slot-${clientSlot}-${i}"

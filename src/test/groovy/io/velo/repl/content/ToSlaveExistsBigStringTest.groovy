@@ -36,7 +36,7 @@ class ToSlaveExistsBigStringTest extends Specification {
         when:
         idListInMaster << new BigStringFiles.IdWithKey(1L, 0, 1L, "")
         idListInMaster << new BigStringFiles.IdWithKey(2L, 0, 2L, "")
-        idListInMaster << new BigStringFiles.IdWithKey(3L, 0, 3L, "")
+        idListInMaster << new BigStringFiles.IdWithKey(3L, 0, 3L, "k3")
         idListInMaster << new BigStringFiles.IdWithKey(4L, 0, 4L, "")
         sentIdList << new BigStringFiles.IdWithKey(1L, 0, 1L, "")
         sentIdList << new BigStringFiles.IdWithKey(2L, 0, 2L, "")
@@ -51,7 +51,7 @@ class ToSlaveExistsBigStringTest extends Specification {
         new File(subDir, '3_3').text = '3' * 30
         content = new ToSlaveExistsBigString(0, bigStringDir, idListInMaster, sentIdList)
         then:
-        content.encodeLength() == 9 + (8 + 8 + 4) * 1 + 30
+        content.encodeLength() == 9 + 8 + 8 + 4 + 2 + 4 + 30
 
         when:
         bytes = new byte[content.encodeLength()]
@@ -65,6 +65,8 @@ class ToSlaveExistsBigStringTest extends Specification {
         buffer.get() == (byte) 1
         buffer.getLong() == 3L
         buffer.getLong() == 3L
+        buffer.getInt() == 2
+        new String([buffer.get(), buffer.get()] as byte[]) == 'k3'
         buffer.getInt() == 30
 
         when:
@@ -107,6 +109,7 @@ class ToSlaveExistsBigStringTest extends Specification {
         buffer.get() == (byte) 1
         buffer.getLong() == total
         buffer.getLong() == total
+        buffer.getInt() == 0
         buffer.getInt() == 11
 
         when:

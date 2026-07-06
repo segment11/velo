@@ -1,13 +1,12 @@
-package io.velo.repl.cluster.tmp
+package io.velo.repl.cluster
 
-import io.velo.repl.cluster.ClusterxBase
 import spock.lang.IgnoreIf
 
 /**
  * Opt-in process-level cluster regression tests.
  *
  * Run only when explicitly requested:
- *   VELO_CLUSTER_MANUAL=true ./gradlew :test --tests "io.velo.repl.cluster.tmp.ClusterMigrationFailoverManualTest" --rerun-tasks
+ *   VELO_CLUSTER_MANUAL=true ./gradlew :test --tests "io.velo.repl.cluster.ClusterMigrationFailoverManualTest" --rerun-tasks
  */
 @IgnoreIf({ System.getenv('VELO_CLUSTER_MANUAL') != 'true' && System.getProperty('velo.cluster.manual') != 'true' })
 class ClusterMigrationFailoverManualTest extends ClusterxBase {

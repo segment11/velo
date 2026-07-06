@@ -7,6 +7,7 @@ import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.HostAndPort
+import io.velo.persist.LocalPersist
 import io.velo.persist.Wal
 import io.velo.repl.LeaderSelector
 import io.velo.repl.ReplPair
@@ -1133,13 +1134,8 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             return
         }
 
-        int step = MultiShard.TO_CLIENT_SLOT_NUMBER.intdiv(ConfForGlobal.slotNumber)
-        ranges.each { SlotRange range ->
-            int firstBoundary = ((range.begin + step - 1).intdiv(step)) * step
-            for (int toClientSlot = firstBoundary; toClientSlot <= range.end; toClientSlot += step) {
-                short innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
-                localPersist.ensureOneSlotInitialized(innerSlot)
-            }
+        LocalPersist.innerSlotsForClientSlotRanges(ranges).each { short innerSlot ->
+            localPersist.ensureOneSlotInitialized(innerSlot)
         }
         localPersist.initSlotsAgainAfterMultiShardLoadedOrChanged()
     }

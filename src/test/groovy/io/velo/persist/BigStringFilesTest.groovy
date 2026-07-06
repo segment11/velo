@@ -401,6 +401,10 @@ class BigStringFilesTest extends Specification {
 
         and: 'one valid big-string file'
         bigStringFiles.writeBigStringBytes(1234L, 0, 5678L, 'valid'.bytes)
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(1234L, CompressedValue.NULL_DICT_SEQ)
+        bigStringFiles.updateUuidFromEncoded('valid-key', cv.encode())
 
         and: 'stray files that would previously throw NumberFormatException / ArrayIndexOutOfBoundsException'
         def strayNoUnderscore = new File(bucketDir, 'not_a_uuid_at_all')
@@ -420,6 +424,7 @@ class BigStringFilesTest extends Specification {
         list[0].uuid() == 1234L
         list[0].bucketIndex() == 0
         list[0].keyHash() == 5678L
+        list[0].key() == 'valid-key'
 
         when: 'getBigStringFileIdList is called on a non-existent bucket directory'
         def emptyList = bigStringFiles.getBigStringFileIdList(99999)

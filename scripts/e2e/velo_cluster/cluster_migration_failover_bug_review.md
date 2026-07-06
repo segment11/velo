@@ -11,7 +11,7 @@ Relevant local helpers:
 
 - `scripts/e2e/velo_cluster/e2e_velo_cluster.sh`
 - `scripts/e2e/velo_cluster/velo_cluster_e2e.py`
-- `src/test/groovy/io/velo/repl/cluster/tmp/ClusterMigrationFailoverManualTest.groovy`
+- `src/test/groovy/io/velo/repl/cluster/ClusterMigrationFailoverManualTest.groovy`
 
 ## Baseline: Cluster Creation Works
 
@@ -80,7 +80,7 @@ The opt-in Groovy probe reproduces the same symptom without redis-py:
 
 ```bash
 VELO_CLUSTER_MANUAL=true ./gradlew :test \
-  --tests "io.velo.repl.cluster.tmp.ClusterMigrationFailoverManualTest" \
+  --tests "io.velo.repl.cluster.ClusterMigrationFailoverManualTest" \
   --rerun-tasks
 ```
 
@@ -165,7 +165,7 @@ Same command as above:
 
 ```bash
 VELO_CLUSTER_MANUAL=true ./gradlew :test \
-  --tests "io.velo.repl.cluster.tmp.ClusterMigrationFailoverManualTest" \
+  --tests "io.velo.repl.cluster.ClusterMigrationFailoverManualTest" \
   --rerun-tasks
 ```
 
@@ -289,7 +289,7 @@ Build and run:
 KEEP_DATA=true scripts/e2e/velo_cluster/e2e_velo_cluster.sh
 KEEP_DATA=true RUN_MIGRATION=false scripts/e2e/velo_cluster/e2e_velo_cluster.sh
 VELO_CLUSTER_MANUAL=true ./gradlew :test \
-  --tests "io.velo.repl.cluster.tmp.ClusterMigrationFailoverManualTest" \
+  --tests "io.velo.repl.cluster.ClusterMigrationFailoverManualTest" \
   --rerun-tasks
 ```
 
@@ -418,7 +418,7 @@ Replay:
 ```bash
 ./gradlew jar
 VELO_CLUSTER_MANUAL=true ./gradlew :test \
-  --tests "io.velo.repl.cluster.tmp.ClusterMigrationFailoverManualTest" \
+  --tests "io.velo.repl.cluster.ClusterMigrationFailoverManualTest" \
   --rerun-tasks
 ```
 
@@ -474,10 +474,98 @@ Verified run:
 
 ```text
 ./gradlew jar
-VELO_CLUSTER_MANUAL=true ./gradlew :test --tests "io.velo.repl.cluster.tmp.ClusterMigrationFailoverManualTest" --rerun-tasks
+VELO_CLUSTER_MANUAL=true ./gradlew :test --tests "io.velo.repl.cluster.ClusterMigrationFailoverManualTest" --rerun-tasks
 BUILD SUCCESSFUL
 
 KEEP_DATA=true scripts/e2e/velo_cluster/e2e_velo_cluster.sh
 E2E workspace: /tmp/velo-cluster-e2e.Fu4qhG
+All Velo cluster e2e checks passed
+```
+
+## Review Follow-up: 2026-07-06
+
+### Big-String Full-Sync Replay
+
+Review finding:
+
+```text
+s_exists_big_string still routed target slots from keyHash, so cluster mode could write big-string bytes
+to a different inner slot than the key's Redis cluster slot.
+```
+
+Fix:
+
+- `ToSlaveExistsBigString` now includes `keyLength + keyBytes` in each full-sync big-string entry.
+- `BigStringFiles.getBigStringFileIdList()` preserves the owning key from the UUID map when building the master-side
+  full-sync id list.
+- `XGroup.s_exists_big_string()` uses the decoded key with `targetSlotForReplKey(...)`; old entries without a key
+  still fall back to the previous key-hash slot calculation.
+- The decoder validates the decoded key hash before accepting the new format, so old-format payloads whose byte length
+  looks like a key length still decode correctly.
+
+Focused replay:
+
+```bash
+./gradlew :test \
+  --tests "io.velo.command.XGroupTest.test exists big string replay uses redis cluster slot when cluster enabled" \
+  --tests "io.velo.command.XGroupTest.test as slave handle s exists big string" \
+  --tests "io.velo.persist.BigStringFilesTest.test getBigStringFileIdList skips unparseable stray files without throwing" \
+  --tests "io.velo.repl.content.ToSlaveExistsBigStringTest" \
+  --rerun-tasks
+```
+
+Coverage:
+
+```text
+XGroup 1279-1310: new key-aware parse path, old-format fallback, and slot selection covered.
+BigStringFiles 311-337: id list key preservation covered.
+```
+
+### Slot-Range Boundary Math
+
+Review finding:
+
+```text
+ClusterxCommand.ensureLocalShardSlotsInitialized duplicated the same client-slot boundary iteration as LocalPersist.
+```
+
+Fix:
+
+`LocalPersist.innerSlotsForClientSlotRanges(...)` now owns the boundary iteration, and `ClusterxCommand` calls that
+helper before initializing local slots.
+
+### Manual Test Package Hygiene
+
+Review finding:
+
+```text
+ClusterMigrationFailoverManualTest lived under io.velo.repl.cluster.tmp.
+```
+
+Fix:
+
+The opt-in test moved to `io.velo.repl.cluster.ClusterMigrationFailoverManualTest`; it remains guarded by
+`VELO_CLUSTER_MANUAL=true` / `-Dvelo.cluster.manual=true`.
+
+### Verified After Follow-up
+
+```text
+./gradlew :test \
+  --tests "io.velo.command.XGroupTest" \
+  --tests "io.velo.persist.BigStringFilesTest" \
+  --tests "io.velo.repl.content.ToSlaveExistsBigStringTest" \
+  --tests "io.velo.command.ClusterxCommandTest" \
+  --tests "io.velo.repl.cluster.ClusterMigrationFailoverManualTest" \
+  --rerun-tasks
+BUILD SUCCESSFUL
+
+./gradlew jar
+BUILD SUCCESSFUL
+
+VELO_CLUSTER_MANUAL=true ./gradlew :test --tests "io.velo.repl.cluster.ClusterMigrationFailoverManualTest" --rerun-tasks
+BUILD SUCCESSFUL
+
+KEEP_DATA=true scripts/e2e/velo_cluster/e2e_velo_cluster.sh
+E2E workspace: /tmp/velo-cluster-e2e.7kZ5aI
 All Velo cluster e2e checks passed
 ```

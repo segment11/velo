@@ -31,6 +31,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1277,13 +1278,33 @@ public class XGroup extends BaseCommand {
 
                 var uuid = buffer.getLong();
                 var keyHash = buffer.getLong();
-                var bigStringBytesLength = buffer.getInt();
+                var entryPayloadPosition = buffer.position();
+                var keyLengthOrBigStringBytesLength = buffer.getInt();
+                String key = null;
+                int bigStringBytesLength;
+                if (keyLengthOrBigStringBytesLength >= 0
+                        && keyLengthOrBigStringBytesLength <= buffer.remaining() - 4) {
+                    var keyBytes = new byte[keyLengthOrBigStringBytesLength];
+                    buffer.get(keyBytes);
+                    bigStringBytesLength = buffer.getInt();
+                    if (bigStringBytesLength < 0 || bigStringBytesLength > buffer.remaining()
+                            || (keyLengthOrBigStringBytesLength > 0 && KeyHash.hash(keyBytes) != keyHash)) {
+                        buffer.position(entryPayloadPosition);
+                        bigStringBytesLength = buffer.getInt();
+                    } else if (keyLengthOrBigStringBytesLength > 0) {
+                        key = new String(keyBytes, StandardCharsets.UTF_8);
+                    }
+                } else {
+                    bigStringBytesLength = keyLengthOrBigStringBytesLength;
+                }
                 if (bigStringBytesLength < 0 || bigStringBytesLength > buffer.remaining()) {
                     throw new IllegalArgumentException("Repl slave handle error: big string payload length invalid=" + bigStringBytesLength + ", slot=" + slot);
                 }
                 var offset = buffer.position();
 
-                var slotInner = BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber);
+                var slotInner = key == null
+                        ? BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber)
+                        : targetSlotForReplKey(key);
                 var bucketIndexInner = KeyHash.bucketIndex(keyHash);
                 entries.add(new BigStringEntry(uuid, slotInner, bucketIndexInner, keyHash, offset, bigStringBytesLength));
                 buffer.position(offset + bigStringBytesLength);

@@ -9,6 +9,7 @@ import io.activej.promise.SettablePromise;
 import io.velo.*;
 import io.velo.persist.index.IndexHandlerPool;
 import io.velo.repl.cluster.MultiShard;
+import io.velo.repl.cluster.SlotRange;
 import io.velo.reply.AsyncReply;
 import io.velo.reply.Reply;
 import io.velo.task.TaskRunnable;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -365,8 +367,13 @@ public class LocalPersist implements NeedCleanUp {
             return slots;
         }
 
+        return innerSlotsForClientSlotRanges(mySelfShard.getMultiSlotRange().getList());
+    }
+
+    public static @NotNull TreeSet<Short> innerSlotsForClientSlotRanges(@NotNull List<SlotRange> ranges) {
+        var slots = new TreeSet<Short>();
         var step = MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber;
-        for (var range : mySelfShard.getMultiSlotRange().getList()) {
+        for (var range : ranges) {
             var firstBoundary = ((range.getBegin() + step - 1) / step) * step;
             for (int toClientSlot = firstBoundary; toClientSlot <= range.getEnd(); toClientSlot += step) {
                 slots.add(MultiShard.asInnerSlotByToClientSlot(toClientSlot));

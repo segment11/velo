@@ -9,6 +9,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,7 +30,7 @@ public class ToSlaveExistsBigString implements ReplContent {
     @VisibleForTesting
     static final int ONCE_SEND_BIG_STRING_COUNT = 10;
 
-    private static final int ENTRY_HEADER_LENGTH = 8 + 8 + 4;
+    private static final int ENTRY_HEADER_LENGTH = 8 + 8 + 4 + 4;
 
     /**
      * Constructs a new {@link ToSlaveExistsBigString} message.
@@ -69,7 +70,8 @@ public class ToSlaveExistsBigString implements ReplContent {
             }
 
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
-            var oneEntryEncodedLength = ENTRY_HEADER_LENGTH + (int) file.length();
+            var keyBytes = id.key().getBytes(StandardCharsets.UTF_8);
+            var oneEntryEncodedLength = ENTRY_HEADER_LENGTH + keyBytes.length + (int) file.length();
             if (encodeLength + oneEntryEncodedLength > Repl.MAX_CONTENT_LENGTH) {
                 if (toSendIdList.isEmpty()) {
                     throw new IllegalStateException("Repl big string content length exceeds max length=" + Repl.MAX_CONTENT_LENGTH
@@ -104,6 +106,8 @@ public class ToSlaveExistsBigString implements ReplContent {
      * - For each big string to send:
      * - 8 bytes: the UUID of the big string.
      * - 8 bytes: the key hash of the big string.
+     * - 4 bytes: the length of the key in bytes.
+     * - Following bytes: the key.
      * - 4 bytes: the length of the big string in bytes.
      * - Following bytes: the big string data.
      * <p>
@@ -129,6 +133,9 @@ public class ToSlaveExistsBigString implements ReplContent {
 
             toBuf.writeLong(id.uuid());
             toBuf.writeLong(id.keyHash());
+            var keyBytes = id.key().getBytes(StandardCharsets.UTF_8);
+            toBuf.writeInt(keyBytes.length);
+            toBuf.write(keyBytes);
             var bigStringBytesLength = (int) file.length();
             toBuf.writeInt(bigStringBytesLength);
 
@@ -149,6 +156,8 @@ public class ToSlaveExistsBigString implements ReplContent {
      * - For each big string to send:
      * - 8 bytes for the UUID.
      * - 8 bytes for the key hash
+     * - 4 bytes for the length of the key.
+     * - The length of the key.
      * - 4 bytes for the length of the big string.
      * - The length of the big string data.
      *
@@ -163,8 +172,9 @@ public class ToSlaveExistsBigString implements ReplContent {
         var length = HEADER_LENGTH;
         for (var id : toSendIdList) {
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
+            var keyBytes = id.key().getBytes(StandardCharsets.UTF_8);
             var bigStringBytesLength = (int) file.length();
-            length += ENTRY_HEADER_LENGTH + bigStringBytesLength;
+            length += ENTRY_HEADER_LENGTH + keyBytes.length + bigStringBytesLength;
         }
         return length;
     }

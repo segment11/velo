@@ -325,12 +325,21 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             try {
                 var uuid = Long.parseLong(arr[0]);
                 var keyHash = Long.parseLong(arr[1]);
-                list.add(new IdWithKey(uuid, bucketIndex, keyHash, ""));
+                list.add(new IdWithKey(uuid, bucketIndex, keyHash, keyByUuid(uuid)));
             } catch (NumberFormatException e) {
                 log.warn("Skip unparseable big string file, name={}, slot={}", file.getName(), slot);
             }
         }
         return list;
+    }
+
+    private String keyByUuid(long uuid) {
+        for (var entry : bigStringUuidByKey.entrySet()) {
+            if (entry.getValue() == uuid) {
+                return entry.getKey();
+            }
+        }
+        return "";
     }
 
     /**
