@@ -31,7 +31,6 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1211,6 +1210,16 @@ public class XGroup extends BaseCommand {
         var oneSlot = localPersist.oneSlot(slot);
         var bigStringFiles = oneSlot.getBigStringFiles();
         var idListInMaster = bigStringFiles.getBigStringFileIdList(bucketIndex);
+        // The slave needs the real key to route the big string to its target slot, so never send an
+        // unrecoverable (empty) key; skip such entries so the wire always carries keyLength > 0.
+        idListInMaster.removeIf(id -> {
+            if (id.key().isEmpty()) {
+                log.warn("Repl master skip big string with unrecoverable key, uuid={}, bucket index={}, slot={}",
+                        id.uuid(), bucketIndex, slot);
+                return true;
+            }
+            return false;
+        });
         if (idListInMaster.isEmpty() && bucketIndex == bucketsPerSlot - 1) {
             return Repl.reply(slot, replPair, s_exists_big_string, NextStepContent.INSTANCE);
         }
@@ -1278,40 +1287,20 @@ public class XGroup extends BaseCommand {
 
                 var uuid = buffer.getLong();
                 var keyHash = buffer.getLong();
-                var entryPayloadPosition = buffer.position();
-                // The first int is either the new-format key length or the old-format big string length.
-                // Disambiguation relies on two invariants:
-                // 1. A stored big string file is never empty, so an old-format big string length is never 0
-                //    and never small; a leading 0 therefore unambiguously means a new-format empty key
-                //    (the master could not recover the key, so the slave falls back to the key-hash slot).
-                // 2. For a non-empty new-format key we additionally require KeyHash.hash(key) == keyHash, so an
-                //    old-format length that happens to look like a valid key length is rejected and reverted.
-                var keyLengthOrBigStringBytesLength = buffer.getInt();
-                String key = null;
-                int bigStringBytesLength;
-                if (keyLengthOrBigStringBytesLength >= 0
-                        && keyLengthOrBigStringBytesLength <= buffer.remaining() - 4) {
-                    var keyBytes = new byte[keyLengthOrBigStringBytesLength];
-                    buffer.get(keyBytes);
-                    bigStringBytesLength = buffer.getInt();
-                    if (bigStringBytesLength < 0 || bigStringBytesLength > buffer.remaining()
-                            || (keyLengthOrBigStringBytesLength > 0 && KeyHash.hash(keyBytes) != keyHash)) {
-                        buffer.position(entryPayloadPosition);
-                        bigStringBytesLength = buffer.getInt();
-                    } else if (keyLengthOrBigStringBytesLength > 0) {
-                        key = new String(keyBytes, StandardCharsets.UTF_8);
-                    }
-                } else {
-                    bigStringBytesLength = keyLengthOrBigStringBytesLength;
+                var keyLength = buffer.getInt();
+                if (keyLength <= 0 || keyLength > buffer.remaining() - 4) {
+                    throw new IllegalArgumentException("Repl slave handle error: big string key length invalid=" + keyLength + ", slot=" + slot);
                 }
+                var keyBytes = new byte[keyLength];
+                buffer.get(keyBytes);
+                var bigStringBytesLength = buffer.getInt();
                 if (bigStringBytesLength < 0 || bigStringBytesLength > buffer.remaining()) {
                     throw new IllegalArgumentException("Repl slave handle error: big string payload length invalid=" + bigStringBytesLength + ", slot=" + slot);
                 }
                 var offset = buffer.position();
 
-                var slotInner = key == null
-                        ? BaseCommand.calcSlotByKeyHash(keyHash, ConfForGlobal.slotNumber)
-                        : targetSlotForReplKey(key);
+                // The master always sends the real key (keyLength > 0), so route by the key's target slot.
+                var slotInner = targetSlotForReplKey(Wal.keyString(keyBytes));
                 var bucketIndexInner = KeyHash.bucketIndex(keyHash);
                 entries.add(new BigStringEntry(uuid, slotInner, bucketIndexInner, keyHash, offset, bigStringBytesLength));
                 buffer.position(offset + bigStringBytesLength);

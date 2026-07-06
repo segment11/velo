@@ -836,6 +836,13 @@ class XGroupTest extends Specification {
         def bigStringKey = 'big-string'
         def sBigString = BaseCommand.slot(bigStringKey, ConfForGlobal.slotNumber)
         oneSlot.bigStringFiles.writeBigStringBytes(bigStringUuid, sBigString.bucketIndex(), sBigString.keyHash(), new byte[1024])
+        // register the key so the master can send it (keyLength > 0 on the wire)
+        def cvBig = new CompressedValue()
+        cvBig.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBig.setCompressedDataAsBigString(bigStringUuid, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.bigStringFiles.updateUuidFromEncoded(bigStringKey, cvBig.encode())
+        // an orphan big string in the same bucket with no recoverable key; the master must skip it
+        oneSlot.bigStringFiles.writeBigStringBytes(2L, sBigString.bucketIndex(), 999L, new byte[8])
 
         when:
         def contentBytes = new byte[4 + 8 * 2]
@@ -1612,7 +1619,9 @@ class XGroupTest extends Specification {
         r.isReplType(ReplType.exists_short_string)
 
         when:
-        contentBytes = new byte[4 + 4 + 1 + (8 + 8 + 4 + 1024) * 2]
+        def bigKey1Bytes = 'big-string-key-a'.bytes
+        def bigKey2Bytes = 'big-string-key-b'.bytes
+        contentBytes = new byte[4 + 4 + 1 + (8 + 8 + 4 + bigKey1Bytes.length + 4 + 1024) + (8 + 8 + 4 + bigKey2Bytes.length + 4 + 1024)]
         replRequest.data = contentBytes
         requestBuffer = ByteBuffer.wrap(contentBytes)
         requestBuffer.putInt(0)
@@ -1620,10 +1629,14 @@ class XGroupTest extends Specification {
         requestBuffer.put((byte) 1)
         requestBuffer.putLong(1L)
         requestBuffer.putLong(1L)
+        requestBuffer.putInt(bigKey1Bytes.length)
+        requestBuffer.put(bigKey1Bytes)
         requestBuffer.putInt(1024)
         requestBuffer.position(requestBuffer.position() + 1024)
         requestBuffer.putLong(2L)
         requestBuffer.putLong(2L)
+        requestBuffer.putInt(bigKey2Bytes.length)
+        requestBuffer.put(bigKey2Bytes)
         requestBuffer.putInt(1024)
         r = x.handleRepl(replRequest) as ReplReply
         then:
@@ -1699,6 +1712,22 @@ class XGroupTest extends Specification {
         requestBuffer.putLong(2L)
         requestBuffer.putInt(2)
         requestBuffer.put((byte) 1)
+        r = x.handleRepl(replRequest) as ReplReply
+        then:
+        r.isReplType(ReplType.error)
+
+        when:
+        // key length must be > 0; an empty key is rejected
+        contentBytes = new byte[4 + 4 + 1 + 8 + 8 + 4 + 4]
+        replRequest.data = contentBytes
+        requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(1)
+        requestBuffer.put((byte) 1)
+        requestBuffer.putLong(1L)
+        requestBuffer.putLong(2L)
+        requestBuffer.putInt(0)
+        requestBuffer.putInt(0)
         r = x.handleRepl(replRequest) as ReplReply
         then:
         r.isReplType(ReplType.error)
@@ -3716,12 +3745,15 @@ class XGroupTest extends Specification {
         def bigStringBytes = new byte[16]
         ByteBuffer.wrap(bigStringBytes).putLong(0xCAFEBABEL).putLong(0xDEADBEEFL)
 
-        def contentBytes = ByteBuffer.allocate(4 + 4 + 1 + 8 + 8 + 4 + bigStringBytes.length)
+        def bigStringKeyBytes = bigStringKeySlot.rawKey().bytes
+        def contentBytes = ByteBuffer.allocate(4 + 4 + 1 + 8 + 8 + 4 + bigStringKeyBytes.length + 4 + bigStringBytes.length)
                 .putInt(bigStringKeySlot.bucketIndex())
                 .putInt(1)
                 .put((byte) 1)
                 .putLong(bigStringUuid)
                 .putLong(bigStringKeySlot.keyHash())
+                .putInt(bigStringKeyBytes.length)
+                .put(bigStringKeyBytes)
                 .putInt(bigStringBytes.length)
                 .put(bigStringBytes)
                 .array()
@@ -3777,12 +3809,15 @@ class XGroupTest extends Specification {
         def sSet = x.findKeyMustInSlot(slot, 'exists_big_string_uuids_bucket_index_' + bigStringSlot.bucketIndex())
 
         when:
-        def contentBytes = ByteBuffer.allocate(4 + 4 + 1 + 8 + 8 + 4 + bigStringBytes.length + 1)
+        def bigStringKeyBytes = bigStringSlot.rawKey().bytes
+        def contentBytes = ByteBuffer.allocate(4 + 4 + 1 + 8 + 8 + 4 + bigStringKeyBytes.length + 4 + bigStringBytes.length + 1)
                 .putInt(bigStringSlot.bucketIndex())
                 .putInt(1)
                 .put((byte) 1)
                 .putLong(bigStringUuid)
                 .putLong(bigStringSlot.keyHash())
+                .putInt(bigStringKeyBytes.length)
+                .put(bigStringKeyBytes)
                 .putInt(bigStringBytes.length)
                 .put(bigStringBytes)
                 .put((byte) 7)

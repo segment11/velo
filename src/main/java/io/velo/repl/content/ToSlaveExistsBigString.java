@@ -2,6 +2,7 @@ package io.velo.repl.content;
 
 import io.activej.bytebuf.ByteBuf;
 import io.velo.persist.BigStringFiles;
+import io.velo.persist.Wal;
 import io.velo.repl.Repl;
 import io.velo.repl.ReplContent;
 import org.apache.commons.io.FileUtils;
@@ -9,7 +10,6 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -70,7 +70,7 @@ public class ToSlaveExistsBigString implements ReplContent {
             }
 
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
-            var keyBytes = id.key().getBytes(StandardCharsets.UTF_8);
+            var keyBytes = Wal.keyBytes(id.key());
             var oneEntryEncodedLength = ENTRY_HEADER_LENGTH + keyBytes.length + (int) file.length();
             if (encodeLength + oneEntryEncodedLength > Repl.MAX_CONTENT_LENGTH) {
                 if (toSendIdList.isEmpty()) {
@@ -133,7 +133,7 @@ public class ToSlaveExistsBigString implements ReplContent {
 
             toBuf.writeLong(id.uuid());
             toBuf.writeLong(id.keyHash());
-            var keyBytes = id.key().getBytes(StandardCharsets.UTF_8);
+            var keyBytes = Wal.keyBytes(id.key());
             toBuf.writeInt(keyBytes.length);
             toBuf.write(keyBytes);
             var bigStringBytesLength = (int) file.length();
@@ -172,7 +172,7 @@ public class ToSlaveExistsBigString implements ReplContent {
         var length = HEADER_LENGTH;
         for (var id : toSendIdList) {
             var file = new File(bigStringDir, bucketIndex + "/" + id.uuid() + "_" + id.keyHash());
-            var keyBytes = id.key().getBytes(StandardCharsets.UTF_8);
+            var keyBytes = Wal.keyBytes(id.key());
             var bigStringBytesLength = (int) file.length();
             length += ENTRY_HEADER_LENGTH + keyBytes.length + bigStringBytesLength;
         }
