@@ -989,6 +989,8 @@ slots
         ConfForGlobal.clusterEnabled = true
         var multiShard = localPersist.multiShard
         var shards = multiShard.shards
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
 
         def shard0 = shards[0]
         shard0.multiSlotRange.addSingle(0, 16383)
@@ -1032,10 +1034,16 @@ slots
         shard1.nodes << new Node(nodeIdFix: 'xxx')
         shards << shard1
         data6[4] = shard1.nodes[0].nodeId().bytes
+        def oldSlavePair = oneSlot.createReplPairAsSlave('localhost', 6380)
+        def oldMasterPair = oneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 6381)
         reply = clusterx.setslot()
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        oldSlavePair.sendBye
+        oldMasterPair.sendBye
+        oneSlot.onlyOneReplPairAsSlave == null
+        oneSlot.replPairAsMasterList.isEmpty()
 
         when:
         shard1.multiSlotRange.addSingle(0, 8191)

@@ -404,3 +404,80 @@ All Velo cluster e2e checks passed
 OneSlot 590-610: 14/15 covered, byed-pair branch covered.
 ClusterxCommand 1238-1247: target-shard replica branch covered.
 ```
+
+## Fix Review: 2026-07-06, Groovy Spock Harness
+
+### Refactor
+
+`ClusterMigrationFailoverManualTest` now extends `ClusterxBase`, which owns the reusable process-cluster helpers:
+starting four local Velo nodes, bootstrapping `CLUSTERX SETNODES`, broadcasting `SETSLOT`, polling command success,
+finding keys for a Redis cluster slot, and waiting for replicated values.
+
+Replay:
+
+```bash
+./gradlew jar
+VELO_CLUSTER_MANUAL=true ./gradlew :test \
+  --tests "io.velo.repl.cluster.tmp.ClusterMigrationFailoverManualTest" \
+  --rerun-tasks
+```
+
+### Bug 4: Source Flush Can Propagate To Migrated Target
+
+Severity: High
+
+Observed before the fix in the Groovy process test:
+
+```text
+SET <slot-0-key> before-migrate on source node-0
+MANAGE SLOT 0 MIGRATE_FROM ... on target node-1
+CLUSTERX MIGRATE 0 <node-1-id> on source node-0
+broadcast CLUSTERX SETSLOT 0 NODE <node-1-id>
+GET <slot-0-key> on target node-1 -> null
+```
+
+Root cause:
+
+During `CLUSTERX SETSLOT` on a local node that no longer belongs to the target shard, `ClusterxCommand.setslot()`
+flushed the local source slot while old slave-side or master-side replication pairs could still be active. If the
+source still had a master-side pair to the migration target, that local flush could be sent as an `XFlush` and wipe
+the target after data had already migrated.
+
+Fix:
+
+The non-target branch in `ClusterxCommand.setslot()` now closes both slave-side and master-side repl pairs before
+calling `oneSlot.flush()`. That makes the old source discard its local copy without sending a final flush to the
+new owner.
+
+Focused regression:
+
+```bash
+./gradlew :test --tests "io.velo.command.ClusterxCommandTest" --rerun-tasks
+```
+
+The `test slots` case now seeds both an old slave pair and an old master pair before moving slot `0` to another
+shard, then asserts both pairs sent BYE and no active pair remains.
+
+Coverage:
+
+```bash
+python3 scripts/jacoco_cover.py io.velo.command.ClusterxCommand 1241 1250 --src
+```
+
+Confirmed:
+
+```text
+ClusterxCommand 1248-1250 covered: remove slave pair, remove master pair, flush.
+```
+
+Verified run:
+
+```text
+./gradlew jar
+VELO_CLUSTER_MANUAL=true ./gradlew :test --tests "io.velo.repl.cluster.tmp.ClusterMigrationFailoverManualTest" --rerun-tasks
+BUILD SUCCESSFUL
+
+KEEP_DATA=true scripts/e2e/velo_cluster/e2e_velo_cluster.sh
+E2E workspace: /tmp/velo-cluster-e2e.Fu4qhG
+All Velo cluster e2e checks passed
+```

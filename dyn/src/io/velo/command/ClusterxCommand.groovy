@@ -1245,6 +1245,8 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                 }
                 oneSlot.resetAsSlave(toMasterNode.host, toMasterNode.port)
             } else {
+                oneSlot.removeReplPairAsSlave()
+                oneSlot.removeReplPairAsMaster()
                 oneSlot.flush()
             }
         }).whenComplete { done, e ->
