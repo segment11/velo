@@ -373,6 +373,20 @@ class OneSlotTest extends Specification {
         then:
         oneSlot.replPairs.size() == 2
 
+        when:
+        oneSlot.replPairs.clear()
+        def byedMasterPair = ReplPairTest.mockOne(slot, true, 'localhost', 6380)
+        byedMasterPair.masterUuid = oneSlot.masterUuid
+        byedMasterPair.slaveUuid = 11L
+        byedMasterPair.sendBye = true
+        oneSlot.replPairs.add(byedMasterPair)
+        def newMasterPair = oneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 6380)
+        then:
+        oneSlot.replPairs.size() == 2
+        !newMasterPair.is(byedMasterPair)
+        !newMasterPair.sendBye
+        oneSlot.getReplPairAsMaster(11L).is(newMasterPair)
+
         cleanup:
         ConfForGlobal.replDelayCloseTimeoutSeconds = 60
         localPersist.cleanUp()

@@ -1188,18 +1188,21 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             addSet << i
         }
 
-        // check if to node id is my self node charge (computed before mutating metadata)
+        // check local role before mutating metadata
         boolean isMySelfNodeChargeThisInnerSlot = false
+        boolean isMySelfShardChargeThisInnerSlot = false
         def mySelfShard = multiShard.mySelfShard()
         if (mySelfShard) {
             def mySelfNode = mySelfShard.mySelfNode()
             isMySelfNodeChargeThisInnerSlot = mySelfNode.nodeId() == nodeId
+            isMySelfShardChargeThisInnerSlot = mySelfShard == toShard
         }
+        def toMasterNode = toShard.master()
 
-        // initialize the local slot BEFORE persisting ownership, so a failed init (fd/disk/memory)
-        // does not leave cluster metadata advertising a slot this node cannot serve. for slots owned
-        // by other shards there is no local persistence, so flush() is skipped when oneSlot is null.
-        def oneSlot = isMySelfNodeChargeThisInnerSlot
+        // initialize the local slot BEFORE persisting ownership when this node is in the target shard,
+        // so a failed init does not leave cluster metadata advertising a slot this node cannot serve.
+        // nodes outside the target shard only flush an existing local copy, if any.
+        def oneSlot = isMySelfShardChargeThisInnerSlot
                 ? localPersist.ensureOneSlotInitialized(innerSlot as short)
                 : localPersist.oneSlot(innerSlot)
 
@@ -1235,6 +1238,12 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                     log.info 'Clusterx set slot {} to node id {} is my self node charge, is already master, do nothing, slot={}',
                             toClientSlot, nodeId, innerSlot
                 }
+            } else if (isMySelfShardChargeThisInnerSlot) {
+                def replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave()
+                if (replPairAsSlave != null) {
+                    oneSlot.removeReplPairAsSlave()
+                }
+                oneSlot.resetAsSlave(toMasterNode.host, toMasterNode.port)
             } else {
                 oneSlot.flush()
             }

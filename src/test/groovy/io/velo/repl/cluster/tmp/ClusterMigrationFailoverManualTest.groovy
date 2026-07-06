@@ -9,6 +9,7 @@ import spock.lang.Specification
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 
 /**
  * Opt-in manual reproducer for cluster migration/failover data-loss investigation.
@@ -21,7 +22,7 @@ class ClusterMigrationFailoverManualTest extends Specification {
     private static final String HOST = '127.0.0.1'
     private static final int SLOT_NUMBER = 4
     private static final int TOTAL_CLIENT_SLOTS = 16384
-    private static final int STEP = TOTAL_CLIENT_SLOTS / SLOT_NUMBER
+    private static final int STEP = (TOTAL_CLIENT_SLOTS / SLOT_NUMBER) as int
 
     List<Process> processes = []
     File baseDir
@@ -36,7 +37,7 @@ class ClusterMigrationFailoverManualTest extends Specification {
         }
         processes.each { process ->
             if (process.isAlive()) {
-                process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)
+                process.waitFor(2, TimeUnit.SECONDS)
             }
             if (process.isAlive()) {
                 process.destroyForcibly()
@@ -62,6 +63,7 @@ class ClusterMigrationFailoverManualTest extends Specification {
         then:
         movedFrom(nodes[0], key)
         nodes[1].jedis.get(key) == 'before-migrate'
+        waitForValue(nodes[3], key, 'before-migrate')
     }
 
     def 'manual repro: forced failover should preserve replicated data on promoted replica'() {
@@ -174,26 +176,26 @@ clusterEnabled=true
         }
     }
 
-    private Object clusterx(NodeHandle node, String... args) {
+    private static Object clusterx(NodeHandle node, String... args) {
         node.jedis.sendCommand(new ExtendProtocolCommand('clusterx'), args.collect { it.bytes } as byte[][])
     }
 
-    private Object manage(NodeHandle node, String... args) {
+    private static Object manage(NodeHandle node, String... args) {
         node.jedis.sendCommand(new ExtendProtocolCommand('manage'), args.collect { it.bytes } as byte[][])
     }
 
-    private String clusterInfo(NodeHandle node) {
+    private static String clusterInfo(NodeHandle node) {
         status(clusterx(node, 'info'))
     }
 
-    private String status(Object reply) {
+    private static String status(Object reply) {
         if (reply instanceof byte[]) {
             return new String(reply as byte[], StandardCharsets.UTF_8)
         }
         return String.valueOf(reply)
     }
 
-    private void waitForInfo(NodeHandle node, String expected) {
+    private static void waitForInfo(NodeHandle node, String expected) {
         long deadline = System.currentTimeMillis() + 90_000
         String last = ''
         while (System.currentTimeMillis() < deadline) {
@@ -206,7 +208,7 @@ clusterEnabled=true
         throw new AssertionError("Timed out waiting for ${expected}, last info=${last}")
     }
 
-    private void waitForValue(NodeHandle node, String key, String expected) {
+    private static void waitForValue(NodeHandle node, String key, String expected) {
         long deadline = System.currentTimeMillis() + 90_000
         Object last = null
         while (System.currentTimeMillis() < deadline) {
@@ -223,7 +225,7 @@ clusterEnabled=true
         throw new AssertionError("Timed out waiting for ${key}=${expected} on ${node.nodeId}, last=${last}")
     }
 
-    private void waitPing(NodeHandle node) {
+    private static void waitPing(NodeHandle node) {
         long deadline = System.currentTimeMillis() + 90_000
         while (System.currentTimeMillis() < deadline) {
             try {

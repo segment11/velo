@@ -246,6 +246,7 @@ class E2E:
         got = self.raw(target, "GET", slot0_key)
         if got != "before-migrate":
             self.bug(f"Migrated key lost or stale on target: key={slot0_key} got={got!r}")
+        self.wait_for_value(self.nodes[3], slot0_key, "before-migrate")
         self.dump_metadata()
 
     def failover_replica(self, slot1_key: str) -> None:

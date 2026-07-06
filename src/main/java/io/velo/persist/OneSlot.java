@@ -596,6 +596,9 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         }
 
         for (var replPair1 : replPairs) {
+            if (replPair1.isSendBye()) {
+                continue;
+            }
             if (replPair1.equals(replPair)) {
                 log.warn("Repl pair as master already exists, host={}, port={}, slot={}", host, port, slot);
                 return replPair1;

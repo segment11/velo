@@ -1166,6 +1166,65 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setslot resets local target shard replica'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+
+        and:
+        def multiShard = localPersist.multiShard
+        def targetShard = multiShard.shards[0]
+        def localNode = targetShard.nodes[0]
+        localNode.master = false
+        localNode.slaveIndex = 1
+        localNode.followNodeId = 'target-master'
+        def targetMaster = new Node(nodeIdFix: 'target-master', host: 'localhost', port: 6380, master: true)
+        targetShard.nodes.add(0, targetMaster)
+        targetShard.multiSlotRange.addSingle(4096, 8191)
+
+        and:
+        def oldSlavePair = oneSlot.createReplPairAsSlave('localhost', 6380)
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = 'target-master'.bytes
+        data6[5] = '7'.bytes
+        clusterx.data = data6
+
+        when:
+        def reply = clusterx.setslot()
+
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        oldSlavePair.sendBye
+        oneSlot.onlyOneReplPairAsSlave != null
+        !oneSlot.onlyOneReplPairAsSlave.is(oldSlavePair)
+        oneSlot.onlyOneReplPairAsSlave.host == 'localhost'
+        oneSlot.onlyOneReplPairAsSlave.port == 6380
+        !oneSlot.canRead
+        targetShard.multiSlotRange.contains(0)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test countkeysinslot returns 0 for uninitialized slot'() {
         given:
         def data3 = new byte[3][]

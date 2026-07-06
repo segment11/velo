@@ -316,3 +316,91 @@ The successful run covered:
 - slot `0` migration from node-0 to node-1 with `GET` on node-1 returning `before-migrate`;
 - forced failover of node-3 for the migrated shard with `GET` returning `before-failover`;
 - post-failover write on the promoted node.
+
+## Fix Review: 2026-07-06
+
+### Bug 3: Target Shard Replica Does Not Catch Up Newly Migrated Slot
+
+Severity: High
+
+Question checked:
+
+```text
+When slot migration makes one inner slot master on the target shard, can that shard's slave catch up records?
+```
+
+Observed before the fix:
+
+```text
+CLUSTERX SETSLOT 0 NODE velo-e2e-1 3
+GET <slot-0-key> on target master node-1 -> before-migrate
+GET <slot-0-key> on target replica node-3 -> ERROR cannot read until timeout
+```
+
+The Python e2e now explicitly waits for the migrated key on the target shard replica after `SETSLOT`:
+
+```python
+self.wait_for_value(self.nodes[3], slot0_key, "before-migrate")
+```
+
+### Root Cause
+
+Two replication lifecycle issues combined during migration finalization:
+
+- `ClusterxCommand.setslot()` only promoted the target master. A local node in the same target shard but not the
+  target master could keep an old or partial slave state for that inner slot.
+- `OneSlot.createIfNotExistReplPairAsMaster()` treated a byed master-side `ReplPair` as reusable because equality
+  only checks slot, role, host, and port. Normal lookup skips byed pairs, so the next fetch request had no active
+  pair and failed with:
+
+  ```text
+  Cannot invoke "io.velo.repl.ReplPair.getSlaveUuid()" because "replPair" is null
+  ```
+
+### Fixes
+
+- `ClusterxCommand.setslot()` now handles local nodes that are replicas in the target shard:
+  it removes any old slave pair for the moved inner slot and calls `resetAsSlave(targetMaster.host, targetMaster.port)`.
+  That forces a fresh full fetch from the new target master after ownership is finalized.
+- `OneSlot.createIfNotExistReplPairAsMaster()` now ignores pairs that already sent BYE when checking for an existing
+  master-side pair, so a reconnect creates a new active replication pair.
+
+### Replay
+
+Migration-only:
+
+```bash
+./gradlew jar
+KEEP_DATA=true RUN_FAILOVER=false scripts/e2e/velo_cluster/e2e_velo_cluster.sh
+```
+
+Full migration plus failover:
+
+```bash
+KEEP_DATA=true scripts/e2e/velo_cluster/e2e_velo_cluster.sh
+```
+
+Focused unit and coverage checks:
+
+```bash
+./gradlew :test \
+  --tests "io.velo.command.ClusterxCommandTest" \
+  --tests "io.velo.persist.OneSlotTest.test repl pair" \
+  --rerun-tasks
+
+python3 scripts/jacoco_cover.py io.velo.persist.OneSlot 590 610 --src
+python3 scripts/jacoco_cover.py io.velo.command.ClusterxCommand 1238 1247 --src
+```
+
+Verified runs:
+
+```text
+E2E workspace: /tmp/velo-cluster-e2e.6XQXS3
+All Velo cluster e2e checks passed
+
+E2E workspace: /tmp/velo-cluster-e2e.jcOnaA
+All Velo cluster e2e checks passed
+
+OneSlot 590-610: 14/15 covered, byed-pair branch covered.
+ClusterxCommand 1238-1247: target-shard replica branch covered.
+```
