@@ -389,4 +389,38 @@ zzz localhost 17381 slave aaa
         fm.slavePostedStatusMaxAgeMillisForTest = null
         fm.clearOneEndpointStatusMapByClusterNamePostBySlave()
     }
+
+    def 'test compute next cluster version'() {
+        given:
+        def fm = FailoverManager.instance
+        def a = new HostAndPort('localhost', 7379)
+        def b = new HostAndPort('localhost', 7380)
+        def c = new HostAndPort('localhost', 7381)
+
+        when: 'all epochs readable -> max + 1'
+        fm.nodeClusterEpochProviderForTest = { HostAndPort hp ->
+            hp.port == 7379 ? 5 : (hp.port == 7380 ? 8 : 3)
+        }
+        def v = fm.computeNextClusterVersion([a, b, c])
+        then:
+        v == 9
+
+        when: 'an unreachable node is skipped, version derived from the rest'
+        fm.nodeClusterEpochProviderForTest = { HostAndPort hp ->
+            if (hp.port == 7380) throw new RuntimeException('node down')
+            hp.port == 7379 ? 5 : 3
+        }
+        v = fm.computeNextClusterVersion([a, b, c])
+        then:
+        v == 6
+
+        when: 'no node reports an epoch -> version starts at 1'
+        fm.nodeClusterEpochProviderForTest = { HostAndPort hp -> throw new RuntimeException('node down') }
+        v = fm.computeNextClusterVersion([a, b, c])
+        then:
+        v == 1
+
+        cleanup:
+        fm.nodeClusterEpochProviderForTest = null
+    }
 }

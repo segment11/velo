@@ -268,6 +268,55 @@ class FailoverManager {
         }
     }
 
+    @TestOnly
+    Closure<Integer> nodeClusterEpochProviderForTest
+
+    /**
+     * Reads the given node's current cluster epoch via {@code clusterx info}.
+     *
+     * @param hostAndPort the node to query
+     * @return the node's cluster_current_epoch, or 0 if it cannot be parsed
+     */
+    int readNodeClusterCurrentEpoch(HostAndPort hostAndPort) {
+        if (nodeClusterEpochProviderForTest != null) {
+            return nodeClusterEpochProviderForTest.call(hostAndPort)
+        }
+
+        def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
+        JedisPoolHolder.exe(jedisPool) { jedis ->
+            def command = new ExtendProtocolCommand('clusterx')
+            byte[] r = jedis.sendCommand(command, 'info'.bytes) as byte[]
+            def text = new String(r)
+            def line = text.readLines().find { it.contains('cluster_current_epoch:') }
+            return line == null ? 0 : (line.split(':')[1].trim() as int)
+        }
+    }
+
+    /**
+     * Computes the next cluster version to broadcast: the maximum current epoch across the given (live)
+     * nodes plus one. Because receivers reject a strictly lower version, max+1 is always accepted and the
+     * version stays monotonic across broadcasts. Nodes that cannot be reached are skipped; if none report
+     * an epoch the version starts at 1.
+     *
+     * @param nodes the nodes to collect epochs from (typically the live cluster nodes)
+     * @return the next cluster version to send with setnodes
+     */
+    int computeNextClusterVersion(Collection<HostAndPort> nodes) {
+        int maxEpoch = 0
+        nodes.each { hostAndPort ->
+            try {
+                def epoch = readNodeClusterCurrentEpoch(hostAndPort)
+                if (epoch > maxEpoch) {
+                    maxEpoch = epoch
+                }
+            } catch (Exception e) {
+                log.warn 'failover manager read cluster epoch fail, host and port={}:{}, error={}',
+                        hostAndPort.host, hostAndPort.port, e.message
+            }
+        }
+        maxEpoch + 1
+    }
+
     /**
      * Checks if a server has restarted and performs the necessary set nodes operation.
      * @param nodeName The name of the Zookeeper node.
@@ -291,13 +340,15 @@ class FailoverManager {
         try {
             def clusterxNodesArgs = new String(client.getData().forPath(zookeeperVeloMetaBasePath + '/' + nodeName))
             def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
+            // pick a version newer than the rejoining node's own epoch, so it accepts the re-pushed topology
+            def clusterVersion = computeNextClusterVersion([hostAndPort])
             String result
             if (mockSetNodes) {
                 result = 'OK'
             } else {
                 result = JedisPoolHolder.exe(jedisPool) { jedis ->
                     def command = new ExtendProtocolCommand('clusterx')
-                    byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes) as byte[]
+                    byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes, (clusterVersion as String).bytes) as byte[]
                     new String(r)
                 }
             }
@@ -658,6 +709,12 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             }
         }
 
+        // pick a cluster version newer than any live node's epoch, so receivers accept it (the failed
+        // node is down, so exclude it from the epoch scan)
+        def liveNodeHostAndPortSet = allNodeHostAndPortSet.findAll { it != failHostAndPort }
+        def clusterVersion = computeNextClusterVersion(liveNodeHostAndPortSet)
+        log.warn 'failover manager do failover, cluster name={}, broadcast cluster version={}', oneClusterName, clusterVersion
+
         for (hostAndPort in allNodeHostAndPortSet) {
             if (hostAndPort == failHostAndPort) {
                 // set to zookeeper, loop check if server restart and then set nodes again
@@ -674,7 +731,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                 def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
                 result = JedisPoolHolder.exe(jedisPool) { jedis ->
                     def command = new ExtendProtocolCommand('clusterx')
-                    byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes) as byte[]
+                    byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes, (clusterVersion as String).bytes) as byte[]
                     new String(r)
                 }
             }

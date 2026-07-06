@@ -38,6 +38,20 @@ def clusterVersion = new String(data[3]) as int   // :994
 ```
 `setnodes()` hard-requires `data.length == 4` (`clusterx setnodes <nodesArgs> <version>`).
 
+**Status update (fixed 2026-07-06):** both broadcast sites now append a cluster
+version. `FailoverManager.computeNextClusterVersion(nodes)` reads each live node's
+`cluster_current_epoch` (via `clusterx info`), takes the max, and returns max+1 —
+always newer than any receiver's epoch, so the 59b guard accepts it, and monotonic
+because each broadcast advances the nodes' epochs. The failover broadcast excludes
+the failed (down) node from the epoch scan; the restart re-broadcast derives the
+version from the rejoining node's own epoch. This is stateless (no per-cluster
+counter needed) and matches the intended design ("collect each node's version,
+choose the bigger as current, broadcast a newer one"). Test:
+`FailoverManagerTest 'test compute next cluster version'` (max+1, skip-unreachable,
+default-1). The live `clusterx info` read and the actual broadcast wire path need a
+running redis/ZooKeeper and remain covered only by the manual/e2e harness, like the
+sibling `getSlaveReplOffset`.
+
 **Root cause:** the two `setnodes` broadcast sites — the only ones in the whole
 controller (`grep` confirms lines 300 and 677 are the sole senders) — never append
 the `clusterVersion` argument. A `setnodes()` was later given a mandatory 4th

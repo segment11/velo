@@ -1166,7 +1166,6 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         def clusterVersion = Integer.parseInt(new String(data[5]))
 
         def multiShard = localPersist.multiShard
-        def shards = multiShard.shards
 
         // Reject a stale (strictly older) setslot before mutating slot ranges or repl pairs, so a
         // reordered/delayed controller broadcast cannot roll this node's ownership back. A zero version
@@ -1176,6 +1175,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             return OK
         }
 
+        def shards = multiShard.shards
         def toShard = shards.find { ss ->
             ss.nodes.find { nn ->
                 nn.nodeId() == nodeId
