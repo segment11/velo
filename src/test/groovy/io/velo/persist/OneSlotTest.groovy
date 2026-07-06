@@ -393,6 +393,57 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test repeated migrate role cycles keep exactly one active repl pair'() {
+        given:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+        // shorten delay-close for fast test (default 60s is too long for unit test sleep)
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 1
+
+        expect: 'no repl pair initially'
+        oneSlot.getOnlyOneReplPairAsSlave() == null
+
+        when: 'cycle the slot in and out three times, migrating back to the same source each time'
+        (1..3).each {
+            // migrate in: become slave of the same source localhost:6379
+            oneSlot.resetAsSlave('localhost', 6379)
+            // getter must return the fresh active pair, never a byed one from a prior cycle
+            assert oneSlot.getOnlyOneReplPairAsSlave() != null
+            assert !oneSlot.getOnlyOneReplPairAsSlave().isSendBye()
+            assert oneSlot.getOnlyOneReplPairAsSlave().host == 'localhost'
+            assert oneSlot.getOnlyOneReplPairAsSlave().port == 6379
+            assert !oneSlot.canRead
+
+            // promote (setslot new owner): drop the slave pair, become master
+            oneSlot.removeReplPairAsSlave()
+            oneSlot.resetAsMaster()
+            // no active slave pair while master; migrate-back must not resurrect a byed pair
+            assert oneSlot.getOnlyOneReplPairAsSlave() == null
+            assert oneSlot.canRead
+        }
+        then: 'no active pair leaked; only byed slave pairs remain queued for the reaper'
+        oneSlot.getOnlyOneReplPairAsSlave() == null
+        oneSlot.getReplPairAsMasterList().isEmpty()
+        !oneSlot.replPairs.isEmpty()
+        oneSlot.replPairs.every { it.isSendBye() }
+
+        when: 'the delay-close reaper drains the byed pairs (at most one per tick)'
+        Thread.sleep(2 * 1000)
+        30.times { oneSlot.doTask(100) }
+        then: 'every byed pair is reaped, nothing accumulates'
+        oneSlot.delayNeedCloseReplPairs.isEmpty()
+        oneSlot.replPairs.isEmpty()
+
+        cleanup:
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 60
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test reset as slave removes master side repl pairs'() {
         given:
         LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
