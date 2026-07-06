@@ -1,6 +1,7 @@
 package io.velo.persist;
 
 import io.velo.CompressedValue;
+import io.velo.ConfForGlobal;
 import io.velo.ConfForSlot;
 import io.velo.KeyHash;
 import io.velo.NullableOnlyTest;
@@ -325,7 +326,14 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             try {
                 var uuid = Long.parseLong(arr[0]);
                 var keyHash = Long.parseLong(arr[1]);
-                list.add(new IdWithKey(uuid, bucketIndex, keyHash, keyByUuid(uuid)));
+                var key = keyByUuid(uuid);
+                if (key.isEmpty() && ConfForGlobal.clusterEnabled) {
+                    // Without the key the slave cannot compute the Redis cluster slot and falls back to the
+                    // key-hash slot, which may not match this big string's real cluster slot. Make it observable.
+                    log.warn("Big string key not recoverable for cluster slot routing, slave falls back to key-hash slot, " +
+                            "uuid={}, bucketIndex={}, slot={}", uuid, bucketIndex, slot);
+                }
+                list.add(new IdWithKey(uuid, bucketIndex, keyHash, key));
             } catch (NumberFormatException e) {
                 log.warn("Skip unparseable big string file, name={}, slot={}", file.getName(), slot);
             }

@@ -1,6 +1,7 @@
 package io.velo.persist
 
 import io.velo.CompressedValue
+import io.velo.ConfForGlobal
 import io.velo.KeyHash
 import org.apache.commons.io.FileUtils
 import spock.lang.Specification
@@ -477,6 +478,32 @@ class BigStringFilesTest extends Specification {
         !bigStringFiles.containsUuid(3L)
 
         cleanup:
+        tmpSlotDir.deleteDir()
+    }
+
+    def 'test getBigStringFileIdList warns when cluster key is not recoverable'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-cluster-warn')
+        if (tmpSlotDir.exists()) {
+            tmpSlotDir.deleteDir()
+        }
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+
+        and: 'a big-string file on disk with no recoverable key mapping'
+        bigStringFiles.writeBigStringBytes(7L, 0, 77L, 'orphan'.bytes)
+
+        when: 'the id list is built while cluster is enabled'
+        def list = bigStringFiles.getBigStringFileIdList(0)
+
+        then: 'the entry falls back to an empty key (warn branch executed)'
+        list.size() == 1
+        list[0].uuid() == 7L
+        list[0].key() == ''
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
         tmpSlotDir.deleteDir()
     }
 
