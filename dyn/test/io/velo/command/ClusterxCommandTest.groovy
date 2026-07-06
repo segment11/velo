@@ -1233,6 +1233,123 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setslot promotes local target node from slave to master'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+
+        and: 'self node is the migration target; it was importing (a slave) and now owns the slot'
+        def multiShard = localPersist.multiShard
+        def targetShard = multiShard.shards[0]
+        def localNode = targetShard.nodes[0]
+        localNode.master = false
+        localNode.slaveIndex = 1
+        localNode.followNodeId = 'old-source-master'
+        targetShard.multiSlotRange.addSingle(4096, 8191)
+
+        and:
+        def oldSlavePair = oneSlot.createReplPairAsSlave('localhost', 6380)
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = localNode.nodeId().bytes // self node is the target -> new owner
+        data6[5] = '9'.bytes
+        clusterx.data = data6
+
+        when:
+        def reply = clusterx.setslot()
+
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        and: 'old slave repl pair is closed and NOT replaced — promoted to master, not re-slaved'
+        oldSlavePair.sendBye
+        oneSlot.onlyOneReplPairAsSlave == null
+        and: 'slot is now writable/readable on the new owner'
+        oneSlot.canRead
+        !oneSlot.isReadonly()
+        targetShard.multiSlotRange.contains(0)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test setslot closes repl pairs and flushes on old source node'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+
+        and: 'self shard currently owns the slot; the slot migrates to a different shard'
+        def multiShard = localPersist.multiShard
+        def shards = multiShard.shards
+        def mySelfShard = shards[0]
+        mySelfShard.multiSlotRange.addSingle(0, 16383)
+        shards << new Shard()
+        shards[1].nodes << new Node(master: true, nodeIdFix: 'new_node_id', host: 'localhost', port: 7379)
+
+        and: 'the old source has both a slave-side and a master-side repl pair open'
+        def oldSlavePair = oneSlot.createReplPairAsSlave('localhost', 6380)
+        def oldMasterPair = oneSlot.createIfNotExistReplPairAsMaster(123L, 'localhost', 7399)
+
+        and:
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = shards[1].nodes[0].nodeId().bytes // target is in the other shard
+        data6[5] = '11'.bytes
+        clusterx.data = data6
+
+        when:
+        def reply = clusterx.setslot()
+
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        and: 'both repl pairs are closed (before the flush) so no stray XFlush reaches the new owner'
+        oldSlavePair.sendBye
+        oldMasterPair.sendBye
+        oneSlot.onlyOneReplPairAsSlave == null
+        oneSlot.getReplPairAsMasterList().isEmpty()
+        and: 'ownership moved from the old source shard to the target shard'
+        shards[1].multiSlotRange.contains(0)
+        !mySelfShard.multiSlotRange.contains(0)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test countkeysinslot returns 0 for uninitialized slot'() {
         given:
         def data3 = new byte[3][]
