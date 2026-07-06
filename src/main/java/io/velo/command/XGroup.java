@@ -1188,6 +1188,14 @@ public class XGroup extends BaseCommand {
         // server received from client
         // send back exists big string to client, with flag can do next step
         // client already persisted big string uuid, send to client exclude sent big string
+
+        // The repl pair can be transiently null while topology switches (e.g. a slave request arriving
+        // during migrate_from reconfiguration); reply empty and let the slave retry rather than NPE.
+        if (replPair == null) {
+            log.warn("Repl master handle exists big string but repl pair is null, slot={}", slot);
+            return Repl.emptyReply();
+        }
+
         var buffer = ByteBuffer.wrap(contentBytes);
         if (buffer.remaining() < 4) {
             throw new IllegalArgumentException("Repl master handle error: exists big string payload too short, slot=" + slot);

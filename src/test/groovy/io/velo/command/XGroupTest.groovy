@@ -880,6 +880,26 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test as master handle exists big string with null repl pair'() {
+        given:
+        def ctx = setupMasterContext()
+        def localPersist = ctx.localPersist
+        def x = ctx.x
+        // do NOT establish a master repl pair, so replPair resolves to null (transient topology switch)
+
+        when: 'a slave sends exists_big_string but no master repl pair exists'
+        def contentBytes = new byte[4] // bucket index 0
+        def replRequest = new ReplRequest(999L, slot, ReplType.exists_big_string, contentBytes, contentBytes.length)
+        def r = x.handleRepl(replRequest) as ReplReply
+
+        then: 'replies empty (slave retries) instead of NPEing'
+        r.isEmpty()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test as master handle exists short string'() {
         given:
         def ctx = setupMasterContext()
