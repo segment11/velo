@@ -1279,6 +1279,13 @@ public class XGroup extends BaseCommand {
                 var uuid = buffer.getLong();
                 var keyHash = buffer.getLong();
                 var entryPayloadPosition = buffer.position();
+                // The first int is either the new-format key length or the old-format big string length.
+                // Disambiguation relies on two invariants:
+                // 1. A stored big string file is never empty, so an old-format big string length is never 0
+                //    and never small; a leading 0 therefore unambiguously means a new-format empty key
+                //    (the master could not recover the key, so the slave falls back to the key-hash slot).
+                // 2. For a non-empty new-format key we additionally require KeyHash.hash(key) == keyHash, so an
+                //    old-format length that happens to look like a valid key length is rejected and reverted.
                 var keyLengthOrBigStringBytesLength = buffer.getInt();
                 String key = null;
                 int bigStringBytesLength;
