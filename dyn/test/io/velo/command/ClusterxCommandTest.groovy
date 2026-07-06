@@ -527,6 +527,71 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test migrate rejects when another migration is in progress'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        ConfForGlobal.slotNumber = (short) 4
+
+        def data4 = new byte[4][]
+        def cGroup = new CGroup('cluster', data4, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def multiShard = localPersist.multiShard
+        def shards = multiShard.shards
+        shards[0].nodes[0].master = true
+        shards << new Shard()
+        shards[1].nodes << new Node(master: true, nodeIdFix: 'new_node_id', host: 'localhost', port: 7379)
+        shards << new Shard()
+        shards[2].nodes << new Node(master: true, nodeIdFix: 'other_node_id', host: 'localhost', port: 7380)
+
+        when: 'a first migrate of aligned slot 0 starts and records the in-progress export slot'
+        data4[2] = '0'.bytes
+        data4[3] = shards[1].nodes[0].nodeId().bytes
+        def reply = clusterx.migrate()
+        then:
+        reply == ClusterxCommand.OK
+        shards[0].exportMigratingSlot == 0
+
+        when: 'a second migrate for a different aligned slot arrives while the first is in progress'
+        data4[2] = '4096'.bytes
+        reply = clusterx.migrate()
+        then: 'it is rejected and the in-progress migration is left intact'
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('in progress')
+        shards[0].exportMigratingSlot == 0
+
+        when: 're-targeting the same slot to a different node while in progress is also rejected'
+        data4[2] = '0'.bytes
+        data4[3] = shards[2].nodes[0].nodeId().bytes
+        reply = clusterx.migrate()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('in progress')
+        shards[0].migratingToPort == 7379
+
+        when: 're-issuing the exact same migrate (same slot and target) is idempotent'
+        data4[2] = '0'.bytes
+        data4[3] = shards[1].nodes[0].nodeId().bytes
+        reply = clusterx.migrate()
+        then:
+        reply == ClusterxCommand.OK
+        shards[0].exportMigratingSlot == 0
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test meet'() {
         given:
         def cGroup = new CGroup('cluster', null, null)

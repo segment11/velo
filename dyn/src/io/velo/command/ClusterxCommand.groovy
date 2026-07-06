@@ -647,6 +647,16 @@ migrating_state:ok
             return OK
         }
 
+        // Reject a new migrate while one is already in progress on this shard, unless it is the exact
+        // same request (idempotent retry). A single exportMigratingSlot can only track one migration;
+        // overwriting it would abandon the in-flight migration and corrupt its completion detection.
+        if (mySelfShard.exportMigratingSlot != Shard.NO_MIGRATING_SLOT
+                && (mySelfShard.exportMigratingSlot != toClientSlot
+                || mySelfShard.migratingToHost != toShardMasterNode.host
+                || mySelfShard.migratingToPort != toShardMasterNode.port)) {
+            return new ErrorReply('another migrate is in progress, slot=' + mySelfShard.exportMigratingSlot)
+        }
+
         mySelfShard.migratingToHost = toShardMasterNode.host
         mySelfShard.migratingToPort = toShardMasterNode.port
         mySelfShard.exportMigratingSlot = toClientSlot
