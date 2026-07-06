@@ -37,6 +37,21 @@ abstract class ClusterxBase extends Specification {
             }
         }
         nodes?.each { it.close() }
+
+        // Each run creates a fresh temp base dir with per-node data and logs; delete it to avoid
+        // unbounded leaks. Re-run with VELO_CLUSTER_KEEP_DIR=true (or -Dvelo.cluster.keepDir=true) to
+        // preserve node dirs and server logs for post-mortem when a scenario fails.
+        if (baseDir != null) {
+            if (keepDir()) {
+                println "Kept cluster dir for inspection: ${baseDir.absolutePath}"
+            } else {
+                baseDir.deleteDir()
+            }
+        }
+    }
+
+    protected static boolean keepDir() {
+        System.getenv('VELO_CLUSTER_KEEP_DIR') == 'true' || System.getProperty('velo.cluster.keepDir') == 'true'
     }
 
     protected void startCluster() {
@@ -44,6 +59,7 @@ abstract class ClusterxBase extends Specification {
         assert jar.isFile(): 'Run ./gradlew jar first'
 
         baseDir = Files.createTempDirectory('velo-cluster-manual-groovy-').toFile()
+        println "Cluster base dir: ${baseDir.absolutePath}"
         def ports = (0..<4).collect { pickPort() }
         nodes = ports.withIndex().collect { int port, int i ->
             new NodeHandle(i, "velo-manual-${i}".toString(), port)
@@ -201,14 +217,16 @@ clusterEnabled=true
     protected static void waitPing(NodeHandle node) {
         long deadline = System.currentTimeMillis() + 90_000
         while (System.currentTimeMillis() < deadline) {
+            Jedis jedis = null
             try {
-                def jedis = new Jedis(HOST, node.port, JEDIS_TIMEOUT_MILLIS)
+                jedis = new Jedis(HOST, node.port, JEDIS_TIMEOUT_MILLIS)
                 if (jedis.ping() == 'PONG') {
                     node.jedis = jedis
                     return
                 }
                 jedis.close()
             } catch (Exception ignored) {
+                jedis?.close()
                 Thread.sleep(250)
             }
         }
