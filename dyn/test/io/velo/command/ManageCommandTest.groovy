@@ -1002,6 +1002,49 @@ class ManageCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test migrate from rejects when another import is in progress'() {
+        given:
+        def data6 = new byte[6][]
+        def mGroup = new MGroup('manage', data6, null)
+        mGroup.from(BaseCommand.mockAGroup())
+        def manage = new ManageCommand(mGroup)
+        manage.from(mGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+        def shards = localPersist.multiShard.shards
+
+        and: 'a different slot is already being imported into this shard'
+        shards[0].importMigratingSlot = 4096
+
+        when: 'migrate_from for slot 0 arrives while the slot-4096 import is in progress'
+        data6[1] = 'slot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'migrate_from'.bytes
+        data6[4] = 'localhost'.bytes
+        data6[5] = '7379'.bytes
+        manage.slotWithKeyHashListParsed = manage.parseSlots('manage', data6, manage.slotNumber)
+        def reply = manage.migrateFrom()
+        then: 'rejected, the in-flight import is left intact'
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('in progress')
+        shards[0].importMigratingSlot == 4096
+
+        when: 're-issuing migrate_from for the already-importing slot is idempotent'
+        shards[0].importMigratingSlot = 0
+        reply = manage.migrateFrom()
+        then:
+        reply == ClusterxCommand.OK
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test dyn-config on sparse local persist skips uninitialized slots'() {
         given:
         def data4 = new byte[4][]

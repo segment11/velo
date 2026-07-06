@@ -15,6 +15,7 @@ import io.velo.persist.LocalPersist
 import io.velo.persist.OneSlot
 import io.velo.persist.Wal
 import io.velo.repl.cluster.MultiShard
+import io.velo.repl.cluster.Shard
 import io.velo.repl.support.JedisPoolHolder
 import io.velo.reply.*
 import io.velo.type.RedisHH
@@ -547,6 +548,16 @@ class ManageCommand extends BaseCommand {
             return ErrorReply.INVALID_INTEGER
         }
         def force = data.length == 7 && new String(data[6]).toLowerCase() == 'force'
+
+        // Reject a new import while a different slot is already being imported into this shard. The shard
+        // tracks a single importMigratingSlot; overwriting it would lose the in-flight import's migrating
+        // state. The same slot is allowed (idempotent; a host re-point is handled by the repl-pair logic).
+        def importShard = localPersist.multiShard.mySelfShard()
+        if (importShard != null
+                && importShard.importMigratingSlot != Shard.NO_MIGRATING_SLOT
+                && importShard.importMigratingSlot != toClientSlot) {
+            return new ErrorReply('another import migrate is in progress, slot=' + importShard.importMigratingSlot)
+        }
 
         def innerSlot = slotWithKeyHashListParsed.first.slot()
 //        def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
