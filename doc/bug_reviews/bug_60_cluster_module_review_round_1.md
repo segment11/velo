@@ -5,6 +5,18 @@
 **Severity:** HIGH — a slot that contains any big-string value cannot be migrated; the
 migration stalls at `migrating_state:migrating` forever and `SETSLOT` cutover never runs.
 
+**Status (fixed 2026-07-06):**
+- **Primary (ReadonlyException):** fixed in `ea2c7885`. Threaded an explicit `ignoreReadonly`
+  through `SGroup.saveRedisSet → BaseCommand.set → putToOneSlot → OneSlot.put`, and the
+  big-string exists-phase apply (`XGroup.s_exists_big_string`) passes `ignoreReadonly=true`
+  for its fetched-uuid bookkeeping write. Unit test: `XGroupTest.'test as slave handle s
+  exists big string applies to a readonly migrating slot'`. Confirmed end-to-end: **T1 passes**
+  (big-string values survive migration to the new owner and its replica).
+- **Secondary (replPair NPE):** fixed in `7fd13842`. `XGroup.exists_big_string` now replies
+  empty when `replPair` is transiently null during the topology switch instead of NPEing.
+  Unit test: `XGroupTest.'test as master handle exists big string with null repl pair'`.
+- **Regression fence:** `ClusterMigrationStressManualTest` T1 (opt-in, `VELO_CLUSTER_MANUAL`).
+
 ## How it was found
 
 `ClusterMigrationStressManualTest.'T1: big string values survive slot migration'`

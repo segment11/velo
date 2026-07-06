@@ -9,6 +9,7 @@ import spock.lang.Specification
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 abstract class ClusterxBase extends Specification {
     protected static final String HOST = '127.0.0.1'
@@ -81,6 +82,7 @@ estimateKeyNumber=1000000
 kv.lru.maxSize=100000
 persist.binlogOn=true
 clusterEnabled=true
+bigStringNoMemoryCopySize=4096
 """.stripIndent().trim() + '\n'
 
             def log = new File(nodeDir, 'server.log')
@@ -146,6 +148,98 @@ clusterEnabled=true
         nodes.each { node ->
             waitClusterxOk(node, 'setslot', slot.toString(), 'node', nodeId, clusterVersion.toString())
         }
+    }
+
+    /**
+     * Runs the full migrate sequence for one client slot from {@code from} to {@code to}:
+     * import on the target, export on the source, wait for catch-up, then broadcast the ownership cutover.
+     */
+    protected void migrateSlot(int clientSlot, NodeHandle from, NodeHandle to) {
+        assert status(manage(to, 'slot', clientSlot.toString(), 'migrate_from', HOST, from.port.toString(), 'force')) == 'OK'
+        assert status(clusterx(from, 'migrate', clientSlot.toString(), to.nodeId)) == 'OK'
+        waitForInfo(from, 'migrating_state:success')
+        broadcastSetSlot(clientSlot, to.nodeId)
+    }
+
+    /**
+     * Any key that maps to {@code slot} doubles as a hash tag: {@code {tag}suffix} routes by CRC16(tag),
+     * so all keys sharing the tag land in the same slot.
+     */
+    protected static String hashTagForSlot(int slot) {
+        findKeyForSlot(slot)
+    }
+
+    /**
+     * Spawns a daemon thread that SETs {@code {hashTag}:w:i} keys (all in the tag's slot) on its own
+     * Jedis connection until {@code stop} is set, recording each acked (key,value) into {@code acked}.
+     * Writes that hit MOVED/readonly during cutover are skipped, so {@code acked} holds only durable writes.
+     */
+    protected Thread startBackgroundWriter(NodeHandle node, String hashTag, AtomicBoolean stop,
+                                           List<List<String>> acked, int throttleMillis) {
+        def writerJedis = new Jedis(HOST, node.port, JEDIS_TIMEOUT_MILLIS)
+        def t = new Thread({
+            try {
+                int i = 0
+                while (!stop.get()) {
+                    def key = '{' + hashTag + '}:w:' + i
+                    def val = 'wv-' + i
+                    try {
+                        if (writerJedis.set(key, val) == 'OK') {
+                            synchronized (acked) {
+                                acked << [key, val]
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        // MOVED / readonly during cutover — only acked writes are recorded
+                    }
+                    i++
+                    if (throttleMillis > 0) {
+                        Thread.sleep(throttleMillis)
+                    }
+                }
+            } finally {
+                writerJedis.close()
+            }
+        })
+        t.daemon = true
+        t.start()
+        t
+    }
+
+    /**
+     * Builds a deterministic value of roughly {@code approxKb} KiB, large enough to exceed the
+     * configured big-string threshold so the value takes the big-string replication path.
+     */
+    protected static String bigValue(int approxKb) {
+        def target = approxKb * 1024
+        def sb = new StringBuilder(target + 40)
+        def chunk = 'velo-big-string-payload-0123456789-'
+        while (sb.length() < target) {
+            sb.append(chunk)
+        }
+        sb.toString()
+    }
+
+    /**
+     * Recursively counts big-string files stored under a node's data dir (any {@code big-string}
+     * subdirectory), to confirm a value actually took the big-string replication path.
+     */
+    protected long bigStringFileCount(int nodeIndex) {
+        def dataDir = new File(new File(baseDir, "node-${nodeIndex}"), 'data')
+        if (!dataDir.exists()) {
+            return 0L
+        }
+        long count = 0L
+        dataDir.eachDirRecurse { d ->
+            if (d.name == 'big-string') {
+                d.eachFileRecurse { f ->
+                    if (f.isFile()) {
+                        count++
+                    }
+                }
+            }
+        }
+        count
     }
 
     protected static void waitClusterxOk(NodeHandle node, String... args) {

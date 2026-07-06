@@ -270,6 +270,16 @@ public class XGroup extends BaseCommand {
         if (this.replPair == null) {
             if (replType.isSlaveSend) {
                 this.replPair = oneSlot.getReplPairAsMaster(slaveUuid);
+
+                // ping/hello create the master pair themselves; every other slave-send request (the
+                // exists-* fetch stages, catch_up, incremental_big_string) needs an existing pair, which
+                // can be transiently null while topology switches (e.g. during migrate_from). Reply empty
+                // instead of NPEing in the fetch handler; the slave's reconnect/re-hello restarts the fetch.
+                if (this.replPair == null && replType != ping && replType != hello) {
+                    log.warn("Repl master handle but repl pair as master not found, maybe topology switching, slave uuid={}, repl type={}, slot={}",
+                            slaveUuid, replType, slot);
+                    return Repl.emptyReply();
+                }
             } else {
                 // slave uuid == self one slot master uuid
                 this.replPair = oneSlot.getReplPairAsSlave(slaveUuid);
@@ -1188,14 +1198,7 @@ public class XGroup extends BaseCommand {
         // server received from client
         // send back exists big string to client, with flag can do next step
         // client already persisted big string uuid, send to client exclude sent big string
-
-        // The repl pair can be transiently null while topology switches (e.g. a slave request arriving
-        // during migrate_from reconfiguration); reply empty and let the slave retry rather than NPE.
-        if (replPair == null) {
-            log.warn("Repl master handle exists big string but repl pair is null, slot={}", slot);
-            return Repl.emptyReply();
-        }
-
+        // (a null repl pair during topology switch is handled centrally in handleReplInner)
         var buffer = ByteBuffer.wrap(contentBytes);
         if (buffer.remaining() < 4) {
             throw new IllegalArgumentException("Repl master handle error: exists big string payload too short, slot=" + slot);
