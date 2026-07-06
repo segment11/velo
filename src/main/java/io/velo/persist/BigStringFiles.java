@@ -83,11 +83,11 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     // Owned by the slot worker thread — not safe for concurrent access from multiple threads.
     final HashMap<String, Long> bigStringUuidByKey = new HashMap<>();
     /**
-     * Reverse index for O(1) UUID membership checks.
+     * Reverse index for O(1) UUID membership checks and O(1) uuid-to-key lookup.
      * Kept in sync with {@link #bigStringUuidByKey} on every put/remove.
      */
     // Owned by the slot worker thread — not safe for concurrent access from multiple threads.
-    final HashSet<Long> bigStringUuidSet = new HashSet<>();
+    final HashMap<Long, String> bigStringKeyByUuid = new HashMap<>();
 
     /**
      * Updates the UUID map from encoded value bytes.
@@ -100,17 +100,17 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     public void updateUuidFromEncoded(String key, byte[] cvEncoded) {
         if (cvEncoded.length < 28) {
             var old = bigStringUuidByKey.remove(key);
-            if (old != null) bigStringUuidSet.remove(old);
+            if (old != null) bigStringKeyByUuid.remove(old);
             return;
         }
         if (CompressedValue.onlyReadSpType(cvEncoded) == CompressedValue.SP_TYPE_BIG_STRING) {
             var newUuid = CompressedValue.getBigStringMetaUuid(cvEncoded);
             var old = bigStringUuidByKey.put(key, newUuid);
-            bigStringUuidSet.add(newUuid);
-            if (old != null && old != newUuid) bigStringUuidSet.remove(old);
+            bigStringKeyByUuid.put(newUuid, key);
+            if (old != null && old != newUuid) bigStringKeyByUuid.remove(old);
         } else {
             var old = bigStringUuidByKey.remove(key);
-            if (old != null) bigStringUuidSet.remove(old);
+            if (old != null) bigStringKeyByUuid.remove(old);
         }
     }
 
@@ -121,7 +121,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      */
     public void removeBigStringUuid(String key) {
         var old = bigStringUuidByKey.remove(key);
-        if (old != null) bigStringUuidSet.remove(old);
+        if (old != null) bigStringKeyByUuid.remove(old);
     }
 
     /**
@@ -135,7 +135,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
         var current = bigStringUuidByKey.get(key);
         if (current != null && current == uuid) {
             bigStringUuidByKey.remove(key);
-            bigStringUuidSet.remove(uuid);
+            bigStringKeyByUuid.remove(uuid);
         }
     }
 
@@ -157,7 +157,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      * @return true if the UUID is mapped to any key
      */
     public boolean containsUuid(long uuid) {
-        return bigStringUuidSet.contains(uuid);
+        return bigStringKeyByUuid.containsKey(uuid);
     }
 
     /**
@@ -172,7 +172,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
      */
     public void clearUuidMap() {
         bigStringUuidByKey.clear();
-        bigStringUuidSet.clear();
+        bigStringKeyByUuid.clear();
     }
 
     /**
@@ -228,7 +228,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
                     // WAL may have loaded a more recent value already; only fill gaps
                     var uuid = CompressedValue.getBigStringMetaUuid(valueBytes);
                     if (bigStringUuidByKey.putIfAbsent(key, uuid) == null) {
-                        bigStringUuidSet.add(uuid);
+                        bigStringKeyByUuid.put(uuid, key);
                     }
                 });
             }
@@ -334,12 +334,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     }
 
     private String keyByUuid(long uuid) {
-        for (var entry : bigStringUuidByKey.entrySet()) {
-            if (entry.getValue() == uuid) {
-                return entry.getKey();
-            }
-        }
-        return "";
+        return bigStringKeyByUuid.getOrDefault(uuid, "");
     }
 
     /**
@@ -503,7 +498,7 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
             bigStringBytesByUuidLRU.clear();
         }
         bigStringUuidByKey.clear();
-        bigStringUuidSet.clear();
+        bigStringKeyByUuid.clear();
 
         var oldCount = bigStringFilesCount;
         try {

@@ -436,6 +436,50 @@ class BigStringFilesTest extends Specification {
         tmpSlotDir.deleteDir()
     }
 
+    def 'test getBigStringFileIdList resolves keys by uuid and falls back to empty when unknown'() {
+        given:
+        def tmpSlotDir = new File('/tmp/tmp-slot-dir-key-by-uuid')
+        if (tmpSlotDir.exists()) {
+            tmpSlotDir.deleteDir()
+        }
+        def bigStringFiles = new BigStringFiles(slot, tmpSlotDir)
+
+        and: 'three big-string files, two with a known key mapping and one without'
+        bigStringFiles.writeBigStringBytes(1L, 0, 11L, 'aaaa'.bytes)
+        bigStringFiles.writeBigStringBytes(2L, 0, 22L, 'bbbb'.bytes)
+        bigStringFiles.writeBigStringBytes(3L, 0, 33L, 'cccc'.bytes)
+
+        def cv1 = new CompressedValue()
+        cv1.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv1.setCompressedDataAsBigString(1L, CompressedValue.NULL_DICT_SEQ)
+        bigStringFiles.updateUuidFromEncoded('key-one', cv1.encode())
+
+        def cv2 = new CompressedValue()
+        cv2.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv2.setCompressedDataAsBigString(2L, CompressedValue.NULL_DICT_SEQ)
+        bigStringFiles.updateUuidFromEncoded('key-two', cv2.encode())
+
+        when:
+        def list = bigStringFiles.getBigStringFileIdList(0).sort { it.uuid() }
+
+        then: 'known uuids resolve to their key, the unmapped uuid falls back to empty'
+        list.size() == 3
+        list[0].uuid() == 1L
+        list[0].key() == 'key-one'
+        list[1].uuid() == 2L
+        list[1].key() == 'key-two'
+        list[2].uuid() == 3L
+        list[2].key() == ''
+
+        and: 'membership check still works after conversion'
+        bigStringFiles.containsUuid(1L)
+        bigStringFiles.containsUuid(2L)
+        !bigStringFiles.containsUuid(3L)
+
+        cleanup:
+        tmpSlotDir.deleteDir()
+    }
+
     def 'test reconcileCountersFromDisk matches actual files after partial cleanup failure'() {
         given:
         def tmpSlotDir = new File('/tmp/tmp-slot-dir-reconcile')
