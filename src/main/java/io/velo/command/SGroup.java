@@ -1090,6 +1090,15 @@ public class SGroup extends BaseCommand {
     }
 
     static void saveRedisSet(RedisHashKeys rhk, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
+        saveRedisSet(rhk, slotWithKeyHash, baseCommand, dictMap, false);
+    }
+
+    /**
+     * @param ignoreReadonly when true, bypass the slot readonly gate — used by the big-string exists-phase
+     *                       replication apply, which records fetched-uuid bookkeeping on a readonly
+     *                       slave/migrating slot.
+     */
+    static void saveRedisSet(RedisHashKeys rhk, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap, boolean ignoreReadonly) {
         if (rhk.size() == 0) {
             baseCommand.removeDelay(slotWithKeyHash);
             return;
@@ -1100,7 +1109,7 @@ public class SGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        baseCommand.set(rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_SET);
+        baseCommand.set(rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_SET, CompressedValue.NO_EXPIRE, ignoreReadonly);
     }
 
     private void saveRedisSet(RedisHashKeys rhk, SlotWithKeyHash slotWithKeyHash) {

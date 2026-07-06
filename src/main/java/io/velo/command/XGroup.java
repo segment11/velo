@@ -1331,7 +1331,9 @@ public class XGroup extends BaseCommand {
 
             var finalRhk = rhk;
             var finalSSet = sSet;
-            promises[pi] = firstOneSlot.asyncRun(() -> SGroup.saveRedisSet(finalRhk, finalSSet, this, dictMap));
+            // ignoreReadonly=true: during slot migration the target (firstOneSlot) is readonly, but this
+            // fetched-uuid bookkeeping is repl-internal state and must be written like any other repl apply.
+            promises[pi] = firstOneSlot.asyncRun(() -> SGroup.saveRedisSet(finalRhk, finalSSet, this, dictMap, true));
             pendingWrites = promises.length == 1 ? promises[0] : Promises.all(promises);
         }
 

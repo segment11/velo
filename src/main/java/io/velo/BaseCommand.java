@@ -1013,6 +1013,18 @@ public abstract class BaseCommand {
      * @param expireAt the expiration time
      */
     public void set(byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt) {
+        set(valueBytes, slotWithKeyHash, spType, expireAt, false);
+    }
+
+    /**
+     * @param valueBytes the value bytes
+     * @param slotWithKeyHash the precomputed slot and hash information
+     * @param spType the CompressedValue special type
+     * @param expireAt the expiration time
+     * @param ignoreReadonly when true, bypass the slot readonly gate (for replication applies writing to a
+     *                       readonly slave/migrating slot)
+     */
+    public void set(byte[] valueBytes, @NotNull SlotWithKeyHash slotWithKeyHash, int spType, long expireAt, boolean ignoreReadonly) {
         var key = slotWithKeyHash.rawKey;
         if (bigStringNoMemoryCopy != null) {
             var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
@@ -1125,7 +1137,7 @@ public abstract class BaseCommand {
             cv.setDictSeqOrSpType(cr.isCompressed() ? dict.getSeq() : CompressedValue.NULL_DICT_SEQ);
             cv.setCompressedData(cr.data());
 
-            putToOneSlot(slot, slotWithKeyHash, cv);
+            putToOneSlot(slot, slotWithKeyHash, cv, ignoreReadonly);
 
             // stats
             compressStats.compressedCount++;
@@ -1153,7 +1165,7 @@ public abstract class BaseCommand {
             cvRaw.setDictSeqOrSpType(spType);
             cvRaw.setCompressedData(valueBytes);
 
-            putToOneSlot(slot, slotWithKeyHash, cvRaw);
+            putToOneSlot(slot, slotWithKeyHash, cvRaw, ignoreReadonly);
 
             if (ConfForGlobal.isValueSetUseCompression && ConfForGlobal.isOnDynTrainDictForCompression) {
                 // add to the train sample list
@@ -1193,14 +1205,22 @@ public abstract class BaseCommand {
      * @param cv the CompressedValue to store
      */
     protected void putToOneSlot(short slot, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv) {
+        putToOneSlot(slot, slotWithKeyHash, cv, false);
+    }
+
+    /**
+     * @param ignoreReadonly when true, bypass the slot readonly gate (used by replication applies that
+     *                       write to a readonly slave/migrating slot, e.g. big-string exists-phase bookkeeping)
+     */
+    protected void putToOneSlot(short slot, @NotNull SlotWithKeyHash slotWithKeyHash, CompressedValue cv, boolean ignoreReadonly) {
         if (byPassGetSet != null) {
             byPassGetSet.put(slot, slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv);
         } else {
             var oneSlot = localPersist.oneSlot(slot);
-            if (oneSlot.isReadonly()) {
+            if (oneSlot.isReadonly() && !ignoreReadonly) {
                 throw new ReadonlyException();
             }
-            oneSlot.put(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv);
+            oneSlot.put(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv, false, ignoreReadonly);
         }
     }
 

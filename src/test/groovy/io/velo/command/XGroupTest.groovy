@@ -1855,6 +1855,47 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test as slave handle s exists big string applies to a readonly migrating slot'() {
+        given:
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def replPairAsMaster = ctx.replPairAsMaster
+        def masterUuid = ctx.masterUuid
+        def x = ctx.x
+
+        and:
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        oneSlot.onlyOneReplPairAsSlave.setRemoteReplProperties(ConfForSlot.global.generateReplProperties())
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        // simulate migration-in: the target slot is readonly during the exists phase
+        oneSlot.setReadonly(true)
+
+        when: 'apply one big-string entry while the slot is readonly'
+        def keyBytes = 'big-key-a'.bytes
+        def payload = new byte[16]
+        def contentBytes = new byte[4 + 4 + 1 + (8 + 8 + 4 + keyBytes.length + 4 + payload.length)]
+        def buf = ByteBuffer.wrap(contentBytes)
+        buf.putInt(0)      // bucket index
+        buf.putInt(1)      // big string count
+        buf.put((byte) 1)  // current bucket done
+        buf.putLong(1L)    // uuid
+        buf.putLong(1L)    // key hash
+        buf.putInt(keyBytes.length)
+        buf.put(keyBytes)
+        buf.putInt(payload.length)
+        buf.put(payload)
+        def replRequest = new ReplRequest(replPairAsMaster.slaveUuid, slot, ReplType.s_exists_big_string, contentBytes, contentBytes.length)
+        ReplReply r = x.handleRepl(replRequest) as ReplReply
+
+        then: 'the apply succeeds (bookkeeping write bypasses readonly), not a ReadonlyException error'
+        r.isReplType(ReplType.exists_big_string)
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test as slave handle s exists short string'() {
         given:
         def ctx = setupSlaveContext()
