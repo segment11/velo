@@ -590,7 +590,10 @@ public class XGroup extends BaseCommand {
         // or the master UUID changed (failover). Without the second condition, a non-first slot that
         // reaches hi() before slot 0 after failover can observe a stale `true` barrier and start
         // applying binlog from the new master before slot 0 has refreshed the dict.
-        if (slot == localPersist.firstOneSlot().slot() || lastUpdatedMasterUuid != masterUuid) {
+        // A node that owns no client slots yet (e.g. brand-new node receiving its first migrated slot)
+        // has a null firstOneSlot(); treat this slot as the de-facto first slot so it leads the barrier.
+        var firstOneSlotForReset = localPersist.firstOneSlot();
+        if (firstOneSlotForReset == null || slot == firstOneSlotForReset.slot() || lastUpdatedMasterUuid != masterUuid) {
             localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false);
         }
         if (lastUpdatedMasterUuid == masterUuid && isExistsDataAllFetched) {
@@ -637,9 +640,10 @@ public class XGroup extends BaseCommand {
                 currentFileIndex, currentOffset, slot);
         log.warn("Repl slave begin fetch all exists data from master, slot={}", slot);
 
-        // dict is global, only first slot do fetch
+        // dict is global, only the first slot fetches it. A node that owns no client slots yet (null
+        // firstOneSlot()) is migrating in a single slot that leads its own fetch, so it must not skip.
         var firstSlot = localPersist.firstOneSlot();
-        if (firstSlot.slot() != slot) {
+        if (firstSlot != null && firstSlot.slot() != slot) {
             log.warn("Repl slave skip fetch exists dict, slot={}", slot);
             return fetchExistsBigString(slot, 0);
         }
@@ -1580,7 +1584,9 @@ public class XGroup extends BaseCommand {
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(binlogMasterUuid, true,
                 lastUpdatedFileIndex, lastUpdatedOffset);
 
-        if (slot == localPersist.firstOneSlot().slot()) {
+        // null firstOneSlot() (node owns no client slots yet) means this slot is the de-facto first slot.
+        var firstOneSlotForDone = localPersist.firstOneSlot();
+        if (firstOneSlotForDone == null || slot == firstOneSlotForDone.slot()) {
             localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(true);
         }
 
@@ -1711,7 +1717,10 @@ public class XGroup extends BaseCommand {
         var lastUpdatedFileIndex = lastUpdatedFileIndexAndOffset.fileIndex();
         var lastUpdatedOffset = lastUpdatedFileIndexAndOffset.offset();
 
-        if (slot != localPersist.firstOneSlot().slot()) {
+        // null firstOneSlot() (node owns no client slots yet) means this slot is the de-facto first slot,
+        // so it leads rather than waits.
+        var firstOneSlotForWait = localPersist.firstOneSlot();
+        if (firstOneSlotForWait != null && slot != firstOneSlotForWait.slot()) {
             // wait the first slot fetched exists all done
             if (!localPersist.isAsSlaveFirstSlotFetchedExistsAllDone()) {
                 // use margin file offset

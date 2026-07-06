@@ -1271,6 +1271,115 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test as slave handle hi when node owns no cluster slots'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def replPairAsMaster = ctx.replPairAsMaster
+        def masterUuid = ctx.masterUuid
+
+        and: 'a brand-new node in the cluster owns no client slots yet, so firstOneSlot() is null'
+        assert localPersist.firstOneSlot() == null
+
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        def metaChunkSegmentIndex = oneSlot.metaChunkSegmentIndex
+        metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, false, 0, 0L)
+
+        when: 'the migrating-in slot runs the hi handshake; the null first slot must not NPE'
+        def hi = new Hi(replPairAsMaster.slaveUuid, masterUuid,
+                new Binlog.FileIndexAndOffset(1, 1L),
+                new Binlog.FileIndexAndOffset(0, 0L), 0)
+        def replRequest = mockReplRequest(replPairAsMaster, ReplType.hi, hi)
+        ReplReply r = ctx.x.handleRepl(replRequest) as ReplReply
+        then:
+        r.isReplType(ReplType.exists_dict)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test as slave handle s exists all done when node owns no cluster slots'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def replPairAsMaster = ctx.replPairAsMaster
+        def masterUuid = ctx.masterUuid
+        def x = ctx.x
+
+        and: 'a zero-owned node -> firstOneSlot() is null'
+        assert localPersist.firstOneSlot() == null
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        oneSlot.onlyOneReplPairAsSlave.setRemoteReplProperties(ConfForSlot.global.generateReplProperties())
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+
+        when: 'the migrating-in slot leads its own barrier instead of NPEing'
+        def contentBytes = [0] as byte[]
+        def replRequest = new ReplRequest(replPairAsMaster.slaveUuid, slot, ReplType.s_exists_all_done, contentBytes, contentBytes.length)
+        ReplReply r = x.handleRepl(replRequest) as ReplReply
+        then:
+        r.isReplType(ReplType.catch_up)
+        localPersist.isAsSlaveFirstSlotFetchedExistsAllDone()
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test as slave handle s catch up when node owns no cluster slots'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def replPairAsMaster = ctx.replPairAsMaster
+        def masterUuid = ctx.masterUuid
+        def x = ctx.x
+        def metaChunkSegmentIndex = oneSlot.metaChunkSegmentIndex
+
+        and: 'a zero-owned node -> firstOneSlot() is null'
+        assert localPersist.firstOneSlot() == null
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        oneSlot.onlyOneReplPairAsSlave.setRemoteReplProperties(ConfForSlot.global.generateReplProperties())
+        metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+
+        when: 'the migrating-in slot catches up (leads rather than waits) without NPEing'
+        int n = 0
+        def vList = Mock.prepareValueList(10)
+        for (v in vList) {
+            n += new XWalV(v).encodedLength()
+        }
+        def contentBytes = new byte[1 + 4 + 8 + 4 + 8 + 4 + n]
+        def requestBuffer = ByteBuffer.wrap(contentBytes)
+        requestBuffer.put((byte) 0)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(0)
+        requestBuffer.putInt(0)
+        requestBuffer.putLong(n)
+        requestBuffer.putInt(n)
+        for (v in vList) {
+            requestBuffer.put(new XWalV(v).encodeWithType())
+        }
+        def replRequest = new ReplRequest(replPairAsMaster.slaveUuid, slot, ReplType.s_catch_up, contentBytes, contentBytes.length)
+        ReplReply r = x.handleRepl(replRequest) as ReplReply
+        then:
+        r.isEmpty()
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test as slave handle byeBye'() {
         given:
         def ctx = setupSlaveContext()
