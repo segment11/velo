@@ -502,6 +502,13 @@ slots
         shards[0].migratingToHost == 'localhost'
         shards[0].migratingToPort == 7379
 
+        when: 'cancel clears the in-flight export (source keeps ownership, slot migratable again)'
+        data4[3] = 'cancel'.bytes
+        reply = clusterx.migrate()
+        then:
+        reply == ClusterxCommand.OK
+        shards[0].exportMigratingSlot == Shard.NO_MIGRATING_SLOT
+
         when:
         // skip
         data4[2] = '1'.bytes

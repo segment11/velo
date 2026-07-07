@@ -623,6 +623,17 @@ migrating_state:ok
             return new ErrorReply('only master can migrate slot')
         }
 
+        // clusterx migrate slot cancel — abort an in-flight export. The source keeps ownership and data
+        // untouched (it never flushed); just clear the export marker so the slot is migratable again. The
+        // target reverts its partial import via `manage slot N migrate_from_abort`.
+        if ('cancel'.equalsIgnoreCase(toNodeId)) {
+            if (mySelfShard.exportMigratingSlot == toClientSlot) {
+                mySelfShard.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
+                log.warn 'Clusterx migrate cancel export migrating slot={}', toClientSlot
+            }
+            return OK
+        }
+
         def shards = multiShard.shards
         def toShard = shards.find { ss ->
             ss.nodes.find { nn ->

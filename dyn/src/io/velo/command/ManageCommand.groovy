@@ -73,7 +73,7 @@ class ManageCommand extends BaseCommand {
         def subCmd = new String(data[1]).toLowerCase()
         // manage slot 0 bucket 0 view-key-count
         if (subCmd == 'slot') {
-            if (data.length < 5) {
+            if (data.length < 4) {
                 return r
             }
 
@@ -86,10 +86,13 @@ class ManageCommand extends BaseCommand {
             }
 
             def subSubCmd = new String(data[3]).toLowerCase()
-            if (subSubCmd == 'migrate_from') {
+            if (subSubCmd == 'migrate_from' || subSubCmd == 'migrate_from_abort') {
                 // given slot is to client slot, change to inner slot
                 // use can use the right event loop
                 slot = MultiShard.asInnerSlotByToClientSlot(slot)
+            } else if (data.length < 5) {
+                // other single-slot manage subcommands need at least 5 args (e.g. bucket/view)
+                return r
             }
 
             r.add(new SlotWithKeyHash(slot, 0, 0L))
@@ -160,6 +163,13 @@ class ManageCommand extends BaseCommand {
                 return ErrorReply.INVALID_INTEGER
             }
             return migrateFrom()
+        }
+        if (tmpSubSubCmd == 'migrate_from_abort') {
+            def toClientSlot = slot
+            if (toClientSlot >= MultiShard.TO_CLIENT_SLOT_NUMBER) {
+                return ErrorReply.INVALID_INTEGER
+            }
+            return migrateFromAbort()
         }
 
         if (slot >= ConfForGlobal.slotNumber) {
@@ -606,6 +616,59 @@ class ManageCommand extends BaseCommand {
             oneSlot.addUpstream(host, port)
             return ClusterxCommand.OK
         }
+    }
+
+    /**
+     * Aborts an in-flight migrate_from import on this target. Reverts the target to not owning the slot: stops
+     * fetching from the source (drops the upstream), drops any relay downstream pairs, discards the partial
+     * imported data, and clears the import-migrating marker. The source still owns the slot and is untouched, so
+     * a caller aborts by also clearing the source's export marker (clusterx migrate ... cancel). Idempotent: a
+     * no-op when there is no in-flight import for the slot.
+     */
+    Reply migrateFromAbort() {
+        // manage slot 0 migrate_from_abort
+        if (data.length != 4) {
+            return ErrorReply.FORMAT
+        }
+
+        def toClientSlot = Short.parseShort(new String(data[2]))
+        if (MultiShard.isToClientSlotSkip(toClientSlot)) {
+            return ClusterxCommand.OK
+        }
+
+        def innerSlot = slotWithKeyHashListParsed.first.slot()
+
+        def importShard = localPersist.multiShard.mySelfShard()
+        if (importShard == null || importShard.importMigratingSlot != toClientSlot) {
+            log.warn 'Manage migrate_from_abort, no in-flight import for slot={}, inner slot={}', toClientSlot, innerSlot
+            return ClusterxCommand.OK
+        }
+
+        if (!localPersist.isOneSlotInitialized(innerSlot as short)) {
+            importShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+            return ClusterxCommand.OK
+        }
+        def oneSlot = localPersist.oneSlot(innerSlot)
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>()
+        def asyncReply = new AsyncReply(finalPromise)
+        oneSlot.asyncRun(() -> {
+            // revert the in-flight import: stop fetching, drop any relay downstream, discard partial data —
+            // the target reverts to not owning this slot (the source still owns it, untouched)
+            oneSlot.removeReplPairAsSlave()
+            oneSlot.removeReplPairAsMaster()
+            oneSlot.flush()
+            importShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+            log.warn 'Manage migrate_from_abort done, slot={}, inner slot={}', toClientSlot, innerSlot
+        }).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error 'Manage migrate_from_abort error, slot={}, error={}', toClientSlot, e.message
+                finalPromise.set(new ErrorReply('error when migrate_from_abort: ' + e.message))
+            } else {
+                finalPromise.set(ClusterxCommand.OK)
+            }
+        })
+        return asyncReply
     }
 
     private Reply trainSampleListAndReturnRatio(String keyPrefixOrSuffixGiven, List<TrainSampleJob.TrainSampleKV> sampleToTrainList) {

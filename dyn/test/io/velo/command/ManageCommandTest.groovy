@@ -8,6 +8,7 @@ import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.persist.Wal
 import io.velo.repl.cluster.MultiShard
+import io.velo.repl.cluster.Shard
 import io.velo.reply.*
 import redis.clients.jedis.Jedis
 import spock.lang.Specification
@@ -48,11 +49,21 @@ class ManageCommandTest extends Specification {
         sList.size() == 0
 
         when:
+        // a 4-arg slot command that is not migrate_from(_abort) needs at least 5 args -> not applicable
         def data4 = new byte[4][]
         data4[1] = 'slot'.bytes
+        data4[2] = '0'.bytes
+        data4[3] = 'sub_cmd'.bytes
         sList = _ManageCommand.parseSlots('manage', data4, 1)
         then:
         sList.size() == 0
+
+        when:
+        // migrate_from_abort is valid at 4 args
+        data4[3] = 'migrate_from_abort'.bytes
+        sList = _ManageCommand.parseSlots('manage', data4, 1)
+        then:
+        sList.size() == 1
 
         when:
         data4[1] = 'xxx'.bytes
@@ -996,6 +1007,79 @@ class ManageCommandTest extends Specification {
         reply = manage.migrateFrom()
         then:
         reply == ClusterxCommand.OK
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test migrate from abort'() {
+        given:
+        def data4 = new byte[4][]
+        def mGroup = new MGroup('manage', data4, null)
+        mGroup.from(BaseCommand.mockAGroup())
+        def manage = new ManageCommand(mGroup)
+        manage.from(mGroup)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+        def shards = localPersist.multiShard.shards
+
+        when: 'abort with no in-flight import is an idempotent no-op'
+        data4[1] = 'slot'.bytes
+        data4[2] = '0'.bytes
+        data4[3] = 'migrate_from_abort'.bytes
+        manage.slotWithKeyHashListParsed = manage.parseSlots('manage', data4, manage.slotNumber)
+        def reply = manage.migrateFromAbort()
+        then:
+        reply == ClusterxCommand.OK
+
+        when: 'start an import (addUpstream + set import marker)'
+        def data6 = new byte[6][]
+        data6[1] = 'slot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'migrate_from'.bytes
+        data6[4] = 'localhost'.bytes
+        data6[5] = '7379'.bytes
+        manage.data = data6
+        manage.slotWithKeyHashListParsed = manage.parseSlots('manage', data6, manage.slotNumber)
+        manage.migrateFrom()
+        then:
+        shards[0].importMigratingSlot == 0
+        oneSlot.hasUpstream()
+
+        when: 'abort the in-flight import'
+        manage.data = data4
+        manage.slotWithKeyHashListParsed = manage.parseSlots('manage', data4, manage.slotNumber)
+        reply = manage.migrateFromAbort()
+        then: 'the upstream is dropped and the import marker is cleared (target reverts to not owning the slot)'
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        shards[0].importMigratingSlot == Shard.NO_MIGRATING_SLOT
+        !oneSlot.hasUpstream()
+
+        when: 'a non-boundary client slot is skipped (handled by the boundary slot)'
+        data4[2] = '1'.bytes
+        manage.data = data4
+        manage.slotWithKeyHashListParsed = manage.parseSlots('manage', data4, manage.slotNumber)
+        reply = manage.migrateFromAbort()
+        then:
+        reply == ClusterxCommand.OK
+
+        when: 'bad arity'
+        def data5 = new byte[5][]
+        data5[1] = 'slot'.bytes
+        data5[2] = '0'.bytes
+        data5[3] = 'migrate_from_abort'.bytes
+        data5[4] = 'x'.bytes
+        manage.data = data5
+        manage.slotWithKeyHashListParsed = manage.parseSlots('manage', data5, manage.slotNumber)
+        reply = manage.migrateFromAbort()
+        then:
+        reply == ErrorReply.FORMAT
 
         cleanup:
         localPersist.cleanUp()
