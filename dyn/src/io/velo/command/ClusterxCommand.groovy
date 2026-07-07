@@ -1263,9 +1263,10 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
         def asyncReply = new AsyncReply(finalPromise)
 
-        // Applies the ownership mutation and performs the local cutover. Split into a closure so the durability
-        // gate below can defer it (leaving no half-applied metadata) until downstream replicas have caught up.
-        Closure applyCutover = {
+        // Commits the ownership/topology change: move the slot to the target shard, clear migration markers, and
+        // bump the epoch. Done ONLY after the local cutover succeeds (below), so a failed cutover never leaves
+        // metadata advertising a slot this node cannot serve (routing must not run ahead of local state).
+        Closure mutateMetadata = {
             // add
             toShard.multiSlotRange.removeOrAddSet(removeNone, addSet)
             toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
@@ -1279,9 +1280,14 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                 }
             }
             multiShard.updateClusterVersion(clusterVersion)
+        }
 
+        // Performs the local cutover first, then commits the metadata only on success. Split into a closure so
+        // the durability gate below can defer it (leaving no half-applied state) until the replica has caught up.
+        Closure applyCutover = {
             if (oneSlot == null) {
-                // not owned locally and not initialized — nothing to flush
+                // not owned locally and not initialized — no local state to cut over, just apply the topology
+                mutateMetadata()
                 finalPromise.set(OK)
                 return
             }
@@ -1323,9 +1329,12 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                 }
             }).whenComplete { done, e ->
                 if (e) {
+                    // local cutover failed — do NOT commit the ownership change, so metadata never runs ahead of
+                    // local state (the controller retries setslot)
                     finalPromise.set(new ErrorReply('error when set slot: ' + e.message))
                     return
                 }
+                mutateMetadata()
                 finalPromise.set(OK)
             }
         }

@@ -8,6 +8,7 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.OneSlot
 import io.velo.repl.LeaderSelector
 import io.velo.repl.cluster.MultiShard
 import io.velo.repl.cluster.Node
@@ -1499,6 +1500,56 @@ slots
 
         cleanup:
         ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test setslot does not commit ownership when the local cutover fails'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = false // initialize the slot first
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+
+        and: 'inject a slot whose local shed-cutover (flush) throws, running inline on this thread'
+        def throwingSlot = new OneSlot(slot, Consts.slotDir, null, null) {
+            @Override
+            void flush() { throw new RuntimeException('boom flush') }
+        }
+        localPersist.oneSlots()[slot] = throwingSlot
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and: 'this node is not in the target shard, so setslot takes the shed (flush) branch'
+        ConfForGlobal.clusterEnabled = true
+        def shards = localPersist.multiShard.shards
+        shards[0].nodes[0].master = true
+        shards << new Shard(nodes: [new Node(master: true, nodeIdFix: 'to_node', host: 'localhost', port: 7379)])
+
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = 'to_node'.bytes
+        data6[5] = '9'.bytes
+        clusterx.data = data6
+
+        when: 'the local cutover throws'
+        def reply = clusterx.setslot()
+
+        then: 'the command errors and the ownership/topology is NOT committed (routing never runs ahead of state)'
+        (reply as AsyncReply).settablePromise.getResult() instanceof ErrorReply
+        !shards[1].multiSlotRange.contains(0)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist.oneSlots()[slot] = null
         localPersist?.cleanUp()
         localPersist?.resetForTest()
         Consts.persistDir.deleteDir()

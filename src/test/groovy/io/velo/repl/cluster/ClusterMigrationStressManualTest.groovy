@@ -31,8 +31,9 @@ class ClusterMigrationStressManualTest extends ClusterxBase {
         then: 'the values actually took the big-string path on the source'
         bigStringFileCount(0) > 0
 
-        when:
-        migrateSlot(0, nodes[0], nodes[1])
+        when: 'migrate slot 0 to node-1, resyncing its replica node-3 before cutover (required now the gate'
+        // enforces a synced replica before promotion)
+        migrateSlot(0, nodes[0], nodes[1], [nodes[3]])
 
         then: 'the old owner redirects and every big-string value is intact on the new owner'
         movedFrom(nodes[0], entries[0][0])
@@ -96,7 +97,10 @@ class ClusterMigrationStressManualTest extends ClusterxBase {
         stop.set(true)
         writer.join(5000)
         waitForInfo(nodes[0], 'migrating_state:success')
-        broadcastSetSlot(0, nodes[1].nodeId)
+        // resync node-1's replica node-3 before cutover (the gate now requires a synced replica), then
+        // broadcast charge-node-first, source-last
+        assert status(manage(nodes[3], 'slot', '0', 'migrate_from', HOST, nodes[1].port.toString(), 'force')) == 'OK'
+        broadcastSetSlotChargeFirst(0, nodes[1], nodes[0])
 
         then: 'writes were actually flowing, the old owner now redirects, seed survived'
         acked.size() > 0

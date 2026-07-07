@@ -165,8 +165,15 @@ bigStringNoMemoryCopySize=4096
             assert status(manage(r, 'slot', clientSlot.toString(), 'migrate_from', HOST, to.port.toString(), 'force')) == 'OK'
         }
 
-        // cutover order: the new owner first (its setslot defers until its replicas are caught up), the source
-        // last (so it flushes its copy only after the new owner has promoted with a synced replica)
+        broadcastSetSlotChargeFirst(clientSlot, to, from)
+    }
+
+    /**
+     * Broadcasts the ownership cutover with the new owner first (its setslot defers until its replicas are
+     * caught up) and the source last (so it flushes its copy only after the new owner has promoted with a
+     * synced replica).
+     */
+    protected void broadcastSetSlotChargeFirst(int clientSlot, NodeHandle to, NodeHandle from) {
         clusterVersion++
         def ordered = [to] + (nodes - [to, from]) + [from]
         ordered.each { node ->
