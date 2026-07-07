@@ -527,6 +527,98 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test as master handle ping serve flag by shard ownership in cluster mode'() {
+        given:
+        def ctx = setupMasterContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def x = ctx.x
+        def slaveUuid = ctx.slaveUuid
+        def multiShard = localPersist.multiShard
+
+        and: 'cluster mode on, this shard owns no slots yet (does not own inner slot 0)'
+        ConfForGlobal.clusterEnabled = true
+        multiShard.mySelfShard().multiSlotRange.list.clear()
+
+        when: 'a fresh ping arrives for a slot this shard does not own'
+        x.replPair = null
+        def ping = new Ping('localhost:6380', 0)
+        def r = x.handleRepl(mockReplRequest(ctx.replPairAsSlave, ReplType.ping, ping)) as ReplReply
+
+        then: 'it replies pong with serve flag 0 and does not create a master repl pair'
+        r.isReplType(ReplType.pong)
+        Wal.keyString(mockReplRequest(r).data).endsWith('\n0')
+        oneSlot.getReplPairAsMaster(slaveUuid) == null
+
+        when: 'the shard now owns inner slot 0 (client block 0..8191)'
+        multiShard.mySelfShard().multiSlotRange.addSingle(0, 8191)
+        x.replPair = null
+        r = x.handleRepl(mockReplRequest(ctx.replPairAsSlave, ReplType.ping, ping)) as ReplReply
+
+        then: 'it serves the slot: serve flag 1 and a master repl pair is created'
+        r.isReplType(ReplType.pong)
+        Wal.keyString(mockReplRequest(r).data).endsWith('\n1')
+        oneSlot.getReplPairAsMaster(slaveUuid) != null
+
+        when: 'a hello arrives for a slot this shard does not own'
+        multiShard.mySelfShard().multiSlotRange.list.clear()
+        x.replPair = null
+        oneSlot.removeReplPairAsMaster()
+        def hello = new Hello(slaveUuid, 'localhost:6380')
+        r = x.handleRepl(mockReplRequest(ctx.replPairAsSlave, ReplType.hello, hello)) as ReplReply
+
+        then: 'the master declines: empty reply and no master repl pair created'
+        r.isEmpty()
+        oneSlot.getReplPairAsMaster(slaveUuid) == null
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test as slave handle pong drops or keeps repl pair by serve flag and epoch'() {
+        given:
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def x = ctx.x
+        def multiShard = localPersist.multiShard
+
+        when: 'cluster on, master says serve=false with an epoch at least as new as ours'
+        ConfForGlobal.clusterEnabled = true
+        def myEpoch = multiShard.clusterMyEpoch
+        def dropPair = oneSlot.createReplPairAsSlave('localhost', 6379)
+        x.replPair = dropPair
+        def r = x.handleRepl(mockReplRequest(dropPair, ReplType.pong, new Pong('localhost:6379', myEpoch, false))) as ReplReply
+
+        then: 'the slave drops its repl pair, stops replicating this slot'
+        r.isEmpty()
+        dropPair.isSendBye()
+
+        when: 'a stale master (older epoch than ours) says serve=false'
+        def keepPair = oneSlot.createReplPairAsSlave('localhost', 6379)
+        x.replPair = keepPair
+        x.handleRepl(mockReplRequest(keepPair, ReplType.pong, new Pong('localhost:6379', multiShard.clusterMyEpoch - 1, false)))
+
+        then: 'the stale master cannot make us abandon the slot'
+        !keepPair.isSendBye()
+
+        when: 'cluster disabled: a serve=false pong is ignored entirely'
+        ConfForGlobal.clusterEnabled = false
+        def nonClusterPair = oneSlot.createReplPairAsSlave('localhost', 6379)
+        x.replPair = nonClusterPair
+        x.handleRepl(mockReplRequest(nonClusterPair, ReplType.pong, new Pong('localhost:6379', 0, false)))
+
+        then: 'plain master-slave replication is untouched by the serve flag'
+        !nonClusterPair.isSendBye()
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test as master handle hello'() {
         given:
         def ctx = setupMasterContext()

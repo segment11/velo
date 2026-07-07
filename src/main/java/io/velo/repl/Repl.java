@@ -143,6 +143,20 @@ public class Repl {
     }
 
     /**
+     * Creates a REPL reply message addressed to a slave uuid directly, for the case where no repl pair exists
+     * (e.g. a master answering a ping for a slot it does not serve, so it declines to create a master pair).
+     *
+     * @param slot      the slot index associated with the message
+     * @param slaveUuid the unique identifier of the slave node
+     * @param type      the type of the REPL message
+     * @param content   the content of the REPL message
+     * @return the REPL reply message
+     */
+    public static ReplReply reply(short slot, long slaveUuid, ReplType type, ReplContent content) {
+        return new ReplReply(slaveUuid, slot, type, content);
+    }
+
+    /**
      * Creates a REPL error message.
      *
      * @param slot         the slot index associated with the message

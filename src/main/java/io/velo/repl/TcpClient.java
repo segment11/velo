@@ -12,9 +12,10 @@ import io.velo.*;
 import io.velo.command.XGroup;
 import io.velo.decode.ReplDecoder;
 import io.velo.decode.Request;
+import io.velo.persist.LocalPersist;
+import io.velo.repl.content.Ping;
 import io.velo.reply.AsyncReply;
 import io.velo.reply.Reply;
-import io.velo.repl.content.Ping;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,7 +97,10 @@ public class TcpClient implements NeedCleanUp {
      * @return true if ping was sent successfully
      */
     public boolean ping() {
-        return write(ReplType.ping, new Ping(ConfForGlobal.announcedHostPortString()));
+        var localPersist = LocalPersist.getInstance();
+        var multiShard = localPersist.getMultiShard();
+        var clusterMyEpoch = multiShard == null ? 0 : multiShard.getClusterMyEpoch();
+        return write(ReplType.ping, new Ping(ConfForGlobal.announcedHostPortString(), clusterMyEpoch));
     }
 
     /**

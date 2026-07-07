@@ -370,6 +370,26 @@ public class LocalPersist implements NeedCleanUp {
         return innerSlotsForClientSlotRanges(mySelfShard.getMultiSlotRange().getList());
     }
 
+    /**
+     * Whether this node's shard genuinely owns the given inner slot (as a master would serve it to a downstream
+     * replica). Unlike {@link #localAssignedInnerSlots()} this never falls back to slot 0: a node with no cluster
+     * ownership does not "serve" its always-initialized fallback slot. When the cluster is disabled every slot is
+     * served, preserving plain master-slave replication behavior.
+     *
+     * @param innerSlot the inner slot index
+     * @return true if the cluster is disabled, or this node's shard owns the inner slot's client-slot block
+     */
+    public boolean isInnerSlotOwnedByMySelfShard(short innerSlot) {
+        if (!ConfForGlobal.clusterEnabled || multiShard == null) {
+            return true;
+        }
+        var mySelfShard = multiShard.mySelfShard();
+        if (mySelfShard == null || mySelfShard.getMultiSlotRange().getList().isEmpty()) {
+            return false;
+        }
+        return innerSlotsForClientSlotRanges(mySelfShard.getMultiSlotRange().getList()).contains(innerSlot);
+    }
+
     public static @NotNull TreeSet<Short> innerSlotsForClientSlotRanges(@NotNull List<SlotRange> ranges) {
         var slots = new TreeSet<Short>();
         var step = MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber;

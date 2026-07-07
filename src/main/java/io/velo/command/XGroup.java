@@ -311,22 +311,57 @@ public class XGroup extends BaseCommand {
             }
             case ping -> {
                 // server received ping from client
-                var netListenAddress = Wal.keyString(contentBytes);
+                var pingFields = Wal.keyString(contentBytes).split(Ping.FIELD_SEPARATOR, -1);
+                var netListenAddress = pingFields[0];
                 var hostAndPort = HostAndPort.parse(netListenAddress);
 
+                // Only serve (and keep a master repl pair for) a slot this node's shard actually owns. During a
+                // migrate_from import, or for a replica's always-initialized fallback slot, the slot is not owned
+                // here, so decline to create the pair and tell the slave (via the pong serve flag) to stop
+                // replicating this slot from us instead of churning create/demote master pairs every ping tick.
+                var serveSlot = localPersist.isInnerSlotOwnedByMySelfShard(slot);
+
                 if (replPair == null) {
-                    replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host, hostAndPort.port);
-                    replPair.increaseStatsCountForReplType(ping);
+                    if (serveSlot) {
+                        replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host, hostAndPort.port);
+                        replPair.increaseStatsCountForReplType(ping);
+                    }
+                }
+                if (replPair != null) {
+                    replPair.setLastPingGetTimestamp(System.currentTimeMillis());
                 }
 
-                replPair.setLastPingGetTimestamp(System.currentTimeMillis());
-                yield Repl.reply(slot, replPair, pong, new Pong(ConfForGlobal.announcedHostPortString()));
+                var multiShard = localPersist.getMultiShard();
+                var clusterMyEpoch = multiShard == null ? 0 : multiShard.getClusterMyEpoch();
+                var pongContent = new Pong(ConfForGlobal.announcedHostPortString(), clusterMyEpoch, serveSlot);
+                yield replPair != null
+                        ? Repl.reply(slot, replPair, pong, pongContent)
+                        : Repl.reply(slot, slaveUuid, pong, pongContent);
             }
             case pong -> {
                 // client received pong from server
                 assert replPair != null;
-                HostAndPort.parse(Wal.keyString(contentBytes));
+                var pongFields = Wal.keyString(contentBytes).split(Ping.FIELD_SEPARATOR, -1);
+                HostAndPort.parse(pongFields[0]);
                 replPair.setLastPongGetTimestamp(System.currentTimeMillis());
+
+                // The master told us it no longer serves this slot (its shard does not own it — e.g. we subscribed
+                // to our always-initialized fallback slot, or the master is still importing it). Drop our slave
+                // repl pair so we stop replicating a slot the master's shard does not own. Guard with the epoch
+                // ("use newest"): only obey a master whose topology is at least as new as ours, so a stale master
+                // cannot make us abandon a slot a newer topology says we should replicate. A later setslot
+                // re-subscribes cleanly once the master actually owns the slot.
+                if (ConfForGlobal.clusterEnabled && pongFields.length > 2 && "0".equals(pongFields[2])) {
+                    var masterEpoch = Integer.parseInt(pongFields[1]);
+                    var multiShard = localPersist.getMultiShard();
+                    var myEpoch = multiShard == null ? 0 : multiShard.getClusterMyEpoch();
+                    if (masterEpoch >= myEpoch) {
+                        log.warn("Repl slave drop repl pair as slave: master no longer serves this slot, master epoch={}, my epoch={}, slot={}",
+                                masterEpoch, myEpoch, slot);
+                        oneSlot.removeReplPairAsSlave();
+                        yield Repl.emptyReply();
+                    }
+                }
 
                 var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
                 if (metaChunkSegmentIndex.isExistsDataAllFetched()) {
@@ -428,6 +463,16 @@ public class XGroup extends BaseCommand {
         var hostAndPort = HostAndPort.parse(netListenAddress);
 
         var oneSlot = localPersist.oneSlot(slot);
+
+        // Decline a downstream replica's hello for a slot this node's shard does not own (its always-initialized
+        // fallback slot, or a slot still being imported): do not create a master pair or start the binlog stream,
+        // so no create-then-demote churn happens at bootstrap. The slave's next ping gets serve=false and drops
+        // the subscription; a later setslot re-subscribes once this node actually owns the slot.
+        if (ConfForGlobal.clusterEnabled && !localPersist.isInnerSlotOwnedByMySelfShard(slot)) {
+            log.warn("Repl master decline hello for a slot not owned by my shard, slave uuid={}, slot={}", slaveUuid, slot);
+            return Repl.emptyReply();
+        }
+
         if (replPair == null) {
             replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host, hostAndPort.port);
             replPair.increaseStatsCountForReplType(hello);
@@ -1978,7 +2023,7 @@ public class XGroup extends BaseCommand {
         }
 
         replPair.setSlaveLastCatchUpBinlogFileIndexAndOffset(
-                    new Binlog.FileIndexAndOffset(fetchedFileIndex, fetchedOffset + readSegmentLength));
+                new Binlog.FileIndexAndOffset(fetchedFileIndex, fetchedOffset + readSegmentLength));
 
         var binlogOneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
         var isCatchUpLastSegmentInOneFile = fetchedOffset == (binlogOneFileMaxLength - binlogOneSegmentLength);

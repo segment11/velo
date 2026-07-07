@@ -268,6 +268,49 @@ class LocalPersistTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test isInnerSlotOwnedByMySelfShard'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.slotNumber = (short) 4
+        ConfForGlobal.netListenAddress = 'localhost:7379'
+        def localPersist = LocalPersist.instance
+        localPersist.resetForTest()
+        Consts.persistDir.mkdirs()
+
+        expect: 'cluster disabled: every slot is served, preserving plain master-slave replication'
+        !ConfForGlobal.clusterEnabled
+        localPersist.isInnerSlotOwnedByMySelfShard((short) 0)
+        localPersist.isInnerSlotOwnedByMySelfShard((short) 3)
+
+        when: 'cluster enabled, self shard owns inner slot 2 (client 8192..12287 for slotNumber=4)'
+        ConfForGlobal.clusterEnabled = true
+        def multiShard = new MultiShard(Consts.persistDir)
+        multiShard.mySelfShard().multiSlotRange.addSingle(8192, 12287)
+        multiShard.updateClusterVersion(1)
+        def snowFlakes = [new SnowFlake(1, 1)] as SnowFlake[]
+        localPersist.initSlots((byte) 1, (short) 4, snowFlakes, Consts.persistDir, Config.create())
+
+        then: 'only the owned inner slot is reported owned; the always-initialized fallback slot 0 is not'
+        !localPersist.isInnerSlotOwnedByMySelfShard((short) 0)
+        !localPersist.isInnerSlotOwnedByMySelfShard((short) 1)
+        localPersist.isInnerSlotOwnedByMySelfShard((short) 2)
+        !localPersist.isInnerSlotOwnedByMySelfShard((short) 3)
+
+        when: 'self shard owns no slots yet'
+        localPersist.multiShard.mySelfShard().multiSlotRange.list.clear()
+
+        then: 'nothing is owned (no fallback-slot-0 ownership for serving downstream replicas)'
+        !localPersist.isInnerSlotOwnedByMySelfShard((short) 0)
+        !localPersist.isInnerSlotOwnedByMySelfShard((short) 2)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test cluster init slots uses slot 0 when self shard owns no slots yet'() {
         given:
         def savedSlotNumber = ConfForGlobal.slotNumber
