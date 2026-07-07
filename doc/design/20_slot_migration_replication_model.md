@@ -186,15 +186,23 @@ Benefits over the Phase-1 (bug 61) gating approach:
       already relays via `OneSlot.put`.
     - Wiring: `migrate_from`→`addUpstream`, `setslot`→`dropUpstream`, relay-aware serve predicate
       (`owned || hasUpstream`), and setslot keeps an already-caught-up replica pair instead of re-fetching.
-  - **Remaining — closing the durability window:** the migrate target's replica must be **synced before
-    cutover**, which needs a "downstream-caught-up-during-import" signal. The existing `migrating_state` cannot
-    express it: it short-circuits to `migrating` whenever the shard has an active `importMigratingSlot`
-    ([`ClusterxCommand.groovy:511`](/home/kerry/ws/velo/dyn/src/io/velo/command/ClusterxCommand.groovy)). Options:
-    (a) a small dedicated readiness query (`manage slot N downstream-caught-up host port` reading the target's
-    downstream `ReplPair.allCaughtUp`), or (b) extend `migrating_state` to report a concurrent downstream export.
-    Then add the pre-cutover resync step to the migrate sequence and the "kill new owner right after setslot"
-    durability test.
-  - **Not started:** import rollback path (Task 11).
+  - **Remaining — closing the durability window (node-internal, no new command):** the migrate target's
+    replica must be **synced before cutover**. The readiness stays internal to the target — it already holds the
+    answer in its downstream `ReplPair.allCaughtUp` (the same field the export-side check reads at
+    [`ClusterxCommand.groovy:556`](/home/kerry/ws/velo/dyn/src/io/velo/command/ClusterxCommand.groovy)):
+    - On import-complete, the target triggers its downstream replicas to do a fresh exists-fetch (reset their
+      downstream pairs so they re-hello against the now-populated slot).
+    - The target's own `setslot` handler waits for its downstream `ReplPair.allCaughtUp` before
+      `dropUpstream`/promote.
+
+    No external "downstream-caught-up" query and no `migrating_state` change — the earlier idea of surfacing this
+    as a `manage` query (controller polls the target) or extending `migrating_state` was unnecessary, since the
+    target owns the information and the wait belongs where the state lives.
+  - **Not started:** import rollback path (Task 11); `releaseOneSlot` for a shed slot (Task 13).
+
+> *Deeper alternative (Tier B):* relay the exists phase via new binlog content types, so the replica follows the
+> target as an ordinary slave with no explicit re-fetch trigger or cutover wait at all — at the cost of a new
+> on-disk binlog format (see the Tier A/B fork above).
 
 ## Test plan (Phase 2)
 
