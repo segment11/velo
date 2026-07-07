@@ -1253,19 +1253,30 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         oneSlot.asyncRun(RunnableEx.of {
             if (isMySelfNodeChargeThisInnerSlot) {
-                def isSelfSlave = oneSlot.removeReplPairAsSlave()
-                if (isSelfSlave) {
-                    oneSlot.resetAsMaster()
+                if (oneSlot.hasUpstream()) {
+                    // dual-role import cutover: drop the upstream and soft-promote, keeping downstream replicas
+                    // and binlog continuity so they need no full re-fetch
+                    oneSlot.dropUpstream()
                 } else {
                     log.info 'Clusterx set slot {} to node id {} is my self node charge, is already master, do nothing, slot={}',
                             toClientSlot, nodeId, innerSlot
                 }
             } else if (isMySelfShardChargeThisInnerSlot) {
                 def replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave()
-                if (replPairAsSlave != null) {
-                    oneSlot.removeReplPairAsSlave()
+                if (replPairAsSlave != null
+                        && replPairAsSlave.host == toMasterNode.host && replPairAsSlave.port == toMasterNode.port
+                        && replPairAsSlave.isAllCaughtUp()) {
+                    // already synced to the new master via the pre-cutover downstream resync — keep the pair,
+                    // just allow reads (become a normal readable replica) instead of a full re-fetch
+                    if (!oneSlot.isCanRead()) {
+                        oneSlot.canRead = true
+                    }
+                } else {
+                    if (replPairAsSlave != null) {
+                        oneSlot.removeReplPairAsSlave()
+                    }
+                    oneSlot.resetAsSlave(toMasterNode.host, toMasterNode.port)
                 }
-                oneSlot.resetAsSlave(toMasterNode.host, toMasterNode.port)
             } else {
                 oneSlot.removeReplPairAsSlave()
                 oneSlot.removeReplPairAsMaster()

@@ -593,7 +593,9 @@ class ManageCommand extends BaseCommand {
                 if (force) {
                     log.warn 'Manage migrate_from, force remove exist repl pair as slave'
                     oneSlot.removeReplPairAsSlave()
-                    oneSlot.resetAsSlave(host, port)
+                    // dual-role import: keep serving downstream replicas and keep binlog on so the import
+                    // relays to them, instead of resetAsSlave which would demote and stop relaying
+                    oneSlot.addUpstream(host, port)
 
                     return ClusterxCommand.OK
                 } else {
@@ -601,7 +603,7 @@ class ManageCommand extends BaseCommand {
                 }
             }
         } else {
-            oneSlot.resetAsSlave(host, port)
+            oneSlot.addUpstream(host, port)
             return ClusterxCommand.OK
         }
     }
