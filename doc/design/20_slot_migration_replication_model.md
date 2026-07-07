@@ -133,11 +133,21 @@ Benefits over the Phase-1 (bug 61) gating approach:
 
 ## Hard problems / open questions
 
-1. **Exists-phase must reach the binlog.** The bulk exists phase is applied via direct writes; the write path
-   only feeds `appendBinlog` when `binlogOn`
-   ([`OneSlot.java:1180`](/home/kerry/ws/velo/src/main/java/io/velo/persist/OneSlot.java)). For a relay, the
-   import-apply must emit binlog records for the exists phase too, or downstream sees only the `catch_up` tail.
-   This is the bulk of the work. Reusing the 2N fan-out path is the preferred route.
+1. **Getting the exists (historical) bulk to the downstream — Tier A vs Tier B.** *(Design fork.)* The binlog is
+   a **logical write-log**: its only data content types are `XWalV`, `XBigStrings`, `XDict`
+   (`src/main/java/io/velo/repl/incremental/`) — there is **no raw chunk-segment type**. The exists phase copies
+   **physical, already-persisted historical segments** whose originating writes have rotated out of the binlog,
+   so they cannot be replayed as binlog records. Both `XWalV.apply` (catch_up) and the exists apply write via
+   `targetWal.put` directly, bypassing the binlog. Two ways forward:
+   - **Tier A (recommended):** the **downstream re-fetches the exists phase physically from the target** (reuse
+     existing exists machinery) once the target holds the data, and the target relays only the **incremental
+     `catch_up`** window as binlog records (`XWalV`/`XBigStrings` appended when `binlogOn`). Closes the
+     post-cutover **no-replica window** (downstream syncs before cutover). Does **not** avoid the exists
+     physical copy — it moves it earlier. Moderate effort, no new on-disk format.
+   - **Tier B:** add raw-segment binlog content types (`XChunkSegments`, big-string files, dict) so the whole
+     import — exists + catch_up — relays as binlog records; the downstream never physically re-fetches. Also
+     achieves the **no-full-re-sync** benefit, but is a large new-format change with its own compatibility and
+     compaction concerns.
 2. **Chained readiness.** The downstream replica must stay `canRead=false` for the slot until the target
    finishes importing *and* the downstream drains the relay, then flip at cutover. Replication lag composes
    across two hops; readiness/`allCaughtUp` accounting must account for the chain.
