@@ -141,10 +141,13 @@ Benefits over the Phase-1 (bug 61) gating approach:
 2. **Chained readiness.** The downstream replica must stay `canRead=false` for the slot until the target
    finishes importing *and* the downstream drains the relay, then flip at cutover. Replication lag composes
    across two hops; readiness/`allCaughtUp` accounting must account for the chain.
-3. **`masterUuid` identity across cutover.** The downstream's `metaChunkSegmentIndex` tracks
-   `(masterUuid, offset)`. During relay the target streams the source's data; at `resetAsMaster`/`dropUpstream`
-   the target's identity changes. The relay binlog needs a stable identity/offset story through promotion, or
-   the downstream is forced into a full re-fetch anyway — defeating the benefit.
+3. **`masterUuid` identity across cutover.** *(Resolved.)* The target slot's `masterUuid` is `final`
+   ([`OneSlot.java:329`](/home/kerry/ws/velo/src/main/java/io/velo/persist/OneSlot.java)) — stable across
+   `addUpstream`/`dropUpstream`. So a downstream that follows the **target's** binlog under the target's stable
+   `masterUuid` keeps tracking one identity through migration *and* cutover. The one requirement this imposes:
+   `dropUpstream` must be a **soft promote** — unlike `resetAsMaster`, it must *not* rebase/reopen the binlog to
+   the source's offset (that would break a downstream mid-follow). It only clears the catch-up-from-source
+   bookkeeping and lifts readonly, keeping the binlog position continuous. Implemented in `OneSlot.dropUpstream`.
 4. **Rollback.** An aborted import must cleanly revert the target *and* the partial state it relayed downstream.
 5. **Ownership still matters.** A node must not relay a slot it will never own (e.g. the always-initialized
    fallback inner slot 0). The bug-61 ownership gate remains the guard for that; `addUpstream` applies only to

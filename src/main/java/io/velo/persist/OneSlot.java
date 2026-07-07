@@ -2727,8 +2727,20 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     public void dropUpstream() throws IOException {
         removeReplPairAsSlave();
-        resetAsMaster();
-        log.warn("Repl drop upstream: removed upstream, promoted to master, downstream kept, slot={}", slot);
+
+        // done importing from the source — clear our catch-up-from-source bookkeeping
+        metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
+
+        // Soft promote: unlike resetAsMaster, do NOT rebase/reopen the binlog. Downstream replicas have been
+        // following this slot's binlog throughout the import, and this slot's masterUuid is stable (final), so
+        // keeping the same binlog position lets them continue seamlessly at cutover with no full re-fetch.
+        if (isReadonly()) {
+            setReadonly(false);
+        }
+        if (!isCanRead()) {
+            setCanRead(true);
+        }
+        log.warn("Repl drop upstream: soft-promoted to master, binlog continuity kept, downstream kept, slot={}", slot);
     }
 
     /**
