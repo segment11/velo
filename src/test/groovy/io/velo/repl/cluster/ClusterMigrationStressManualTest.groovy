@@ -2,6 +2,7 @@ package io.velo.repl.cluster
 
 import spock.lang.IgnoreIf
 
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -39,6 +40,38 @@ class ClusterMigrationStressManualTest extends ClusterxBase {
 
         and: 'the new owner stored them as big strings and its replica received every value'
         bigStringFileCount(1) > 0
+        entries.each { kv -> waitForValue(nodes[3], kv[0], kv[1]) }
+    }
+
+    def 'T3: big string values survive new-owner crash right after cutover (durability window closed)'() {
+        given:
+        startCluster()
+        bootstrapInitialTopology()
+        def tag = hashTagForSlot(0)
+        def entries = (0..<5).collect { ["{${tag}}:big:${it}".toString(), (bigValue(8) + '-' + it).toString()] }
+
+        when: 'write big-string values on the source, then migrate with pre-cutover replica resync'
+        entries.each { kv -> assert nodes[0].jedis.set(kv[0], kv[1]) == 'OK' }
+
+        then: 'the values actually took the big-string path on the source'
+        bigStringFileCount(0) > 0
+
+        when: 'migrate slot 0 to node-1, resyncing its replica node-3 before cutover'
+        migrateSlot(0, nodes[0], nodes[1], [nodes[3]])
+
+        then: 'the new owner replica already holds every value at cutover (synced before, not after)'
+        entries.each { kv -> waitForValue(nodes[3], kv[0], kv[1]) }
+
+        when: 'the new owner crashes right after cutover, then its replica is promoted among living nodes'
+        processes[1].destroyForcibly()
+        processes[1].waitFor(5, TimeUnit.SECONDS)
+        clusterVersion++
+        def promoted = failoverNodesArgs(true)
+        [nodes[0], nodes[2], nodes[3]].each { node ->
+            waitClusterxOk(node, 'setnodes', promoted, clusterVersion.toString())
+        }
+
+        then: 'every big-string value survived on the promoted node — there was no no-replica window'
         entries.each { kv -> waitForValue(nodes[3], kv[0], kv[1]) }
     }
 

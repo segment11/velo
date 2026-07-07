@@ -1239,66 +1239,88 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                 ? localPersist.ensureOneSlotInitialized(innerSlot as short)
                 : localPersist.oneSlot(innerSlot)
 
-        // add
-        toShard.multiSlotRange.removeOrAddSet(removeNone, addSet)
-        toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
-        toShard.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
-        shards.each { ss ->
-            if (ss != toShard) {
-                // remove
-                ss.multiSlotRange.removeOrAddSet(addSet, removeNone)
-                ss.importMigratingSlot = Shard.NO_MIGRATING_SLOT
-                ss.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
-            }
-        }
-        multiShard.updateClusterVersion(clusterVersion)
-
         SettablePromise<Reply> finalPromise = new SettablePromise<>()
         def asyncReply = new AsyncReply(finalPromise)
 
-        if (oneSlot == null) {
-            // not owned locally and not initialized — nothing to flush
-            finalPromise.set(OK)
-            return asyncReply
-        }
-
-        oneSlot.asyncRun(RunnableEx.of {
-            if (isMySelfNodeChargeThisInnerSlot) {
-                if (oneSlot.hasUpstream()) {
-                    // dual-role import cutover: drop the upstream and soft-promote, keeping downstream replicas
-                    // and binlog continuity so they need no full re-fetch
-                    oneSlot.dropUpstream()
-                } else {
-                    log.info 'Clusterx set slot {} to node id {} is my self node charge, is already master, do nothing, slot={}',
-                            toClientSlot, nodeId, innerSlot
+        // Applies the ownership mutation and performs the local cutover. Split into a closure so the durability
+        // gate below can defer it (leaving no half-applied metadata) until downstream replicas have caught up.
+        Closure applyCutover = {
+            // add
+            toShard.multiSlotRange.removeOrAddSet(removeNone, addSet)
+            toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+            toShard.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
+            shards.each { ss ->
+                if (ss != toShard) {
+                    // remove
+                    ss.multiSlotRange.removeOrAddSet(addSet, removeNone)
+                    ss.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+                    ss.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
                 }
-            } else if (isMySelfShardChargeThisInnerSlot) {
-                def replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave()
-                if (replPairAsSlave != null
-                        && replPairAsSlave.host == toMasterNode.host && replPairAsSlave.port == toMasterNode.port
-                        && replPairAsSlave.isAllCaughtUp()) {
-                    // already synced to the new master via the pre-cutover downstream resync — keep the pair,
-                    // just allow reads (become a normal readable replica) instead of a full re-fetch
-                    if (!oneSlot.isCanRead()) {
-                        oneSlot.canRead = true
-                    }
-                } else {
-                    if (replPairAsSlave != null) {
-                        oneSlot.removeReplPairAsSlave()
-                    }
-                    oneSlot.resetAsSlave(toMasterNode.host, toMasterNode.port)
-                }
-            } else {
-                oneSlot.removeReplPairAsSlave()
-                oneSlot.removeReplPairAsMaster()
-                oneSlot.flush()
             }
-        }).whenComplete { done, e ->
-            if (e) {
-                finalPromise.set(new ErrorReply('error when set slot: ' + e.message))
+            multiShard.updateClusterVersion(clusterVersion)
+
+            if (oneSlot == null) {
+                // not owned locally and not initialized — nothing to flush
+                finalPromise.set(OK)
                 return
             }
-            finalPromise.set(OK)
+
+            oneSlot.asyncRun(RunnableEx.of {
+                if (isMySelfNodeChargeThisInnerSlot) {
+                    if (oneSlot.hasUpstream()) {
+                        // dual-role import cutover: drop the upstream and soft-promote, keeping downstream replicas
+                        // and binlog continuity so they need no full re-fetch
+                        oneSlot.dropUpstream()
+                    } else {
+                        log.info 'Clusterx set slot {} to node id {} is my self node charge, is already master, do nothing, slot={}',
+                                toClientSlot, nodeId, innerSlot
+                    }
+                } else if (isMySelfShardChargeThisInnerSlot) {
+                    def replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave()
+                    if (replPairAsSlave != null
+                            && replPairAsSlave.host == toMasterNode.host && replPairAsSlave.port == toMasterNode.port
+                            && replPairAsSlave.isAllCaughtUp()) {
+                        // already synced to the new master via the pre-cutover downstream resync — keep the pair,
+                        // just allow reads (become a normal readable replica) instead of a full re-fetch
+                        if (!oneSlot.isCanRead()) {
+                            oneSlot.canRead = true
+                        }
+                    } else {
+                        if (replPairAsSlave != null) {
+                            oneSlot.removeReplPairAsSlave()
+                        }
+                        oneSlot.resetAsSlave(toMasterNode.host, toMasterNode.port)
+                    }
+                } else {
+                    oneSlot.removeReplPairAsSlave()
+                    oneSlot.removeReplPairAsMaster()
+                    oneSlot.flush()
+                }
+            }).whenComplete { done, e ->
+                if (e) {
+                    finalPromise.set(new ErrorReply('error when set slot: ' + e.message))
+                    return
+                }
+                finalPromise.set(OK)
+            }
+        }
+
+        // Durability gate: a charge node promoting a slot it imported (has an upstream) must not cut over while
+        // its downstream replicas are unsynced — that would make it the sole owner with no synced replica (a
+        // crash window). Defer (retryable; the controller / waitClusterxOk retries setslot) until they catch up.
+        // Checked BEFORE mutating ownership metadata, and the source is broadcast last, so the source flushes
+        // only after the charge node returns OK.
+        if (isMySelfNodeChargeThisInnerSlot && oneSlot != null) {
+            oneSlot.asyncRun(RunnableEx.of {
+                if (oneSlot.hasUpstream() && !oneSlot.downstreamAllCaughtUp()) {
+                    log.warn 'Clusterx setslot defer: downstream replica not caught up, slot={}, inner slot={}', toClientSlot, innerSlot
+                    finalPromise.set(new ErrorReply('downstream replica not caught up, retry setslot'))
+                } else {
+                    applyCutover()
+                }
+            })
+        } else {
+            applyCutover()
         }
 
         asyncReply

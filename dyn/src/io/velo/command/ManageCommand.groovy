@@ -594,6 +594,17 @@ class ManageCommand extends BaseCommand {
         var replPairAsSlave = oneSlot.onlyOneReplPairAsSlave
         if (replPairAsSlave) {
             if (replPairAsSlave.host == host && replPairAsSlave.port == port) {
+                if (force) {
+                    // force a fresh import even from the same master. The pre-cutover downstream resync uses this:
+                    // a replica may already have an (empty, bootstrap-era) pair to this master, but the master's
+                    // slot data changed since, so a fresh exists-fetch is required — the idempotent no-op would
+                    // otherwise leave the replica missing the imported historical data.
+                    log.warn 'Manage migrate_from, force fresh import from same master host={}, port={}, slot={}',
+                            host, port, oneSlot.slot()
+                    oneSlot.removeReplPairAsSlave()
+                    oneSlot.addUpstream(host, port)
+                    return ClusterxCommand.OK
+                }
                 log.info 'Manage migrate_from, already slave of host={}, port={}, slot={}',
                         host, port, oneSlot.slot()
                 return ClusterxCommand.OK

@@ -2751,10 +2751,33 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
+     * @return true if this slot has an upstream that has finished importing (caught up). Used to decide whether a
+     * migration import target may serve the slot to a downstream replica yet: only once it actually holds the
+     * data, so the replica's fetch completes instead of stalling against a still-importing (empty) slot.
+     */
+    public boolean hasCaughtUpUpstream() {
+        var upstream = getOnlyOneReplPairAsSlave();
+        return upstream != null && upstream.isAllCaughtUp();
+    }
+
+    /**
      * @return true if this slot currently serves at least one downstream replica
      */
     public boolean hasDownstream() {
         return !getReplPairAsMasterList().isEmpty();
+    }
+
+    /**
+     * @return true if every downstream replica has caught up (vacuously true when there is no downstream). Used
+     * at migration cutover to gate promotion until the migrated slot has a synced replica (no durability window).
+     */
+    public boolean downstreamAllCaughtUp() {
+        for (var replPair : getReplPairAsMasterList()) {
+            if (!replPair.isAllCaughtUp()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private final static OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();

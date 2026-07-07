@@ -315,12 +315,13 @@ public class XGroup extends BaseCommand {
                 var netListenAddress = pingFields[0];
                 var hostAndPort = HostAndPort.parse(netListenAddress);
 
-                // Serve (and keep a master repl pair for) a slot this node either owns, or is importing with an
-                // upstream (addUpstream migration target) — in the latter case it relays the import to downstream
-                // replicas. Otherwise (a replica's always-initialized fallback slot, or a slot owned elsewhere)
-                // decline and tell the slave via the pong serve flag to stop replicating this slot from us,
-                // instead of churning create/demote master pairs every ping tick.
-                var serveSlot = localPersist.isInnerSlotOwnedByMySelfShard(slot) || oneSlot.hasUpstream();
+                // Serve (and keep a master repl pair for) a slot this node either owns, or has finished importing
+                // via an upstream (addUpstream migration target whose upstream caught up) — in the latter case it
+                // relays to downstream replicas that resync after the import. A still-importing slot is NOT served
+                // (its data is incomplete, so a replica's fetch would stall). Otherwise (a replica's fallback slot,
+                // or a slot owned elsewhere) decline and tell the slave via the pong serve flag to stop replicating
+                // this slot from us, instead of churning create/demote master pairs every ping tick.
+                var serveSlot = localPersist.isInnerSlotOwnedByMySelfShard(slot) || oneSlot.hasCaughtUpUpstream();
 
                 if (replPair == null) {
                     if (serveSlot) {
@@ -465,12 +466,13 @@ public class XGroup extends BaseCommand {
 
         var oneSlot = localPersist.oneSlot(slot);
 
-        // Decline a downstream replica's hello for a slot this node neither owns nor is importing with an
-        // upstream (its always-initialized fallback slot, or a slot owned elsewhere): do not create a master
-        // pair or start the binlog stream, so no create-then-demote churn happens at bootstrap. The slave's next
-        // ping gets serve=false and drops the subscription. A migration import target (hasUpstream) does serve,
-        // so its replica can re-fetch and follow the import before cutover.
-        if (ConfForGlobal.clusterEnabled && !localPersist.isInnerSlotOwnedByMySelfShard(slot) && !oneSlot.hasUpstream()) {
+        // Decline a downstream replica's hello for a slot this node neither owns nor has finished importing (its
+        // always-initialized fallback slot, a slot owned elsewhere, or a slot still mid-import): do not create a
+        // master pair or start the binlog stream, so no create-then-demote churn happens at bootstrap and no
+        // replica stalls fetching a still-importing slot. The slave's next ping gets serve=false and drops the
+        // subscription. A migration target that has imported the slot (upstream caught up) does serve, so its
+        // replica can resync and follow it before cutover.
+        if (ConfForGlobal.clusterEnabled && !localPersist.isInnerSlotOwnedByMySelfShard(slot) && !oneSlot.hasCaughtUpUpstream()) {
             log.warn("Repl master decline hello for a slot not owned by my shard, slave uuid={}, slot={}", slaveUuid, slot);
             return Repl.emptyReply();
         }

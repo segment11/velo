@@ -154,11 +154,24 @@ bigStringNoMemoryCopySize=4096
      * Runs the full migrate sequence for one client slot from {@code from} to {@code to}:
      * import on the target, export on the source, wait for catch-up, then broadcast the ownership cutover.
      */
-    protected void migrateSlot(int clientSlot, NodeHandle from, NodeHandle to) {
+    protected void migrateSlot(int clientSlot, NodeHandle from, NodeHandle to, List<NodeHandle> toReplicas = []) {
         assert status(manage(to, 'slot', clientSlot.toString(), 'migrate_from', HOST, from.port.toString(), 'force')) == 'OK'
         assert status(clusterx(from, 'migrate', clientSlot.toString(), to.nodeId)) == 'OK'
         waitForInfo(from, 'migrating_state:success')
-        broadcastSetSlot(clientSlot, to.nodeId)
+
+        // pre-cutover downstream resync: trigger the new owner's replicas to fetch the now-populated slot from it,
+        // so they are synced before cutover (closes the no-replica durability window)
+        toReplicas.each { r ->
+            assert status(manage(r, 'slot', clientSlot.toString(), 'migrate_from', HOST, to.port.toString(), 'force')) == 'OK'
+        }
+
+        // cutover order: the new owner first (its setslot defers until its replicas are caught up), the source
+        // last (so it flushes its copy only after the new owner has promoted with a synced replica)
+        clusterVersion++
+        def ordered = [to] + (nodes - [to, from]) + [from]
+        ordered.each { node ->
+            waitClusterxOk(node, 'setslot', clientSlot.toString(), 'node', to.nodeId, clusterVersion.toString())
+        }
     }
 
     /**

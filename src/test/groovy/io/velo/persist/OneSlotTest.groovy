@@ -523,6 +523,15 @@ class OneSlotTest extends Specification {
         oneSlot.isReadonly()
         !oneSlot.isCanRead()
 
+        and: 'the upstream has not caught up yet, so the slot is not yet serveable to downstream replicas'
+        !oneSlot.hasCaughtUpUpstream()
+
+        when: 'the upstream finishes importing (catches up)'
+        oneSlot.onlyOneReplPairAsSlave.allCaughtUp = true
+
+        then: 'the slot now has a caught-up upstream (may serve its imported data to downstream replicas)'
+        oneSlot.hasCaughtUpUpstream()
+
         when: 'cutover drops the upstream and promotes to plain master'
         oneSlot.dropUpstream()
 
