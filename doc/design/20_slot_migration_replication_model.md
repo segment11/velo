@@ -1,6 +1,8 @@
 # Velo Slot-Migration Replication Model — Dual-Role `OneSlot` (Upstream / Downstream)
 
-**Status:** Proposal / design discussion (Phase 1 shipped as bug 61; Phase 2 not yet built)
+**Status:** Phase 1 (bug 61) shipped. Phase 2 **Tier A implemented** (Tasks 6–12: dual-role primitives,
+catch_up relay, wiring, import rollback, and the durability-window closure — all committed, process-tested).
+Tier B (no full re-sync) and `releaseOneSlot` (Task 13) remain.
 **Related:** [`09_replication_design.md`](/home/kerry/ws/velo/doc/design/09_replication_design.md),
 [`16_cluster_management_design.md`](/home/kerry/ws/velo/doc/design/16_cluster_management_design.md),
 [`18_scale_up_design.md`](/home/kerry/ws/velo/doc/design/18_scale_up_design.md),
@@ -113,23 +115,35 @@ resetAsSlave(...):                   // unchanged: full role swap (drop downstre
 Read plainly: `addUpstream` = "**add an upstream, keep the downstream**"; `resetAsSlave` = "**drop the
 downstream, swap to an upstream**". The migration import wants the former; failover wants the latter.
 
-This turns the source → target → downstream path into a **relay chain**:
+### What Tier A actually implements (vs the ideal live relay chain)
+
+The ideal would be a pure **relay chain** where the downstream follows the whole import live (source → target →
+downstream) and is already fully in sync at cutover. That is **Tier B** — it needs raw-segment binlog content
+types (the exists/historical bulk has no binlog representation today; see Hard problems). **Tier A** — what is
+built — gets the downstream synced *before* cutover a different way:
 
 ```
- node-0 (SOURCE)          node-1 (TARGET, master-and-slave)              node-3 (node-1's replica)
-        | ── exists_* / catch_up ─▶ apply locally                        |
-        |                          AND append to node-1 binlog ─────────▶ | catch_up follows the import live
-        |                          (master pairs kept, binlogOn kept)     | (canRead stays false until cutover)
-   ═ setslot ═▶ dropUpstream(): node-1 promotes; node-3 already in sync ─▶ | flip canRead → serving immediately
+ node-0 (SOURCE)     node-1 (TARGET, master-and-slave)                 node-3 (node-1's replica)
+   ── exists/catch_up ─▶ import locally; relay only catch_up to binlog  |  (not subscribed during import:
+   (target upstream not caught up → does NOT serve slot to downstream)  |   hasCaughtUpUpstream=false)
+   ─ migrating_state:success → target upstream caught up ──────────────▶|
+   resync: node-3 migrate_from(node-1) ◀───────────────────────────────┤  fresh physical exists-fetch
+   (now serves: hasCaughtUpUpstream=true) ── exists + catch_up ────────▶|  → node-3 caught up
+   ═ setslot (charge node first) ═▶ gate: wait downstream allCaughtUp,   |
+                                    then dropUpstream/soft-promote       |  already synced ⇒ serving
+   ═ setslot (source last) ═▶ node-0 flushes only after node-1 promoted  |
 ```
 
-Benefits over the Phase-1 (bug 61) gating approach:
+Benefits **delivered by Tier A**:
 
-- **No create→demote→recreate churn** — the master pair is never dropped.
-- **No post-cutover no-replica window** — the replica tracks the import throughout, so at cutover the migrated
-  slot already has an up-to-date replica.
-- **No full replica re-sync** — the replica applies the import incrementally instead of re-fetching the whole
-  (possibly large) slot after cutover.
+- **No create→demote→recreate churn** — the master pair is never dropped (`addUpstream` keeps downstream).
+- **No post-cutover no-replica window** — the target gates cutover on `downstreamAllCaughtUp` and the source
+  flushes last, so the slot always has a synced replica at the moment of promotion (verified by test T3).
+
+Benefit **not** delivered by Tier A (needs Tier B):
+
+- **Avoiding the full replica re-sync** — the replica still does a physical exists-fetch during the resync; Tier
+  A moves it *before* cutover rather than eliminating it. For a very large slot this is still a full copy.
 
 ## Hard problems / open questions
 
@@ -148,9 +162,11 @@ Benefits over the Phase-1 (bug 61) gating approach:
      import — exists + catch_up — relays as binlog records; the downstream never physically re-fetches. Also
      achieves the **no-full-re-sync** benefit, but is a large new-format change with its own compatibility and
      compaction concerns.
-2. **Chained readiness.** The downstream replica must stay `canRead=false` for the slot until the target
-   finishes importing *and* the downstream drains the relay, then flip at cutover. Replication lag composes
-   across two hops; readiness/`allCaughtUp` accounting must account for the chain.
+2. **Chained readiness.** *(Resolved for Tier A.)* Rather than a live two-hop chain, Tier A keeps the target
+   from serving the slot until its own upstream has caught up (`hasCaughtUpUpstream`), so a downstream never
+   subscribes to a still-importing (empty) slot and stalls. The downstream resyncs *after* import, and the
+   target gates cutover on `downstreamAllCaughtUp` — so readiness is a single check on the target, not a
+   composed two-hop lag.
 3. **`masterUuid` identity across cutover.** *(Resolved.)* The target slot's `masterUuid` is `final`
    ([`OneSlot.java:329`](/home/kerry/ws/velo/src/main/java/io/velo/persist/OneSlot.java)) — stable across
    `addUpstream`/`dropUpstream`. So a downstream that follows the **target's** binlog under the target's stable
@@ -158,7 +174,9 @@ Benefits over the Phase-1 (bug 61) gating approach:
    `dropUpstream` must be a **soft promote** — unlike `resetAsMaster`, it must *not* rebase/reopen the binlog to
    the source's offset (that would break a downstream mid-follow). It only clears the catch-up-from-source
    bookkeeping and lifts readonly, keeping the binlog position continuous. Implemented in `OneSlot.dropUpstream`.
-4. **Rollback.** An aborted import must cleanly revert the target *and* the partial state it relayed downstream.
+4. **Rollback.** *(Done — Task 11.)* `manage slot N migrate_from_abort` reverts the target (drop upstream, drop
+   relay downstream, discard partial data, clear the import marker); `clusterx migrate N cancel` clears the
+   source's export marker (source keeps ownership, untouched).
 5. **Ownership still matters.** A node must not relay a slot it will never own (e.g. the always-initialized
    fallback inner slot 0). The bug-61 ownership gate remains the guard for that; `addUpstream` applies only to
    the migrate_from target, which *will* own the slot.
@@ -171,34 +189,32 @@ Benefits over the Phase-1 (bug 61) gating approach:
   churn; fixed with a cluster-only ping/pong sync-topology exchange (master declines an unowned slot; slave
   drops it, guarded by newest epoch). This is **Phase 1**: correct and churn-free, but it re-subscribes only at
   cutover, so it keeps the no-replica window and the full re-sync.
-- **This proposal (`asSlaveKeepMaster` / `addUpstream`)** is **Phase 2**: complementary, not competing. Bug 61
-  keeps a node from relaying a slot it will never own; Phase 2 lets the migrate target relay a slot it *is*
-  acquiring, closing the durability window and the re-sync cost.
+- **`addUpstream` / dual-role** is **Phase 2**: complementary, not competing. Bug 61 keeps a node from serving a
+  slot it will never own; Phase 2 lets the migrate target serve a slot it *has* acquired, closing the churn and
+  the durability window. (Tier A does **not** close the re-sync cost — that is Tier B.)
 
 ## Phased plan
 
 - **Phase 1 (done):** bug 61 ownership gating — stop the churn/NPE, keep migration correct. Shipped, T1-green.
-- **Phase 2 (in progress):** dual-role migration via `addUpstream`/`dropUpstream`.
-  - **Done & committed (T1-green, no regression):**
-    - `OneSlot.addUpstream`/`dropUpstream` primitives (dual-role; soft-promote preserves binlog continuity).
-    - Identity model resolved: target slot `masterUuid` is stable, so a downstream tracks it through cutover.
-    - `catch_up` relay: `XWalV.apply` re-logs applied writes (self-gated on `binlogOn`); big-string catch_up
-      already relays via `OneSlot.put`.
-    - Wiring: `migrate_from`→`addUpstream`, `setslot`→`dropUpstream`, relay-aware serve predicate
-      (`owned || hasUpstream`), and setslot keeps an already-caught-up replica pair instead of re-fetching.
-  - **Remaining — closing the durability window (node-internal, no new command):** the migrate target's
-    replica must be **synced before cutover**. The readiness stays internal to the target — it already holds the
-    answer in its downstream `ReplPair.allCaughtUp` (the same field the export-side check reads at
-    [`ClusterxCommand.groovy:556`](/home/kerry/ws/velo/dyn/src/io/velo/command/ClusterxCommand.groovy)):
-    - On import-complete, the target triggers its downstream replicas to do a fresh exists-fetch (reset their
-      downstream pairs so they re-hello against the now-populated slot).
-    - The target's own `setslot` handler waits for its downstream `ReplPair.allCaughtUp` before
-      `dropUpstream`/promote.
-
-    No external "downstream-caught-up" query and no `migrating_state` change — the earlier idea of surfacing this
-    as a `manage` query (controller polls the target) or extending `migrating_state` was unnecessary, since the
-    target owns the information and the wait belongs where the state lives.
-  - **Not started:** import rollback path (Task 11); `releaseOneSlot` for a shed slot (Task 13).
+- **Phase 2 Tier A (done & committed, T1/T2/T3-green):** dual-role migration via `addUpstream`/`dropUpstream`.
+  - `OneSlot.addUpstream`/`dropUpstream` primitives (dual-role; soft-promote preserves binlog continuity).
+  - Identity model resolved: target slot `masterUuid` is stable, so a downstream tracks it through cutover.
+  - `catch_up` relay: `XWalV.apply` re-logs applied writes (self-gated on `binlogOn`); big-string catch_up
+    already relays via `OneSlot.put`.
+  - Wiring: `migrate_from`→`addUpstream`, `setslot`→`dropUpstream`.
+  - Serve predicate = `owned || hasCaughtUpUpstream` — a slot is served to a downstream only once the target has
+    finished importing it, so a replica never subscribes to a still-importing (empty) slot and stalls.
+  - **Durability-window closure (node-internal, no new command):** the target's own `setslot` gates on its
+    downstream `ReplPair.allCaughtUp` (`downstreamAllCaughtUp`), deferring (retryable) until synced, then
+    soft-promotes. The migrate sequence resyncs the target's replicas after import (`migrate_from force` forces a
+    fresh fetch even from the same master) and broadcasts cutover **charge node first, source last** (the source
+    flushes only after the new owner has promoted with a synced replica). No external "downstream-caught-up"
+    query and no `migrating_state` change — the target owns the information and the wait lives where the state is.
+  - Import rollback (Task 11): `migrate_from_abort` / `clusterx migrate ... cancel`.
+- **Remaining:**
+  - **Tier B** — raw-segment binlog content types so the whole import relays and the downstream never does a full
+    physical re-fetch (the one Tier-A benefit still outstanding). Large, new on-disk format.
+  - **`releaseOneSlot` (Task 13)** — reclaim a shed slot's resources / restore the lazy-init invariant.
 
 > *Deeper alternative (Tier B):* relay the exists phase via new binlog content types, so the replica follows the
 > target as an ordinary slave with no explicit re-fetch trigger or cutover wait at all — at the cost of a new
@@ -208,8 +224,9 @@ Benefits over the Phase-1 (bug 61) gating approach:
 
 - **Durability:** kill the new owner immediately after `setslot`; assert the migrated slot's data survives on
   its replica (no no-replica window).
-- **Efficiency:** migrate a large slot; assert the downstream replica does **not** perform a full re-sync after
-  cutover (it applied the relay incrementally) — e.g. by asserting bounded post-cutover fetch bytes / time.
+- **Efficiency (Tier B only):** migrate a large slot; assert the downstream replica does **not** perform a full
+  physical fetch (it followed the relay). Not applicable to Tier A, which still does a physical exists-fetch (the
+  resync), just before cutover instead of after.
 - **Churn/identity:** assert the target's master pair to its replica is never dropped during migration, and the
   downstream's `(masterUuid, offset)` bookkeeping survives the promotion without a forced full re-fetch.
 - **Rollback:** abort an in-flight import; assert both target and downstream revert cleanly.
