@@ -116,6 +116,41 @@ class XWalVTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test apply relays to binlog only when slot is binlog-on (import target)'() {
+        given:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def replPair = ReplPairTest.mockAsSlave()
+
+        def vList = Mock.prepareValueList(2, 0) { v ->
+            def s = BaseCommand.slot(v.key(), ConfForGlobal.slotNumber)
+            new Wal.V(v.seq(), s.bucketIndex(), v.keyHash(), System.currentTimeMillis() + 1000, CompressedValue.NULL_DICT_SEQ,
+                    v.key(), v.cvEncoded(), false)
+        }
+
+        when: 'a plain slave (binlog off) applies a WAL entry'
+        oneSlot.dynConfig.setBinlogOn(false)
+        def offsetBefore = oneSlot.binlog.currentReplOffset()
+        new XWalV(vList[0], true).apply(slot, replPair)
+
+        then: 'nothing is re-logged to the binlog'
+        oneSlot.binlog.currentReplOffset() == offsetBefore
+
+        when: 'an import target (binlog on, as after addUpstream) applies a WAL entry'
+        oneSlot.dynConfig.setBinlogOn(true)
+        new XWalV(vList[1], true).apply(slot, replPair)
+
+        then: 'the applied write is relayed to the binlog for downstream replicas to follow'
+        oneSlot.binlog.currentReplOffset() > offsetBefore
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test applyAsync returns awaitable promise even when target equals stream slot'() {
         given:
         final short slot = 0

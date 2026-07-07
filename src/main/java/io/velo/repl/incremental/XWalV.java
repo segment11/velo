@@ -179,6 +179,12 @@ public class XWalV implements BinlogContent {
             if (putResult.needPersist()) {
                 oneSlot.doPersist(walGroupIndex, key, putResult);
             }
+            // Relay to downstream replicas following this slot's binlog. This WAL apply writes targetWal.put
+            // directly and bypasses the binlog (unlike the big-string path, which applies via OneSlot.put and
+            // already appends a record). Binlog.append self-gates on binlogOn, so this is a no-op for a plain
+            // slave or a 2N target slot (binlog off) and only relays when this slot is a migration import target
+            // kept binlog-on by OneSlot.addUpstream.
+            oneSlot.appendBinlog(new XWalV(v2, isValueShort));
         });
 
         replPair.setSlaveCatchUpLastSeq(v.seq());
@@ -198,6 +204,8 @@ public class XWalV implements BinlogContent {
             if (putResult.needPersist()) {
                 oneSlot.doPersist(walGroupIndex, key, putResult);
             }
+            // relay to downstream replicas (self-gated on binlogOn; see apply())
+            oneSlot.appendBinlog(new XWalV(v2, isValueShort));
         });
         promise.whenResult(unused -> replPair.setSlaveCatchUpLastSeq(v.seq()));
         return promise;
