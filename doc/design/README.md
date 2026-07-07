@@ -38,6 +38,7 @@ This directory documents the design that is present in the checked-in code, not 
 - [16_cluster_management_design.md](/home/kerry/ws/velo/doc/design/16_cluster_management_design.md)
 - [18_scale_up_design.md](/home/kerry/ws/velo/doc/design/18_scale_up_design.md)
 - [19_command_registry_design.md](/home/kerry/ws/velo/doc/design/19_command_registry_design.md)
+- [20_slot_migration_replication_model.md](/home/kerry/ws/velo/doc/design/20_slot_migration_replication_model.md)
 
 ## Related Non-Design Docs
 
