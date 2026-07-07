@@ -178,9 +178,23 @@ Benefits over the Phase-1 (bug 61) gating approach:
 ## Phased plan
 
 - **Phase 1 (done):** bug 61 ownership gating — stop the churn/NPE, keep migration correct. Shipped, T1-green.
-- **Phase 2 (this doc):** introduce `addUpstream`/`dropUpstream` for the migrate_from target only, reusing the
-  2N fan-out/relay machinery to propagate the import (exists + catch_up) to downstream replicas live. Gate
-  behind a config flag; default off until validated.
+- **Phase 2 (in progress):** dual-role migration via `addUpstream`/`dropUpstream`.
+  - **Done & committed (T1-green, no regression):**
+    - `OneSlot.addUpstream`/`dropUpstream` primitives (dual-role; soft-promote preserves binlog continuity).
+    - Identity model resolved: target slot `masterUuid` is stable, so a downstream tracks it through cutover.
+    - `catch_up` relay: `XWalV.apply` re-logs applied writes (self-gated on `binlogOn`); big-string catch_up
+      already relays via `OneSlot.put`.
+    - Wiring: `migrate_from`→`addUpstream`, `setslot`→`dropUpstream`, relay-aware serve predicate
+      (`owned || hasUpstream`), and setslot keeps an already-caught-up replica pair instead of re-fetching.
+  - **Remaining — closing the durability window:** the migrate target's replica must be **synced before
+    cutover**, which needs a "downstream-caught-up-during-import" signal. The existing `migrating_state` cannot
+    express it: it short-circuits to `migrating` whenever the shard has an active `importMigratingSlot`
+    ([`ClusterxCommand.groovy:511`](/home/kerry/ws/velo/dyn/src/io/velo/command/ClusterxCommand.groovy)). Options:
+    (a) a small dedicated readiness query (`manage slot N downstream-caught-up host port` reading the target's
+    downstream `ReplPair.allCaughtUp`), or (b) extend `migrating_state` to report a concurrent downstream export.
+    Then add the pre-cutover resync step to the migrate sequence and the "kill new owner right after setslot"
+    durability test.
+  - **Not started:** import rollback path (Task 11).
 
 ## Test plan (Phase 2)
 
