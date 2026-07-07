@@ -1,5 +1,7 @@
 package io.velo.command
 
+import java.io.IOException
+
 import groovy.transform.CompileStatic
 import io.activej.common.function.RunnableEx
 import io.activej.common.function.SupplierEx
@@ -1266,7 +1268,10 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         // Commits the ownership/topology change: move the slot to the target shard, clear migration markers, and
         // bump the epoch. Done ONLY after the local cutover succeeds (below), so a failed cutover never leaves
         // metadata advertising a slot this node cannot serve (routing must not run ahead of local state).
-        Closure mutateMetadata = {
+        // Returns the reply to send: OK on success (or when a newer setslot already won), an ErrorReply if
+        // persisting the metadata fails — so callers surface a clean error instead of letting the checked
+        // IOException escape the async callback.
+        Closure<Reply> mutateMetadata = {
             // Re-check staleness at commit time, not just at request arrival (line above). The cutover runs
             // asynchronously, so a newer setslot may have advanced clusterCurrentEpoch in the meantime; committing
             // this older request's ownership now would roll routing back (updateClusterVersion would then ignore
@@ -1274,7 +1279,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             // already won.
             if (clusterVersion != 0 && clusterVersion < multiShard.clusterCurrentEpoch) {
                 log.warn 'clusterx setslot ignore stale cluster version={} at commit, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
-                return
+                return OK
             }
             // add
             toShard.multiSlotRange.removeOrAddSet(removeNone, addSet)
@@ -1288,7 +1293,15 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                     ss.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
                 }
             }
-            multiShard.updateClusterVersion(clusterVersion)
+            try {
+                multiShard.updateClusterVersion(clusterVersion)
+            } catch (IOException e) {
+                // persisting metadata failed after the local cutover already succeeded — return a clean error and
+                // let the controller retry setslot, rather than throwing out of the async completion callback
+                log.error 'clusterx setslot failed to persist cluster metadata, slot={}, inner slot={}', toClientSlot, innerSlot, e
+                return new ErrorReply('error when set slot: ' + e.message)
+            }
+            OK
         }
 
         // Performs the local cutover first, then commits the metadata only on success. Split into a closure so
@@ -1296,8 +1309,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         Closure applyCutover = {
             if (oneSlot == null) {
                 // not owned locally and not initialized — no local state to cut over, just apply the topology
-                mutateMetadata()
-                finalPromise.set(OK)
+                finalPromise.set(mutateMetadata())
                 return
             }
 
@@ -1343,8 +1355,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                     finalPromise.set(new ErrorReply('error when set slot: ' + e.message))
                     return
                 }
-                mutateMetadata()
-                finalPromise.set(OK)
+                finalPromise.set(mutateMetadata())
             }
         }
 

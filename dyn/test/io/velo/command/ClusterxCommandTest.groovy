@@ -1608,6 +1608,55 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setslot returns a clean error when the metadata commit fails to persist'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = false
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        def multiShard = localPersist.multiShard
+
+        and: 'this node is not in the target shard and holds no local copy, so oneSlot is null (no cutover)'
+        ConfForGlobal.clusterEnabled = true
+        localPersist.oneSlots()[slot] = null
+        def shards = multiShard.shards
+        shards[0].nodes[0].master = true
+        shards << new Shard(nodes: [new Node(master: true, nodeIdFix: 'to_node', host: 'localhost', port: 7379)])
+
+        and: 'make saveMeta throw IOException by turning the metadata file into a directory'
+        def metaFile = new File(Consts.persistDir, 'nodes.json')
+        metaFile.delete()
+        metaFile.mkdirs()
+
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = 'to_node'.bytes
+        data6[5] = '9'.bytes
+        clusterx.data = data6
+
+        when: 'the deferred metadata commit fails to persist'
+        def reply = clusterx.setslot()
+
+        then: 'the failure surfaces as a clean error on the promise instead of escaping the callback'
+        noExceptionThrown()
+        (reply as AsyncReply).settablePromise.getResult() instanceof ErrorReply
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        metaFile.deleteDir()
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test setslot closes repl pairs and flushes on old source node'() {
         given:
         def savedClusterEnabled = ConfForGlobal.clusterEnabled
