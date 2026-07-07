@@ -491,6 +491,53 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test add upstream keeps downstream and binlog, drop upstream promotes to master'() {
+        given:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 1
+
+        when: 'this slot is a shard master with a downstream replica'
+        oneSlot.dynConfig.setBinlogOn(false)
+        oneSlot.setReadonly(false)
+        oneSlot.setCanRead(true)
+        def downstream = ReplPairTest.mockAsMaster(oneSlot.masterUuid)
+        downstream.slaveUuid = 11L
+        oneSlot.replPairs.add(downstream)
+
+        then:
+        oneSlot.hasDownstream()
+        !oneSlot.hasUpstream()
+
+        when: 'it adds an upstream to import a migrating slot from another shard'
+        oneSlot.addUpstream('localhost', 6379)
+
+        then: 'the downstream link is kept, binlog is forced on, an upstream is added, slot is readonly/not-readable'
+        oneSlot.hasUpstream()
+        oneSlot.hasDownstream()
+        !downstream.isSendBye()
+        oneSlot.dynConfig.isBinlogOn()
+        oneSlot.isReadonly()
+        !oneSlot.isCanRead()
+
+        when: 'cutover drops the upstream and promotes to plain master'
+        oneSlot.dropUpstream()
+
+        then: 'the upstream is gone, the slot is readable master again, downstream still served'
+        !oneSlot.hasUpstream()
+        oneSlot.hasDownstream()
+        !oneSlot.isReadonly()
+        oneSlot.isCanRead()
+
+        cleanup:
+        ConfForGlobal.replDelayCloseTimeoutSeconds = 60
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test eventloop'() {
         given:
         def persistConfig = Config.create()

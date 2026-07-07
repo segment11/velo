@@ -2679,6 +2679,72 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         log.warn("Repl reset binlog on false as slave, slot={}", slot);
     }
 
+    /**
+     * Adds an <b>upstream</b> replication link — this slot fetches data from {@code host:port} — while
+     * <b>keeping its downstream links</b> (its own shard's replicas) and <b>keeping its binlog enabled</b>, so
+     * the imported data can be relayed downstream. Used by slot migration ({@code migrate_from}), where this
+     * slot stays its shard's master while temporarily importing a slot from another shard.
+     * <p>
+     * Contrast with {@link #resetAsSlave}, which fully swaps roles for failover: it drops the downstream links
+     * and disables the binlog. The dual-role split is: {@code addUpstream} = "add an upstream, keep the
+     * downstream"; {@code resetAsSlave} = "drop the downstream, swap to an upstream".
+     * <p>
+     * The slot is set readonly and not-readable while importing; {@link #dropUpstream} promotes it at cutover.
+     *
+     * @param host the upstream (migration source) host
+     * @param port the upstream (migration source) port
+     * @throws IOException if the binlog or config cannot be updated
+     */
+    public void addUpstream(@NotNull String host, int port) throws IOException {
+        // clear old catch-up state so the import fetches from the beginning, for data consistency
+        metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
+        binlog.moveToNextSegment();
+        log.warn("Repl add upstream: clear fetched binlog file index and offset, slot={}", slot);
+
+        // KEEP downstream links (do NOT removeReplPairAsMaster) so replicas keep following this slot
+        createReplPairAsSlave(host, port);
+
+        if (!isReadonly()) {
+            setReadonly(true);
+        }
+        if (isCanRead()) {
+            setCanRead(false);
+        }
+
+        // KEEP binlog ON (unlike resetAsSlave) so the import relays to downstream replicas
+        if (!dynConfig.isBinlogOn()) {
+            dynConfig.setBinlogOn(true);
+        }
+        log.warn("Repl add upstream: readonly true, not readable, downstream and binlog kept, slot={}", slot);
+    }
+
+    /**
+     * Drops the <b>upstream</b> link added by {@link #addUpstream} and promotes this slot back to a plain
+     * master, keeping the downstream links that were never removed. Used at migration cutover; because the
+     * downstream links stayed up, the replicas are already near-synced.
+     *
+     * @throws IOException if the binlog or config cannot be updated
+     */
+    public void dropUpstream() throws IOException {
+        removeReplPairAsSlave();
+        resetAsMaster();
+        log.warn("Repl drop upstream: removed upstream, promoted to master, downstream kept, slot={}", slot);
+    }
+
+    /**
+     * @return true if this slot currently has an upstream link (it is fetching from a master / migration source)
+     */
+    public boolean hasUpstream() {
+        return getOnlyOneReplPairAsSlave() != null;
+    }
+
+    /**
+     * @return true if this slot currently serves at least one downstream replica
+     */
+    public boolean hasDownstream() {
+        return !getReplPairAsMasterList().isEmpty();
+    }
+
     private final static OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
 
     private final DictMap dictMap = DictMap.getInstance();
