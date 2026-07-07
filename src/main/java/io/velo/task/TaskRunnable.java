@@ -74,6 +74,15 @@ public class TaskRunnable implements Runnable {
         oneSlot.setRequestHandler(requestHandler);
     }
 
+    /**
+     * Stop driving {@code doTask} for a slot being released (shed at migration cutover). Idempotent.
+     *
+     * @param oneSlot the slot to unregister
+     */
+    public void removeOneSlot(OneSlot oneSlot) {
+        oneSlots.remove(oneSlot);
+    }
+
     /** The Eventloop for this slot worker. */
     private Eventloop slotWorkerEventloop;
 

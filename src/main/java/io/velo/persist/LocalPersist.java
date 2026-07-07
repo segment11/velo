@@ -164,6 +164,50 @@ public class LocalPersist implements NeedCleanUp {
         return oneSlot;
     }
 
+    /**
+     * Releases an inner slot this node has shed (e.g. the source of a migration after {@code setslot} moved the
+     * slot away): closes its repl pairs, stops its {@code doTask}, releases its files/fds, and publishes a null
+     * {@code oneSlots[slot]} — restoring the lazy-init invariant that only owned slots are initialized and
+     * reclaiming the slot's memory/fds. A later migrate-back re-creates it via {@link #ensureOneSlotInitialized}.
+     * <p>
+     * The always-initialized fallback inner slot 0 (the lazy-init barrier) is never released. Must be called on
+     * the slot's own worker thread (its {@code cleanUp} asserts that); the caller (the setslot cleanup) already
+     * runs on that thread. Idempotent: a no-op when the slot is already null or is slot 0.
+     *
+     * @param slot the inner slot to release
+     */
+    public synchronized void releaseOneSlot(short slot) {
+        if (slot == 0) {
+            // the lazy-init fallback/barrier slot is always kept initialized
+            return;
+        }
+        if (oneSlots == null || slot < 0 || slot >= oneSlots.length) {
+            return;
+        }
+        var existing = oneSlots[slot];
+        if (existing == null) {
+            return;
+        }
+
+        // close and drop all repl pairs now — the delay-close reaper will not run once the slot is unregistered
+        existing.closeAllReplPairsForRelease();
+        // stop the task runnable from driving this slot's doTask
+        if (slotTaskRunnables != null) {
+            var taskRunnable = slotTaskRunnables[slot % slotTaskRunnables.length];
+            if (taskRunnable != null) {
+                taskRunnable.removeOneSlot(existing);
+            }
+        }
+        // release files / fds (runs on this slot's worker thread)
+        existing.cleanUp();
+
+        // publish the null (copy-on-write) — restores "unowned == null" that lazy-init readers already tolerate
+        var newSlots = oneSlots.clone();
+        newSlots[slot] = null;
+        oneSlots = newSlots;
+        log.warn("Released shed one slot={}", slot);
+    }
+
     private void bindOneSlotIfInitialized(@NotNull OneSlot oneSlot) {
         if (slotWorkerThreadIds == null) {
             return;

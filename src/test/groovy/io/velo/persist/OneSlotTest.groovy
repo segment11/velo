@@ -532,6 +532,15 @@ class OneSlotTest extends Specification {
         then: 'the slot now has a caught-up upstream (may serve its imported data to downstream replicas)'
         oneSlot.hasCaughtUpUpstream()
 
+        and: 'the downstream replica has not caught up yet, so cutover would be gated'
+        !oneSlot.downstreamAllCaughtUp()
+
+        when: 'the downstream replica catches up'
+        downstream.allCaughtUp = true
+
+        then: 'downstreamAllCaughtUp reports ready (cutover may proceed)'
+        oneSlot.downstreamAllCaughtUp()
+
         when: 'cutover drops the upstream and promotes to plain master'
         oneSlot.dropUpstream()
 
@@ -543,6 +552,36 @@ class OneSlotTest extends Specification {
 
         cleanup:
         ConfForGlobal.replDelayCloseTimeoutSeconds = 60
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test close all repl pairs for release'() {
+        given:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+
+        when: 'the slot has an active repl pair and an already-byed one awaiting the delay-close reaper'
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        def byed = oneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 6380)
+        byed.bye()
+        oneSlot.addDelayNeedCloseReplPair(byed)
+
+        then:
+        !oneSlot.getReplPairs().isEmpty()
+        !oneSlot.delayNeedCloseReplPairs.isEmpty()
+
+        when: 'release closes and drops them all immediately (no waiting for the reaper)'
+        oneSlot.closeAllReplPairsForRelease()
+
+        then:
+        oneSlot.getReplPairs().isEmpty()
+        oneSlot.delayNeedCloseReplPairs.isEmpty()
+
+        cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }

@@ -403,6 +403,30 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
         delayNeedCloseReplPairs.add(replPair);
     }
 
+    /**
+     * Closes and drops every replication pair immediately, for slot release/teardown. Unlike the delay-close
+     * reaper (which waits {@code replDelayCloseTimeoutSeconds} so a failover can still reclaim a pair), a slot
+     * being released is going away, so its pairs — both already byed (in the delay-close list) and any still
+     * active — are closed now; otherwise the reaper would never run once the slot is unregistered from its task
+     * runnable, stranding the byed sockets. Must run on this slot's worker thread.
+     */
+    public void closeAllReplPairsForRelease() {
+        checkCurrentThreadId();
+
+        for (var replPair : delayNeedCloseReplPairs) {
+            replPair.close();
+        }
+        delayNeedCloseReplPairs.clear();
+
+        for (var replPair : replPairs) {
+            if (!replPair.isSendBye()) {
+                replPair.bye();
+            }
+            replPair.close();
+        }
+        replPairs.clear();
+    }
+
     @TestOnly
     private boolean doMockWhenCreateReplPairAsSlave = false;
 

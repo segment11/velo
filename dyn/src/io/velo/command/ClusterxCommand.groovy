@@ -1295,6 +1295,10 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                     oneSlot.removeReplPairAsSlave()
                     oneSlot.removeReplPairAsMaster()
                     oneSlot.flush()
+                    // shed: this node no longer owns the slot — reclaim its resources and restore the
+                    // lazy-init invariant (only owned slots stay initialized). Slot 0 is exempt (kept as the
+                    // barrier). A later migrate-back re-creates it via ensureOneSlotInitialized.
+                    localPersist.releaseOneSlot(innerSlot as short)
                 }
             }).whenComplete { done, e ->
                 if (e) {

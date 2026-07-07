@@ -268,6 +268,55 @@ class LocalPersistTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test releaseOneSlot'() {
+        given:
+        def localPersist = LocalPersist.instance
+        prepareLocalPersist((byte) 1, (short) 2)
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
+
+        and: 'slot 1 has repl pairs (one active, one already byed and awaiting the delay-close reaper)'
+        def oneSlot1 = localPersist.oneSlot(slot1)
+        oneSlot1.doMockWhenCreateReplPairAsSlave = true
+        oneSlot1.createReplPairAsSlave('localhost', 6379)
+        def byedPair = oneSlot1.createIfNotExistReplPairAsMaster(11L, 'localhost', 6380)
+        byedPair.bye()
+        oneSlot1.addDelayNeedCloseReplPair(byedPair)
+
+        expect:
+        localPersist.isOneSlotInitialized(slot1)
+        !oneSlot1.getReplPairs().isEmpty()
+
+        when: 'release the shed slot 1'
+        localPersist.releaseOneSlot(slot1)
+
+        then: 'it is deinitialized, its repl pairs are closed/dropped, and oneSlot(1) returns null'
+        !localPersist.isOneSlotInitialized(slot1)
+        localPersist.oneSlot(slot1) == null
+        oneSlot1.getReplPairs().isEmpty()
+        oneSlot1.delayNeedCloseReplPairs.isEmpty()
+
+        when: 're-releasing an already-released slot is a no-op'
+        localPersist.releaseOneSlot(slot1)
+        then:
+        !localPersist.isOneSlotInitialized(slot1)
+
+        when: 'slot 0 (the lazy-init barrier) is never released'
+        localPersist.releaseOneSlot(slot)
+        then:
+        localPersist.isOneSlotInitialized(slot)
+
+        when: 'a migrate-back re-initializes the released slot fresh'
+        def reinit = localPersist.ensureOneSlotInitialized(slot1)
+        then:
+        reinit != null
+        localPersist.isOneSlotInitialized(slot1)
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test isInnerSlotOwnedByMySelfShard'() {
         given:
         def savedSlotNumber = ConfForGlobal.slotNumber

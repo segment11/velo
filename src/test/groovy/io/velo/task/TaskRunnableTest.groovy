@@ -75,6 +75,29 @@ class TaskRunnableTest extends Specification {
         1 == 1
     }
 
+    def 'test removeOneSlot'() {
+        given:
+        def oneSlot = new OneSlot((short) 0, Consts.slotDir, null, null)
+        OneSlot[] oneSlots = [oneSlot] as OneSlot[]
+        def taskRunnable = new TaskRunnable((byte) 0, (byte) 1)
+        taskRunnable.chargeOneSlots(oneSlots)
+
+        expect:
+        taskRunnable.oneSlots.size() == 1
+
+        when: 'a shed slot is unregistered so doTask stops driving it'
+        taskRunnable.removeOneSlot(oneSlot)
+
+        then:
+        taskRunnable.oneSlots.isEmpty()
+
+        when: 'removing again is an idempotent no-op'
+        taskRunnable.removeOneSlot(oneSlot)
+
+        then:
+        taskRunnable.oneSlots.isEmpty()
+    }
+
     def 'test scheduler keeps running after a slot doTask throws'() {
         given:
         // a slot whose doTask throws on the first tick, then just counts subsequent ticks
