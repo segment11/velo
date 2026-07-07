@@ -1267,6 +1267,15 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         // bump the epoch. Done ONLY after the local cutover succeeds (below), so a failed cutover never leaves
         // metadata advertising a slot this node cannot serve (routing must not run ahead of local state).
         Closure mutateMetadata = {
+            // Re-check staleness at commit time, not just at request arrival (line above). The cutover runs
+            // asynchronously, so a newer setslot may have advanced clusterCurrentEpoch in the meantime; committing
+            // this older request's ownership now would roll routing back (updateClusterVersion would then ignore
+            // the stale epoch bump but the slot-range mutation below has no such guard). Drop it: the newer state
+            // already won.
+            if (clusterVersion != 0 && clusterVersion < multiShard.clusterCurrentEpoch) {
+                log.warn 'clusterx setslot ignore stale cluster version={} at commit, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
+                return
+            }
             // add
             toShard.multiSlotRange.removeOrAddSet(removeNone, addSet)
             toShard.importMigratingSlot = Shard.NO_MIGRATING_SLOT

@@ -1555,6 +1555,59 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setslot does not commit stale ownership when a newer setslot advanced the epoch mid-cutover'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = false // initialize the slot first
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        def multiShard = localPersist.multiShard
+
+        and: 'inject a slot whose local shed-cutover simulates a newer setslot committing epoch=20 mid-flush'
+        def hookSlot = new OneSlot(slot, Consts.slotDir, null, null) {
+            @Override
+            void flush() { multiShard.updateClusterVersion(20) }
+        }
+        localPersist.oneSlots()[slot] = hookSlot
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and: 'this node is not in the target shard, so setslot takes the shed (flush) branch'
+        ConfForGlobal.clusterEnabled = true
+        def shards = multiShard.shards
+        shards[0].nodes[0].master = true
+        shards << new Shard(nodes: [new Node(master: true, nodeIdFix: 'to_node', host: 'localhost', port: 7379)])
+
+        and: 'this setslot carries the older version 9'
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = 'to_node'.bytes
+        data6[5] = '9'.bytes
+        clusterx.data = data6
+
+        when: 'the older setslot reaches the deferred commit after the epoch was advanced to 20'
+        def reply = clusterx.setslot()
+
+        then: 'the stale ownership change is dropped (routing never rolls back) and the epoch stays at 20'
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        !shards[1].multiSlotRange.contains(0)
+        multiShard.clusterCurrentEpoch == 20
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist.oneSlots()[slot] = null
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test setslot closes repl pairs and flushes on old source node'() {
         given:
         def savedClusterEnabled = ConfForGlobal.clusterEnabled
