@@ -137,8 +137,12 @@ built — gets the downstream synced *before* cutover a different way:
 Benefits **delivered by Tier A**:
 
 - **No create→demote→recreate churn** — the master pair is never dropped (`addUpstream` keeps downstream).
-- **No post-cutover no-replica window** — the target gates cutover on `downstreamAllCaughtUp` and the source
-  flushes last, so the slot always has a synced replica at the moment of promotion (verified by test T3).
+- **No post-cutover no-replica window (when replicas are configured)** — if the shard has replica nodes, the
+  target defers cutover until it has an **established and caught-up** downstream pair
+  (`hasDownstream() && downstreamAllCaughtUp()`; `downstreamAllCaughtUp` alone is vacuously true before any
+  replica subscribes), and the source flushes last — so the slot always has a synced replica at the moment of
+  promotion (verified by test T3). For a shard with **no replicas configured** there is no such window, so
+  cutover proceeds immediately — this is a weaker-durability-by-configuration mode, not a gap.
 
 Benefit **not** delivered by Tier A (needs Tier B):
 

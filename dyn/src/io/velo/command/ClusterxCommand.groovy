@@ -1332,13 +1332,21 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
         // Durability gate: a charge node promoting a slot it imported (has an upstream) must not cut over while
         // its downstream replicas are unsynced — that would make it the sole owner with no synced replica (a
-        // crash window). Defer (retryable; the controller / waitClusterxOk retries setslot) until they catch up.
-        // Checked BEFORE mutating ownership metadata, and the source is broadcast last, so the source flushes
-        // only after the charge node returns OK.
+        // crash window). When the shard has replica nodes configured, require an established AND caught-up
+        // downstream (downstreamAllCaughtUp alone is vacuously true when no pair has subscribed yet, which would
+        // let it promote before the replica resynced). When the shard has no replicas configured, there is no
+        // such window, so proceed. Defer is retryable (controller / waitClusterxOk retries setslot). Checked
+        // BEFORE mutating ownership metadata, and the source is broadcast last, so it flushes only after OK.
+        // replicas = shard nodes other than the new owner (the charge node's own master flag may still be stale
+        // mid-promotion, so key off the target nodeId rather than the master flag)
+        def shardHasReplica = mySelfShard != null && mySelfShard.nodes.any { it.nodeId() != nodeId }
         if (isMySelfNodeChargeThisInnerSlot && oneSlot != null) {
             oneSlot.asyncRun(RunnableEx.of {
-                if (oneSlot.hasUpstream() && !oneSlot.downstreamAllCaughtUp()) {
-                    log.warn 'Clusterx setslot defer: downstream replica not caught up, slot={}, inner slot={}', toClientSlot, innerSlot
+                boolean downstreamReady = shardHasReplica
+                        ? (oneSlot.hasDownstream() && oneSlot.downstreamAllCaughtUp())
+                        : true
+                if (oneSlot.hasUpstream() && !downstreamReady) {
+                    log.warn 'Clusterx setslot defer: downstream replica not caught up or not subscribed, slot={}, inner slot={}', toClientSlot, innerSlot
                     finalPromise.set(new ErrorReply('downstream replica not caught up, retry setslot'))
                 } else {
                     applyCutover()

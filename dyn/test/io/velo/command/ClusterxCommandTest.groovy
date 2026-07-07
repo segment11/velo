@@ -1451,6 +1451,59 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setslot defers cutover until a configured replica is synced'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 4)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.doMockWhenCreateReplPairAsSlave = true
+
+        and: 'self node is the migration target (importing, has an upstream) and the shard has a replica node'
+        def targetShard = localPersist.multiShard.shards[0]
+        def localNode = targetShard.nodes[0]
+        localNode.master = false
+        targetShard.multiSlotRange.addSingle(4096, 8191)
+        targetShard.nodes << new Node(master: false, nodeIdFix: 'replica_node', host: 'localhost', port: 6390)
+        oneSlot.createReplPairAsSlave('localhost', 6380) // the import upstream
+
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = localNode.nodeId().bytes
+        data6[5] = '9'.bytes
+        clusterx.data = data6
+
+        when: 'a configured replica has not subscribed/synced yet — cutover defers (retryable) and does not mutate'
+        def reply = clusterx.setslot()
+        then:
+        (reply as AsyncReply).settablePromise.getResult() instanceof ErrorReply
+        !targetShard.multiSlotRange.contains(0)
+
+        when: 'a caught-up downstream replica pair now exists'
+        def downstream = oneSlot.createIfNotExistReplPairAsMaster(11L, 'localhost', 6390)
+        downstream.allCaughtUp = true
+        reply = clusterx.setslot()
+        then: 'cutover proceeds'
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        targetShard.multiSlotRange.contains(0)
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test setslot closes repl pairs and flushes on old source node'() {
         given:
         def savedClusterEnabled = ConfForGlobal.clusterEnabled
