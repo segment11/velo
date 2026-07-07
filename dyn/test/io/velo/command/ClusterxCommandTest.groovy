@@ -452,6 +452,51 @@ slots
         (reply as IntegerReply).integer == 11058
     }
 
+    def 'test info does not NPE on export path when the local slot is released/null'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.slotNumber = (short) 2
+        // initialize both slots with cluster disabled (lazy-init would skip unowned slot 1 otherwise);
+        // a prior test may have left clusterEnabled=true, so force it off here
+        ConfForGlobal.clusterEnabled = false
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def shard0 = localPersist.multiShard.shards[0]
+
+        and: 'inner slot 1 is released (null), while the shard is stale-marked as exporting a client slot in it'
+        localPersist.releaseOneSlot((short) 1)
+        ConfForGlobal.clusterEnabled = true
+        shard0.importMigratingSlot = Shard.NO_MIGRATING_SLOT
+        shard0.exportMigratingSlot = 8192  // client slot 8192 -> inner slot 1 for slotNumber=2
+
+        expect:
+        localPersist.oneSlot((short) 1) == null
+
+        when: 'clusterx info reports the export without dereferencing the null local slot'
+        def reply = clusterx.info()
+
+        then:
+        reply != null
+        infoToLines(reply).find { it.contains('migrating_state:migrating') } != null
+        infoToLines(reply).find { it.contains('export_migrating_slot:8192') } != null
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test migrate'() {
         given:
         def data4 = new byte[4][]
@@ -495,6 +540,7 @@ slots
 
         when:
         shards[1].nodes[0].master = true
+        shards[0].multiSlotRange.addSingle(0, 16383)
         reply = clusterx.migrate()
         then:
         reply == ClusterxCommand.OK
@@ -553,6 +599,8 @@ slots
         def multiShard = localPersist.multiShard
         def shards = multiShard.shards
         shards[0].nodes[0].master = true
+        // this shard owns the slots it exports (client 0..8191 = inner slots 0 and 1 for slotNumber=4)
+        shards[0].multiSlotRange.addSingle(0, 8191)
         shards << new Shard()
         shards[1].nodes << new Node(master: true, nodeIdFix: 'new_node_id', host: 'localhost', port: 7379)
         shards << new Shard()
@@ -594,6 +642,47 @@ slots
         cleanup:
         ConfForGlobal.clusterEnabled = savedClusterEnabled
         ConfForGlobal.slotNumber = savedSlotNumber
+        localPersist.cleanUp()
+        localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test migrate rejects a slot not owned by this shard'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = true
+
+        def data4 = new byte[4][]
+        def cGroup = new CGroup('cluster', data4, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def shards = localPersist.multiShard.shards
+        shards[0].nodes[0].master = true
+        shards << new Shard(nodes: [new Node(master: true, nodeIdFix: 'to_node', host: 'localhost', port: 7379)])
+
+        when: 'this shard owns no slots — exporting slot 0 is rejected and no export marker is set'
+        shards[0].multiSlotRange.list.clear()
+        data4[2] = '0'.bytes
+        data4[3] = 'to_node'.bytes
+        def reply = clusterx.migrate()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('not owned')
+        shards[0].exportMigratingSlot == Shard.NO_MIGRATING_SLOT
+
+        when: 'once the shard owns the slot, the migrate is accepted'
+        shards[0].multiSlotRange.addSingle(0, 16383)
+        reply = clusterx.migrate()
+        then:
+        reply == ClusterxCommand.OK
+        shards[0].exportMigratingSlot == 0
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
         localPersist.cleanUp()
         localPersist.resetForTest()
         Consts.persistDir.deleteDir()

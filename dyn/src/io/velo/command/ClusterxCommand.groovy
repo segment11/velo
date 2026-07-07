@@ -542,6 +542,20 @@ migrating_state:ok
         def innerSlot = MultiShard.asInnerSlotByToClientSlot(exportMigratingSlot)
         def oneSlot = localPersist.oneSlot(innerSlot)
 
+        if (oneSlot == null) {
+            // Export marker set for a slot not initialized locally (lazy-init / released, or stale metadata).
+            // migrate() now rejects exporting an unowned slot, but guard defensively so info never NPEs: the
+            // migration cannot be complete without a local slot, so report it as still migrating.
+            r.migrating_state = 'migrating'
+            r.import_migrating_slot = Shard.NO_MIGRATING_SLOT
+            r.export_migrating_slot = exportMigratingSlot
+            def lines = r.collect { entry ->
+                entry.key + ':' + entry.value
+            }.join("\r\n") + "\r\n"
+            finalPromise.set(new BulkReply(lines.bytes))
+            return asyncReply
+        }
+
         oneSlot.asyncCall(SupplierEx.of {
             def replPairAsMasterList = oneSlot.replPairAsMasterList
             def replPairAsMaster = replPairAsMasterList.find {
@@ -656,6 +670,13 @@ migrating_state:ok
 
         if (MultiShard.isToClientSlotSkip(toClientSlot)) {
             return OK
+        }
+
+        // Reject exporting a slot this shard does not own. Otherwise a misrouted/stale migrate would mark this
+        // shard as exporting a slot it holds no data for, and the clusterx info export path would dereference a
+        // null (lazy-init / released) local slot.
+        if (!mySelfShard.multiSlotRange.contains(toClientSlot)) {
+            return new ErrorReply('slot ' + toClientSlot + ' is not owned by this shard')
         }
 
         // Reject a new migrate while one is already in progress on this shard, unless it is the exact
