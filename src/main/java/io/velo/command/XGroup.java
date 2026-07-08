@@ -1781,8 +1781,13 @@ public class XGroup extends BaseCommand {
 
         // null firstOneSlot() (node owns no client slots yet) means this slot is the de-facto first slot,
         // so it leads rather than waits.
+        // The barrier serializes the per-key-prefix trained dicts (node-wide DictMap): non-first slots skip
+        // fetching them (see hi()) and rely on the first slot to populate the DictMap. That only matters when
+        // the first slot is itself being slave-synced. If the first slot is owned locally as master (e.g. a
+        // single non-first inner slot migrating in), the DictMap is already populated, so the imported slot
+        // must not wait — otherwise it would stall forever because the first slot never runs s_exists_all_done.
         var firstOneSlotForWait = localPersist.firstOneSlot();
-        if (firstOneSlotForWait != null && slot != firstOneSlotForWait.slot()) {
+        if (firstOneSlotForWait != null && slot != firstOneSlotForWait.slot() && firstOneSlotForWait.isAsSlave()) {
             // wait the first slot fetched exists all done
             if (!localPersist.isAsSlaveFirstSlotFetchedExistsAllDone()) {
                 // use margin file offset

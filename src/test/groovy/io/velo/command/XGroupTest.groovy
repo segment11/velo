@@ -1492,6 +1492,100 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test as slave non-first slot catch up does not wait for first slot barrier when the first slot is owned locally as master'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        def ctx = setupSlaveContext()
+        ConfForGlobal.slotNumber = slotNumber
+        def localPersist = ctx.localPersist
+        def masterUuid = ctx.masterUuid
+        def x = ctx.x
+        def multiShard = localPersist.multiShard
+
+        and: 'this node owns its first inner slot 0 as master, so its node-wide DictMap is already populated'
+        multiShard.mySelfShard().multiSlotRange.list.clear()
+        multiShard.mySelfShard().multiSlotRange.addSingle(0, 16383)
+        assert localPersist.firstOneSlot().slot() == slot
+        assert !localPersist.firstOneSlot().isAsSlave()
+
+        and: 'a non-first slot (1) is importing as a slave; the barrier flag stays false because slot 0 is never slave-synced'
+        def nonFirstOneSlot = localPersist.ensureOneSlotInitialized(slot1)
+        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
+        def replPairAsSlave = nonFirstOneSlot.createReplPairAsSlave('localhost', 6379)
+        nonFirstOneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false)
+
+        when: 'the master reports it has no more binlog (13-byte readonly catch-up) for the non-first slot'
+        def contentBytes = new byte[13]
+        def buffer = ByteBuffer.wrap(contentBytes)
+        buffer.put((byte) 1)   // master readonly
+        buffer.putInt(0)       // master current file index
+        buffer.putLong(0L)     // master current offset
+        def replRequest = new ReplRequest(replPairAsSlave.slaveUuid, slot1, ReplType.s_catch_up, contentBytes, contentBytes.length)
+        ReplReply r = x.handleRepl(replRequest) as ReplReply
+
+        then: 'it does not stall on the first-slot barrier (which would leave allCaughtUp false); the stream is caught up'
+        r.isEmpty()
+        replPairAsSlave.isAllCaughtUp()
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.slotNumber = savedSlotNumber
+    }
+
+    def 'test as slave non-first slot catch up still waits for the first slot barrier when the first slot is itself slave-syncing'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        ConfForGlobal.clusterEnabled = true
+        def ctx = setupSlaveContext()
+        ConfForGlobal.slotNumber = slotNumber
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def masterUuid = ctx.masterUuid
+        def x = ctx.x
+        def multiShard = localPersist.multiShard
+
+        and: 'the node owns both inner slots but the FIRST slot 0 is itself being slave-synced (full-node sync)'
+        multiShard.mySelfShard().multiSlotRange.list.clear()
+        multiShard.mySelfShard().multiSlotRange.addSingle(0, 16383)
+        oneSlot.createReplPairAsSlave('localhost', 6379)
+        assert localPersist.firstOneSlot().slot() == slot
+        assert localPersist.firstOneSlot().isAsSlave()
+
+        and: 'the first slot has not finished its exists fetch yet, so the barrier flag is false'
+        def nonFirstOneSlot = localPersist.ensureOneSlotInitialized(slot1)
+        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
+        def replPairAsSlave = nonFirstOneSlot.createReplPairAsSlave('localhost', 6379)
+        nonFirstOneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
+        localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false)
+
+        when: 'a readonly catch-up arrives for the non-first slot while the first slot is not done'
+        def contentBytes = new byte[13]
+        def buffer = ByteBuffer.wrap(contentBytes)
+        buffer.put((byte) 1)
+        buffer.putInt(0)
+        buffer.putLong(0L)
+        def replRequest = new ReplRequest(replPairAsSlave.slaveUuid, slot1, ReplType.s_catch_up, contentBytes, contentBytes.length)
+        ReplReply r = x.handleRepl(replRequest) as ReplReply
+
+        then: 'it defers (empty reply) and does NOT mark the stream caught up — the barrier still holds'
+        r.isEmpty()
+        !replPairAsSlave.isAllCaughtUp()
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        ConfForGlobal.slotNumber = savedSlotNumber
+    }
+
     def 'test as slave handle byeBye'() {
         given:
         def ctx = setupSlaveContext()
