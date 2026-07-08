@@ -1608,6 +1608,67 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setslot does not change local role when a newer setslot advanced the epoch before cutover'() {
+        given:
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = false // initialize the slot first
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        def multiShard = localPersist.multiShard
+
+        and: 'self node is the charge (import) target with an upstream; the durability gate reads hasUpstream, and'
+        and: 'a newer setslot advances the epoch to 20 during that read, before the destructive cutover runs'
+        boolean[] droppedUpstream = [false]
+        def hookSlot = new OneSlot(slot, Consts.slotDir, null, null) {
+            private boolean bumped = false
+            @Override
+            boolean hasUpstream() {
+                if (!bumped) { bumped = true; multiShard.updateClusterVersion(20) }
+                return true
+            }
+            @Override
+            void dropUpstream() { droppedUpstream[0] = true }
+        }
+        localPersist.oneSlots()[slot] = hookSlot
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and: 'single-node self shard is the target, so this node is the charge node with no configured replica'
+        ConfForGlobal.clusterEnabled = true
+        def selfShard = multiShard.shards[0]
+        def selfNode = selfShard.nodes[0]
+        selfNode.master = false
+
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = selfNode.nodeId().bytes // self node is the new owner (charge/promote path)
+        data6[5] = '9'.bytes
+        clusterx.data = data6
+
+        when: 'the older setslot reaches the cutover after the epoch was advanced to 20'
+        def reply = clusterx.setslot()
+
+        then: 'the stale request never promotes the local slot (no dropUpstream) and never commits ownership'
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        !droppedUpstream[0]
+        !selfShard.multiSlotRange.contains(0)
+        multiShard.clusterCurrentEpoch == 20
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        localPersist.oneSlots()[slot] = null
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test setslot returns a clean error when the metadata commit fails to persist'() {
         given:
         def savedClusterEnabled = ConfForGlobal.clusterEnabled

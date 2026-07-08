@@ -1314,6 +1314,16 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             }
 
             oneSlot.asyncRun(RunnableEx.of {
+                // Re-check staleness on the slot's own thread, immediately before the destructive local cutover
+                // (dropUpstream/resetAsSlave/flush/releaseOneSlot). The request passed the arrival check, but a
+                // newer setslot may have advanced the epoch while this one was queued; without this guard a
+                // superseded request would still tear down or promote local replication state and only be
+                // discarded at commit. Skip the cutover entirely — the no-error completion runs mutateMetadata,
+                // whose matching guard drops the ownership commit, so neither local state nor metadata changes.
+                if (clusterVersion != 0 && clusterVersion < multiShard.clusterCurrentEpoch) {
+                    log.warn 'clusterx setslot ignore stale cluster version={} before local cutover, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
+                    return
+                }
                 if (isMySelfNodeChargeThisInnerSlot) {
                     if (oneSlot.hasUpstream()) {
                         // dual-role import cutover: drop the upstream and soft-promote, keeping downstream replicas
