@@ -1,8 +1,8 @@
 # Velo Slot-Migration Replication Model — Dual-Role `OneSlot` (Upstream / Downstream)
 
-**Status:** Phase 1 (bug 61) shipped. Phase 2 **Tier A implemented** (Tasks 6–12: dual-role primitives,
-catch_up relay, wiring, import rollback, and the durability-window closure — all committed, process-tested).
-Tier B (no full re-sync) and `releaseOneSlot` (Task 13) remain.
+**Status:** Phase 1 (bug 61) shipped. Phase 2 **Tier A implemented** (Tasks 6–13: dual-role primitives,
+catch_up relay, wiring, import rollback, the durability-window closure, and `releaseOneSlot` — all committed,
+process-tested). Only Tier B (no full re-sync) remains.
 **Related:** [`09_replication_design.md`](/home/kerry/ws/velo/doc/design/09_replication_design.md),
 [`16_cluster_management_design.md`](/home/kerry/ws/velo/doc/design/16_cluster_management_design.md),
 [`18_scale_up_design.md`](/home/kerry/ws/velo/doc/design/18_scale_up_design.md),
@@ -180,7 +180,11 @@ Benefit **not** delivered by Tier A (needs Tier B):
    bookkeeping and lifts readonly, keeping the binlog position continuous. Implemented in `OneSlot.dropUpstream`.
 4. **Rollback.** *(Done — Task 11.)* `manage slot N migrate_from_abort` reverts the target (drop upstream, drop
    relay downstream, discard partial data, clear the import marker); `clusterx migrate N cancel` clears the
-   source's export marker (source keeps ownership, untouched).
+   source's export marker **and lifts the readonly the caught-up export set** (bug 64), so the source keeps
+   ownership *and* stays writable — otherwise the slot was left stuck returning `ERR readonly`. *Known gap
+   (bug 65):* cancel does not yet tear down the source's export repl pair (it is only bye'd, delayed-close), so
+   an immediate re-migrate to the same target can reuse the stale already-caught-up pair and cut over before the
+   new data syncs — see `doc/bug_reviews/bug_65_cluster_module_review_round_1.md`.
 5. **Ownership still matters.** A node must not relay a slot it will never own (e.g. the always-initialized
    fallback inner slot 0). The bug-61 ownership gate remains the guard for that; `addUpstream` applies only to
    the migrate_from target, which *will* own the slot.
@@ -215,10 +219,12 @@ Benefit **not** delivered by Tier A (needs Tier B):
     flushes only after the new owner has promoted with a synced replica). No external "downstream-caught-up"
     query and no `migrating_state` change — the target owns the information and the wait lives where the state is.
   - Import rollback (Task 11): `migrate_from_abort` / `clusterx migrate ... cancel`.
+- **Task 13 (done):** `releaseOneSlot` reclaims a shed slot's resources at cutover and restores the lazy-init
+  invariant. Inner slot 0 is exempt (it is the always-initialized fallback slot). Process-tested by T4 (migrate
+  a non-zero inner slot out → the source logs `Released shed one slot`, and its sibling inner slots keep serving).
 - **Remaining:**
   - **Tier B** — raw-segment binlog content types so the whole import relays and the downstream never does a full
     physical re-fetch (the one Tier-A benefit still outstanding). Large, new on-disk format.
-  - **`releaseOneSlot` (Task 13)** — reclaim a shed slot's resources / restore the lazy-init invariant.
 
 > *Deeper alternative (Tier B):* relay the exists phase via new binlog content types, so the replica follows the
 > target as an ordinary slave with no explicit re-fetch trigger or cutover wait at all — at the cost of a new

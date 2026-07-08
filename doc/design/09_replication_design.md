@@ -59,6 +59,17 @@ message families for:
 These flows are orchestrated inside [`XGroup`](/home/kerry/ws/velo/src/main/java/io/velo/command/XGroup.java),
 not in an external replication daemon.
 
+Each slot runs its exists phase independently — there is no cross-slot ordering barrier. In particular every
+slot fetches the trained dictionaries it needs during its own exists phase (`hi` → `exists_dict`) and applies
+them idempotently via
+[`DictMap.putDictIfNotExist`](/home/kerry/ws/velo/src/main/java/io/velo/DictMap.java): a no-op when the seq is
+already present, and it never regenerates the seq (values reference their dict by seq, so a slave must preserve
+the master's seq). Overlapping dict sets across slots therefore cost only a little redundant transfer and never
+corrupt the node-wide `DictMap`. This replaced an earlier design in which only the first slot fetched dicts and
+the others skipped the fetch and waited on a node-global barrier
+(`isAsSlaveFirstSlotFetchedExistsAllDone`) — that barrier stalled on unusual topologies and left cross-node
+migrated slots without the source's dicts, so it was removed.
+
 ## Incremental Replay
 
 Incremental state is represented as `X*` binlog content objects under

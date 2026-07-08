@@ -31,6 +31,14 @@ Important current behaviors:
 - dictionaries are persisted to `dict-map.dat`
 - dictionary updates can be appended to binlog through `XDict`
 - dictionary metrics are exported through `SimpleGauge`
+- two put paths with different seq semantics:
+  - `putDict` — master-side training; regenerates the seq on a collision (a newly trained dict must get a free
+    seq)
+  - `putDictIfNotExist` — slave-side replication apply (used by `XGroup.s_exists_dict` and `XDict.apply`);
+    stores under the master's exact seq and is a no-op if that seq is already present. It never regenerates,
+    because a value references its dict by seq, so the slave must preserve the master's seq. This makes the
+    apply idempotent, so every slot can fetch the dicts it needs during its own exists phase without a
+    cross-slot ordering barrier
 
 ## Training Path
 
