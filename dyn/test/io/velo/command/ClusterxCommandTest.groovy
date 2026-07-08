@@ -1623,7 +1623,9 @@ slots
         def multiShard = localPersist.multiShard
 
         and: 'self node is the charge (import) target with an upstream; the durability gate reads hasUpstream, and'
-        and: 'a newer setslot advances the epoch to 20 during that read, before the destructive cutover runs'
+        and: 'a newer setslot advances the epoch to 20 during that read, before the destructive cutover runs.'
+        and: 'NOTE: this covers "epoch advanced before the cutover-start check". The residual cross-thread window'
+        and: 'between that check and the destructive op is best-effort and knowingly not closed (see the guard).'
         boolean[] droppedUpstream = [false]
         def hookSlot = new OneSlot(slot, Consts.slotDir, null, null) {
             private boolean bumped = false

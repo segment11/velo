@@ -1320,6 +1320,14 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
                 // superseded request would still tear down or promote local replication state and only be
                 // discarded at commit. Skip the cutover entirely — the no-error completion runs mutateMetadata,
                 // whose matching guard drops the ownership commit, so neither local state nor metadata changes.
+                //
+                // Best-effort by design: this is a check on a global epoch that other threads (another slot's
+                // setslot commit, or setnodes/refreshAllShards) can advance in the few non-yielding instructions
+                // between here and the destructive op. That residual check->act window is knowingly NOT closed
+                // here — the destructive ops are irreversible, and closing it would need either serialization
+                // under the multiShard monitor (fights the run-to-completion model) or the durable intent-record
+                // redesign. Correctness of the residual rests on idempotent controller retry + the migration
+                // counterpart staying authoritative, same as the metadata-persist-failure path.
                 if (clusterVersion != 0 && clusterVersion < multiShard.clusterCurrentEpoch) {
                     log.warn 'clusterx setslot ignore stale cluster version={} before local cutover, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
                     return
