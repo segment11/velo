@@ -646,6 +646,27 @@ migrating_state:ok
             if (mySelfShard.exportMigratingSlot == toClientSlot) {
                 mySelfShard.exportMigratingSlot = Shard.NO_MIGRATING_SLOT
                 log.warn 'Clusterx migrate cancel export migrating slot={}', toClientSlot
+
+                // The export path sets the source slot readonly once its migrating slave caught up (see
+                // info()). Cancel keeps the slot owned locally, so restore writability; otherwise the slot
+                // is stuck rejecting writes with ERR readonly. readonly is persisted via the slot DynConfig,
+                // so reset it on the slot thread.
+                def innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot)
+                def oneSlot = localPersist.oneSlot(innerSlot)
+                if (oneSlot != null && oneSlot.readonly) {
+                    SettablePromise<Reply> finalPromise = new SettablePromise<>()
+                    oneSlot.asyncRun(RunnableEx.of {
+                        oneSlot.readonly = false
+                    }).whenComplete { done, e ->
+                        if (e) {
+                            log.error 'Clusterx migrate cancel reset readonly failed, slot={}, inner slot={}', toClientSlot, innerSlot, e
+                            finalPromise.set(new ErrorReply('error when cancel migrate: ' + e.message))
+                        } else {
+                            finalPromise.set(OK)
+                        }
+                    }
+                    return new AsyncReply(finalPromise)
+                }
             }
             return OK
         }

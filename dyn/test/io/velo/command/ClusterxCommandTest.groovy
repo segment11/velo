@@ -556,6 +556,20 @@ slots
         reply == ClusterxCommand.OK
         shards[0].exportMigratingSlot == Shard.NO_MIGRATING_SLOT
 
+        when: 'the export had marked the source readonly (slave caught up), then cancel'
+        // re-arm the export, then simulate the readonly the info path sets on the source once caught up
+        data4[3] = shards[1].nodes[0].nodeId().bytes
+        clusterx.migrate()
+        assert shards[0].exportMigratingSlot == 0
+        localPersist.oneSlot(slot).readonly = true
+        data4[3] = 'cancel'.bytes
+        reply = clusterx.migrate()
+        then: 'cancel restores writability so the still-owned slot is not stuck readonly'
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        shards[0].exportMigratingSlot == Shard.NO_MIGRATING_SLOT
+        !localPersist.oneSlot(slot).readonly
+
         when:
         // skip
         data4[2] = '1'.bytes
