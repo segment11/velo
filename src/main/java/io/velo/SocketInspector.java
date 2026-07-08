@@ -274,6 +274,32 @@ public class SocketInspector implements TcpSocket.Inspector {
     long[] netOutBytesLengthArray;
 
     /**
+     * Eager-allocates the per-worker counter arrays from the worker counts, so they are never null once
+     * the inspector exists. This closes the bug-66 startup race at the source: the SimpleServer is wired
+     * with this inspector at DI/build time and can start accepting before
+     * {@link #initByNetWorkerEventloopArray} runs in {@code onStart()}. With the arrays allocated up front,
+     * {@code onConnect}/{@code onRead}/{@code onWrite} never dereference a null array — no per-I/O
+     * null-guards, no lost or negative counts.
+     *
+     * @param netWorkers  number of net worker threads (sizes the connected-client array)
+     * @param slotWorkers number of slot worker threads (net + slot sizes the byte-length arrays)
+     */
+    public SocketInspector(int netWorkers, int slotWorkers) {
+        this.connectedClientCountArray = new int[netWorkers];
+        this.netInBytesLengthArray = new long[netWorkers + slotWorkers];
+        this.netOutBytesLengthArray = new long[netWorkers + slotWorkers];
+    }
+
+    /**
+     * Sizes the arrays from {@link ConfForGlobal} (clamped to at least 1). Production uses the
+     * config-driven {@link #SocketInspector(int, int)} from the DI provider; this no-arg form is for tests
+     * and any caller that constructs before the worker counts are known precisely.
+     */
+    public SocketInspector() {
+        this(Math.max(1, ConfForGlobal.netWorkers), Math.max(1, ConfForGlobal.slotWorkers));
+    }
+
+    /**
      * Gets the total network input bytes length across all network workers.
      *
      * @return the total network input bytes length
@@ -300,7 +326,9 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
-     * Initializes the inspector with the given event loop array.
+     * Wires the event loop references. The counter arrays are eager-allocated in the constructor (bug 66),
+     * so this only (re)allocates them when the actual worker counts differ from the constructor's — which
+     * preserves any counts accumulated in the tiny bind-&gt;init window in the normal, matching-size case.
      *
      * @param slotWorkerEventloopArray the array of slot event loops
      * @param netWorkerEventloopArray  the array of net event loops
@@ -309,9 +337,17 @@ public class SocketInspector implements TcpSocket.Inspector {
         this.slotWorkerEventloopArray = slotWorkerEventloopArray;
         this.netWorkerEventloopArray = netWorkerEventloopArray;
 
-        this.connectedClientCountArray = new int[netWorkerEventloopArray.length];
-        this.netInBytesLengthArray = new long[netWorkerEventloopArray.length + slotWorkerEventloopArray.length];
-        this.netOutBytesLengthArray = new long[netWorkerEventloopArray.length + slotWorkerEventloopArray.length];
+        var netLen = netWorkerEventloopArray.length;
+        var totalLen = netWorkerEventloopArray.length + slotWorkerEventloopArray.length;
+        if (connectedClientCountArray == null || connectedClientCountArray.length != netLen) {
+            this.connectedClientCountArray = new int[netLen];
+        }
+        if (netInBytesLengthArray == null || netInBytesLengthArray.length != totalLen) {
+            this.netInBytesLengthArray = new long[totalLen];
+        }
+        if (netOutBytesLengthArray == null || netOutBytesLengthArray.length != totalLen) {
+            this.netOutBytesLengthArray = new long[totalLen];
+        }
     }
 
     /**

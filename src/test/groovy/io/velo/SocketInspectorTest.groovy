@@ -200,6 +200,56 @@ class SocketInspectorTest extends Specification {
         inspector.clearAll()
     }
 
+    /**
+     * Regression test for bug 66 — the SimpleServer is wired with the inspector at DI/build time and can
+     * start accepting connections before {@code MultiWorkerServer.onStart()} calls
+     * {@link SocketInspector#initByNetWorkerEventloopArray}. The fix eager-allocates the per-worker counter
+     * arrays in the constructor (sized from the worker counts), so a freshly constructed inspector is fully
+     * usable with no init: {@code onConnect}/{@code onRead}/{@code onWrite}/{@code onDisconnect} count
+     * correctly and never dereference a null array. No init call is made in this test on purpose.
+     */
+    def 'test freshly constructed inspector counts without init (bug 66 regression)'() {
+        given:
+        // onConnect runs on a net worker thread; onStart sets the thread-id array before the server accepts.
+        // Simulate one net worker mapped to the current thread.
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Thread.currentThread().threadId()] as long[]
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        // constructor sizes the arrays; no initByNetWorkerEventloopArray call anywhere below
+        def fresh = new SocketInspector(1, 1)
+        def socket = mockTcpSocket(eventloopCurrent, 46399)
+        Eventloop[] oneEventloop = [eventloopCurrent]
+        BlockingList.initBySlotWorkerEventloopArray(oneEventloop)
+
+        when: 'onConnect / onRead / onWrite / onDisconnect run before any init'
+        fresh.onConnect(socket)
+        fresh.onRead(socket, ByteBuf.empty())
+        fresh.onWrite(socket, null, 100)
+        fresh.onDisconnect(socket)
+
+        then: 'no NPE, and the counters are correct because the arrays existed from construction'
+        notThrown(Exception)
+        fresh.connectionCount.get() == 0    // +1 on connect, -1 on disconnect
+        fresh.socketMap.size() == 0
+        fresh.connectedClientCount() == 0   // per-worker array incremented then decremented, not skipped
+        fresh.netInBytesLength() == 0        // empty read
+        fresh.netOutBytesLength() == 100     // onWrite recorded 100 bytes out (not skipped)
+
+        when: 'the no-arg constructor also sizes from ConfForGlobal and is usable immediately'
+        def dflt = new SocketInspector()
+        dflt.onConnect(mockTcpSocket(eventloopCurrent, 46398))
+
+        then: 'onConnect counts without any init call'
+        notThrown(Exception)
+        dflt.connectionCount.get() == 1
+
+        cleanup:
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = null
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = null
+    }
+
     def 'test publish dispatches to net worker eventloop not slot worker'() {
         given:
         def inspector = new SocketInspector()
@@ -228,21 +278,21 @@ class SocketInspectorTest extends Specification {
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [netWorkerEventloop.getEventloopThread().threadId()]
         inspector.connectedClientCountArray = [0]
         // onConnect must run on the net worker eventloop thread (as in production)
-        def connectDone = new java.util.concurrent.CountDownLatch(1)
+        def connectDone = new CountDownLatch(1)
         netWorkerEventloop.execute {
             inspector.onConnect(socket)
             connectDone.countDown()
         }
-        connectDone.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        connectDone.await(2, TimeUnit.SECONDS)
 
         // Subscribe is called from the slot worker (simulated by submitting to slot worker eventloop)
         def channel = 'test_channel'
-        def subscribeDone = new java.util.concurrent.CountDownLatch(1)
+        def subscribeDone = new CountDownLatch(1)
         slotWorkerEventloop.execute {
             inspector.subscribe(channel, false, socket)
             subscribeDone.countDown()
         }
-        subscribeDone.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        subscribeDone.await(2, TimeUnit.SECONDS)
 
         expect:
         inspector.subscribeClientCount() == 1
@@ -251,14 +301,14 @@ class SocketInspectorTest extends Specification {
         // Publish from the slot worker eventloop
         // The callback should be dispatched to the NET worker eventloop, NOT the slot worker
         def callbackThreadRef = new AtomicReference<Thread>()
-        def publishDone = new java.util.concurrent.CountDownLatch(1)
+        def publishDone = new CountDownLatch(1)
         slotWorkerEventloop.execute {
             inspector.publish(channel, new BulkReply('test_message'), (s, r) -> {
                 callbackThreadRef.set(Thread.currentThread())
                 publishDone.countDown()
             })
         }
-        publishDone.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        publishDone.await(2, TimeUnit.SECONDS)
 
         then:
         // The callback must have run on the net worker thread, not the slot worker thread
@@ -297,21 +347,21 @@ class SocketInspectorTest extends Specification {
         inspector.connectedClientCountArray = [0]
 
         def channel = 'concurrent_test'
-        def sockets = []
+        List<TcpSocket> sockets = []
         for (int i = 0; i < 20; i++) {
             def socket = mockTcpSocket(netWorkerEventloop)
             sockets << socket
-            def connectDone = new java.util.concurrent.CountDownLatch(1)
+            def connectDone = new CountDownLatch(1)
             netWorkerEventloop.execute {
                 inspector.onConnect(socket)
                 connectDone.countDown()
             }
-            connectDone.await(2, java.util.concurrent.TimeUnit.SECONDS)
+            connectDone.await(2, TimeUnit.SECONDS)
         }
 
         when:
         def errors = Collections.synchronizedList(new ArrayList<Throwable>())
-        def done = new java.util.concurrent.CountDownLatch(4)
+        def done = new CountDownLatch(4)
 
         // Thread 1: subscribe sockets
         Thread.start {
@@ -355,7 +405,7 @@ class SocketInspectorTest extends Specification {
             }
         }
 
-        done.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        done.await(5, TimeUnit.SECONDS)
 
         then:
         errors.isEmpty()

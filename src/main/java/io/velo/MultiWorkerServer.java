@@ -1739,7 +1739,11 @@ public class MultiWorkerServer extends Launcher {
                 throw new IllegalArgumentException("net.maxConnections must be > 0, given: " + maxConnections);
             }
 
-            var r = new SocketInspector();
+            // Size the per-worker counter arrays up front (bug 66): the SimpleServer is wired with this
+            // inspector at DI time and can accept before onStart's initByNetWorkerEventloopArray runs.
+            int netWorkers = config.get(ofInteger(), "netWorkers", 1);
+            int slotWorkers = config.get(ofInteger(), "slotWorkers", 1);
+            var r = new SocketInspector(netWorkers, slotWorkers);
             r.setMaxConnections(maxConnections);
             MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = r;
             return r;
