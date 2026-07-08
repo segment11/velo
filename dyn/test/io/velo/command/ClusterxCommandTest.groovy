@@ -1569,6 +1569,7 @@ slots
         def localPersist = LocalPersist.instance
         def multiShard = localPersist.multiShard
 
+        and: 'defense-in-depth: the controller serializes setslot per node so this does not arise normally, but'
         and: 'inject a slot whose local shed-cutover simulates a newer setslot committing epoch=20 mid-flush'
         def hookSlot = new OneSlot(slot, Consts.slotDir, null, null) {
             @Override
@@ -1624,8 +1625,8 @@ slots
 
         and: 'self node is the charge (import) target with an upstream; the durability gate reads hasUpstream, and'
         and: 'a newer setslot advances the epoch to 20 during that read, before the destructive cutover runs.'
-        and: 'NOTE: this covers "epoch advanced before the cutover-start check". The residual cross-thread window'
-        and: 'between that check and the destructive op is best-effort and knowingly not closed (see the guard).'
+        and: 'NOTE: the controller serializes setslot per node, so this concurrent-epoch case does not arise in'
+        and: 'normal operation; the test exercises the defense-in-depth guard for a violated-invariant scenario.'
         boolean[] droppedUpstream = [false]
         def hookSlot = new OneSlot(slot, Consts.slotDir, null, null) {
             private boolean bumped = false

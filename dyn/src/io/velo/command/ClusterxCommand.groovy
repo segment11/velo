@@ -1212,8 +1212,10 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         def multiShard = localPersist.multiShard
 
         // Reject a stale (strictly older) setslot before mutating slot ranges or repl pairs, so a
-        // reordered/delayed controller broadcast cannot roll this node's ownership back. A zero version
-        // means "leave the epoch unchanged" and is not treated as stale.
+        // reordered/delayed/duplicate controller broadcast cannot roll this node's ownership back. The
+        // controller drives setslot to a node one at a time (serialized per node), so processed alone a stale
+        // request is caught right here, before any async work. A zero version means "leave the epoch unchanged"
+        // and is not treated as stale.
         if (clusterVersion != 0 && clusterVersion < multiShard.clusterCurrentEpoch) {
             log.warn 'clusterx setslot ignore stale cluster version={}, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
             return OK
@@ -1272,11 +1274,13 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         // persisting the metadata fails — so callers surface a clean error instead of letting the checked
         // IOException escape the async callback.
         Closure<Reply> mutateMetadata = {
-            // Re-check staleness at commit time, not just at request arrival (line above). The cutover runs
-            // asynchronously, so a newer setslot may have advanced clusterCurrentEpoch in the meantime; committing
-            // this older request's ownership now would roll routing back (updateClusterVersion would then ignore
-            // the stale epoch bump but the slot-range mutation below has no such guard). Drop it: the newer state
-            // already won.
+            // Defense-in-depth re-check at commit time. The primary guarantee is that the controller serializes
+            // setslot per node, so no concurrent setslot advances clusterCurrentEpoch during this one's async
+            // window and the arrival check (line ~1217) already rules out a stale request. This guard only bites
+            // if that invariant is violated (a manual clusterx setslot, a duplicate/out-of-order delivery
+            // processed concurrently, or more than one controller): committing an older request's ownership would
+            // roll routing back, since updateClusterVersion would ignore the stale epoch bump but the slot-range
+            // mutation below has no such guard. Drop it — the newer state already won.
             if (clusterVersion != 0 && clusterVersion < multiShard.clusterCurrentEpoch) {
                 log.warn 'clusterx setslot ignore stale cluster version={} at commit, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
                 return OK
@@ -1314,20 +1318,21 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
             }
 
             oneSlot.asyncRun(RunnableEx.of {
-                // Re-check staleness on the slot's own thread, immediately before the destructive local cutover
-                // (dropUpstream/resetAsSlave/flush/releaseOneSlot). The request passed the arrival check, but a
-                // newer setslot may have advanced the epoch while this one was queued; without this guard a
-                // superseded request would still tear down or promote local replication state and only be
-                // discarded at commit. Skip the cutover entirely — the no-error completion runs mutateMetadata,
-                // whose matching guard drops the ownership commit, so neither local state nor metadata changes.
+                // Defense-in-depth re-check on the slot's own thread, immediately before the destructive local
+                // cutover (dropUpstream/resetAsSlave/flush/releaseOneSlot). The primary guarantee is controller
+                // per-node setslot serialization, so no concurrent setslot advances the epoch during this one's
+                // async window; this only bites if that invariant is violated (manual/duplicate/out-of-order or a
+                // second controller). Then a superseded request would otherwise tear down or promote local
+                // replication state and only be discarded at commit. Skip the cutover entirely — the no-error
+                // completion still runs mutateMetadata, whose matching guard drops the ownership commit, so
+                // neither local state nor metadata changes.
                 //
-                // Best-effort by design: this is a check on a global epoch that other threads (another slot's
-                // setslot commit, or setnodes/refreshAllShards) can advance in the few non-yielding instructions
-                // between here and the destructive op. That residual check->act window is knowingly NOT closed
-                // here — the destructive ops are irreversible, and closing it would need either serialization
-                // under the multiShard monitor (fights the run-to-completion model) or the durable intent-record
-                // redesign. Correctness of the residual rests on idempotent controller retry + the migration
-                // counterpart staying authoritative, same as the metadata-persist-failure path.
+                // Note the guard is not atomic with the destructive op: it reads a global epoch that another
+                // thread could in principle advance in the few non-yielding instructions before the op. Given
+                // serialization there is no such concurrent writer, so the window is unreachable in normal
+                // operation; if the invariant were violated, closing it would need serialization under the
+                // multiShard monitor (fights the run-to-completion model) or the durable intent-record redesign,
+                // with the residual resting on idempotent retry + the migration counterpart staying authoritative.
                 if (clusterVersion != 0 && clusterVersion < multiShard.clusterCurrentEpoch) {
                     log.warn 'clusterx setslot ignore stale cluster version={} before local cutover, current epoch={}', clusterVersion, multiShard.clusterCurrentEpoch
                     return
