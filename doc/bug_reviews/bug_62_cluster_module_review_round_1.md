@@ -4,6 +4,10 @@
 
 **Severity:** High (migration of any non-first inner slot never completes; the source is stuck exporting)
 
+> **Update (2026-07-08):** the minimal `isAsSlave()` gate below (`dbb0228c`) has since been superseded —
+> the first-slot barrier it guarded was removed entirely by the dict-sync decoupling refactor, so the stall
+> can no longer occur. See `docs/plans/2026-07-08-repl-dict-sync-decoupling.md`.
+
 **Discovered by:** process-level test `ClusterMigrationStressManualTest` (T4 / T5), migrating client slot
 8192 (inner slot 2) between real JVM nodes. The source never reaches `migrating_state:success`; the
 import on the target completes its exists phase and then silently stops making progress until the 90 s

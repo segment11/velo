@@ -149,9 +149,9 @@ public class XDict implements BinlogContent {
     public void apply(short slot, ReplPair replPair) {
         log.warn("Repl slave get dict, key prefix or suffix={}, seq={}", keyPrefixOrSuffix, dict.getSeq());
         // ignore slot, need sync
-        var dictMap = DictMap.getInstance();
-        synchronized (dictMap) {
-            dictMap.putDict(keyPrefixOrSuffix, dict);
-        }
+        // idempotent, seq-preserving apply: preserve the master's seq (values reference dicts by seq) and
+        // no-op if we already have it, so a re-synced or multi-slot replay cannot regenerate/duplicate it.
+        // putDictIfNotExist is itself synchronized on the DictMap instance, so no extra block is needed.
+        DictMap.getInstance().putDictIfNotExist(keyPrefixOrSuffix, dict);
     }
 }

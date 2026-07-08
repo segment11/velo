@@ -102,6 +102,68 @@ class DictMapTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test putDictIfNotExist preserves the master seq and is idempotent'() {
+        given:
+        FileUtils.forceMkdir(Consts.testDir)
+        def dictFile = new File(Consts.testDir, 'dict-map.dat')
+        if (dictFile.exists()) {
+            dictFile.delete()
+        }
+
+        and:
+        def dictMap = DictMap.instance
+        dictMap.cleanUp()
+        dictMap.initDictMap(Consts.testDir)
+
+        and:
+        final short slot = 0
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.firstOneSlot()
+        oneSlot.dynConfig.binlogOn = true
+
+        and: 'a dict carrying the master seq 100'
+        def dict = new Dict()
+        dict.dictBytes = 'from-master'.bytes
+        dict.seq = 100
+        dict.createdTime = System.currentTimeMillis()
+
+        when: 'first apply stores it under the master seq without regenerating'
+        def stored = dictMap.putDictIfNotExist('prefix-a', dict)
+        then:
+        stored.seq == 100
+        dictMap.dictSize() == 1
+        dictMap.getDictBySeq(100).dictBytes == 'from-master'.bytes
+
+        when: 'a second slot applies the same seq (same content) concurrently — idempotent no-op'
+        def again = new Dict()
+        again.dictBytes = 'from-master'.bytes
+        again.seq = 100
+        again.createdTime = System.currentTimeMillis()
+        def stored2 = dictMap.putDictIfNotExist('prefix-a', again)
+        then: 'no duplicate, no regenerated seq; returns the already-stored dict'
+        stored2.seq == 100
+        dictMap.dictSize() == 1
+        dictMap.getDictBySeq(100).dictBytes == 'from-master'.bytes
+
+        when: 'contrast: putDict on the same seq regenerates to a new seq (master-training semantics)'
+        def trained = new Dict()
+        trained.dictBytes = 'trained'.bytes
+        trained.seq = 100
+        trained.createdTime = System.currentTimeMillis()
+        dictMap.putDict('prefix-b', trained)
+        then:
+        trained.seq != 100
+        dictMap.dictSize() == 2
+
+        cleanup:
+        dictMap.clearAll()
+        dictMap.cleanUp()
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test putDict asserts when seq equals SELF_ZSTD_DICT_SEQ'() {
         given:
         FileUtils.forceMkdir(Consts.testDir)

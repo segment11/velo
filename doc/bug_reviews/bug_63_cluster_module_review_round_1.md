@@ -6,7 +6,10 @@
 per-key-prefix trained dict that exists on the source but not the target could be undecodable on the
 target after migration.
 
-**Status:** Reported, not yet reproduced or fixed. Filed as the "adjacent concern" surfaced while fixing
+**Status:** Fixed (2026-07-08) by the dict-sync decoupling refactor — every slot (including a migrated
+non-first slot) now fetches its source's per-prefix trained dicts during its own exists phase, applied
+idempotently via `DictMap.putDictIfNotExist`. See `docs/plans/2026-07-08-repl-dict-sync-decoupling.md`.
+Originally filed as the "adjacent concern" surfaced while fixing
 [bug 62](bug_62_cluster_module_review_round_1.md).
 
 ### Cited files / lines

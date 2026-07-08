@@ -122,6 +122,41 @@ public class DictMap implements NeedCleanUp {
             }
         }
 
+        return storeDict(keyPrefixOrSuffix, dict);
+    }
+
+    /**
+     * Slave-side idempotent apply. Stores {@code dict} under the master's exact seq, or returns the
+     * already-present dict for that seq without touching anything. Unlike {@link #putDict} it never
+     * regenerates the seq — values reference their dict by seq, so a slave must preserve the master's
+     * seq or the values become undecodable. Being a no-op when the seq is already present makes it safe
+     * for multiple slots to fetch the same dict concurrently during their own exists phase: whoever
+     * stores it first wins, the rest are no-ops. No skip/barrier ordering is needed.
+     *
+     * @param keyPrefixOrSuffix the key prefix or suffix of the dictionary
+     * @param dict              the dictionary to apply, carrying the master's seq
+     * @return the dict now stored for that seq (the caller's {@code dict} if freshly stored, else the
+     * existing one)
+     */
+    @SlaveReplay
+    public synchronized Dict putDictIfNotExist(String keyPrefixOrSuffix, Dict dict) {
+        assert dict.getSeq() != Dict.SELF_ZSTD_DICT_SEQ;
+
+        var existDict = cacheDictBySeq.get(dict.getSeq());
+        if (existDict != null) {
+            return existDict;
+        }
+
+        return storeDict(keyPrefixOrSuffix, dict);
+    }
+
+    /**
+     * Persists {@code dict} under its current seq: writes it to the dict-map file, updates the in-memory
+     * caches, then appends it to the binlog for downstream replicas. The caller is responsible for having
+     * resolved the seq (regenerate on conflict for {@link #putDict}, or no-op-if-present for
+     * {@link #putDictIfNotExist}).
+     */
+    private Dict storeDict(String keyPrefixOrSuffix, Dict dict) {
         // 1. Write to file first — if this fails the dict is rejected outright
         try {
             fos.write(dict.encode(keyPrefixOrSuffix));

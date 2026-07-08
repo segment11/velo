@@ -1432,13 +1432,12 @@ class XGroupTest extends Specification {
         oneSlot.onlyOneReplPairAsSlave.setRemoteReplProperties(ConfForSlot.global.generateReplProperties())
         oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
 
-        when: 'the migrating-in slot leads its own barrier instead of NPEing'
+        when: 'the migrating-in slot handles exists-all-done and moves to catch up without NPEing'
         def contentBytes = [0] as byte[]
         def replRequest = new ReplRequest(replPairAsMaster.slaveUuid, slot, ReplType.s_exists_all_done, contentBytes, contentBytes.length)
         ReplReply r = x.handleRepl(replRequest) as ReplReply
         then:
         r.isReplType(ReplType.catch_up)
-        localPersist.isAsSlaveFirstSlotFetchedExistsAllDone()
 
         cleanup:
         ConfForGlobal.clusterEnabled = savedClusterEnabled
@@ -1492,53 +1491,7 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test as slave non-first slot catch up does not wait for first slot barrier when the first slot is owned locally as master'() {
-        given:
-        def savedClusterEnabled = ConfForGlobal.clusterEnabled
-        def savedSlotNumber = ConfForGlobal.slotNumber
-        ConfForGlobal.clusterEnabled = true
-        def ctx = setupSlaveContext()
-        ConfForGlobal.slotNumber = slotNumber
-        def localPersist = ctx.localPersist
-        def masterUuid = ctx.masterUuid
-        def x = ctx.x
-        def multiShard = localPersist.multiShard
-
-        and: 'this node owns its first inner slot 0 as master, so its node-wide DictMap is already populated'
-        multiShard.mySelfShard().multiSlotRange.list.clear()
-        multiShard.mySelfShard().multiSlotRange.addSingle(0, 16383)
-        assert localPersist.firstOneSlot().slot() == slot
-        assert !localPersist.firstOneSlot().isAsSlave()
-
-        and: 'a non-first slot (1) is importing as a slave; the barrier flag stays false because slot 0 is never slave-synced'
-        def nonFirstOneSlot = localPersist.ensureOneSlotInitialized(slot1)
-        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
-        def replPairAsSlave = nonFirstOneSlot.createReplPairAsSlave('localhost', 6379)
-        nonFirstOneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
-        localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false)
-
-        when: 'the master reports it has no more binlog (13-byte readonly catch-up) for the non-first slot'
-        def contentBytes = new byte[13]
-        def buffer = ByteBuffer.wrap(contentBytes)
-        buffer.put((byte) 1)   // master readonly
-        buffer.putInt(0)       // master current file index
-        buffer.putLong(0L)     // master current offset
-        def replRequest = new ReplRequest(replPairAsSlave.slaveUuid, slot1, ReplType.s_catch_up, contentBytes, contentBytes.length)
-        ReplReply r = x.handleRepl(replRequest) as ReplReply
-
-        then: 'it does not stall on the first-slot barrier (which would leave allCaughtUp false); the stream is caught up'
-        r.isEmpty()
-        replPairAsSlave.isAllCaughtUp()
-
-        cleanup:
-        ConfForGlobal.clusterEnabled = savedClusterEnabled
-        localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
-        localPersist.cleanUp()
-        Consts.persistDir.deleteDir()
-        ConfForGlobal.slotNumber = savedSlotNumber
-    }
-
-    def 'test as slave non-first slot catch up still waits for the first slot barrier when the first slot is itself slave-syncing'() {
+    def 'test as slave non-first slot catch up proceeds without any first-slot barrier'() {
         given:
         def savedClusterEnabled = ConfForGlobal.clusterEnabled
         def savedSlotNumber = ConfForGlobal.slotNumber
@@ -1551,32 +1504,32 @@ class XGroupTest extends Specification {
         def x = ctx.x
         def multiShard = localPersist.multiShard
 
-        and: 'the node owns both inner slots but the FIRST slot 0 is itself being slave-synced (full-node sync)'
+        and: 'the node owns both inner slots and the FIRST slot 0 is itself still slave-syncing (not done)'
+        // this is exactly the state the removed barrier used to block on; it must no longer block
         multiShard.mySelfShard().multiSlotRange.list.clear()
         multiShard.mySelfShard().multiSlotRange.addSingle(0, 16383)
         oneSlot.createReplPairAsSlave('localhost', 6379)
         assert localPersist.firstOneSlot().slot() == slot
         assert localPersist.firstOneSlot().isAsSlave()
 
-        and: 'the first slot has not finished its exists fetch yet, so the barrier flag is false'
+        and: 'a non-first slot (1) importing as a slave — it fetched its own dicts, so it need not wait for slot 0'
         def nonFirstOneSlot = localPersist.ensureOneSlotInitialized(slot1)
         localPersist.fixSlotThreadId(slot1, Thread.currentThread().threadId())
         def replPairAsSlave = nonFirstOneSlot.createReplPairAsSlave('localhost', 6379)
         nonFirstOneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 0, 0L)
-        localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false)
 
-        when: 'a readonly catch-up arrives for the non-first slot while the first slot is not done'
+        when: 'a readonly catch-up arrives for the non-first slot while the first slot is still not done'
         def contentBytes = new byte[13]
         def buffer = ByteBuffer.wrap(contentBytes)
-        buffer.put((byte) 1)
-        buffer.putInt(0)
-        buffer.putLong(0L)
+        buffer.put((byte) 1)   // master readonly
+        buffer.putInt(0)       // master current file index
+        buffer.putLong(0L)     // master current offset
         def replRequest = new ReplRequest(replPairAsSlave.slaveUuid, slot1, ReplType.s_catch_up, contentBytes, contentBytes.length)
         ReplReply r = x.handleRepl(replRequest) as ReplReply
 
-        then: 'it defers (empty reply) and does NOT mark the stream caught up — the barrier still holds'
+        then: 'no barrier: the stream is marked caught up immediately regardless of the first slot state'
         r.isEmpty()
-        !replPairAsSlave.isAllCaughtUp()
+        replPairAsSlave.isAllCaughtUp()
 
         cleanup:
         ConfForGlobal.clusterEnabled = savedClusterEnabled
@@ -2476,13 +2429,6 @@ class XGroupTest extends Specification {
         r = x.handleRepl(replRequest) as ReplReply
         then:
         r.isReplType(ReplType.error)
-
-        when:
-        localPersist.asSlaveFirstSlotFetchedExistsAllDone = false
-        replRequest.slot = 1
-        r = x.handleRepl(replRequest) as ReplReply
-        then:
-        r.isEmpty()
 
         when:
         replRequest.slot = 0
@@ -3804,7 +3750,7 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test hi resets first slot fetched exists all done flag on master uuid change for non first slot'() {
+    def 'test hi on a non-first slot fetches its own dict rather than skipping'() {
         given:
         ConfForGlobal.netListenAddress = 'localhost:6380'
         ConfForGlobal.slotNumber = slotNumber
@@ -3820,11 +3766,7 @@ class XGroupTest extends Specification {
         localPersist.startIndexHandlerPool()
         Thread.sleep(1000)
 
-        and:
-        // simulate prior session: global flag was set true by a completed first-slot handshake
-        localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(true)
-
-        // non-first slot had a different master persisted; fresh hi arrives with a new master uuid
+        and: 'the non-first slot had a different master persisted; a fresh hi arrives with a new master uuid'
         def oldMasterUuid = 500L
         nonFirstSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(oldMasterUuid, true, 0, 0L)
 
@@ -3837,20 +3779,17 @@ class XGroupTest extends Specification {
         x.from(BaseCommand.mockAGroup())
         x.replPair = null
 
-        when:
+        when: 'the non-first slot (1) handles hi'
         def hi = new Hi(replPairAsMaster.slaveUuid, newMasterUuid,
                 new Binlog.FileIndexAndOffset(0, 0L),
                 new Binlog.FileIndexAndOffset(0, 0L), 0)
-        // send with slot=1 (non-first slot) to exercise the failover-on-non-first-slot path
         def hiReply = Repl.reply(slot1, replPairAsMaster, ReplType.hi, hi)
         def nettyBuf = Unpooled.wrappedBuffer(hiReply.buffer().array())
         def hiReplRequest = Repl.decode(nettyBuf)
-        x.handleRepl(hiReplRequest)
+        def r = x.handleRepl(hiReplRequest) as ReplReply
 
-        then:
-        // flag must be reset to false so non-first slots' s_catch_up gate will delay
-        // until slot 0 refreshes dicts from the new master
-        !localPersist.isAsSlaveFirstSlotFetchedExistsAllDone()
+        then: 'every slot now fetches its own dict during its exists phase — no first-slot-only skip'
+        r.isReplType(ReplType.exists_dict)
 
         cleanup:
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())

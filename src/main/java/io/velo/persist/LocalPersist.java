@@ -688,15 +688,6 @@ public class LocalPersist implements NeedCleanUp {
         this.indexHandlerPool.start();
     }
 
-    private volatile boolean isAsSlaveFirstSlotFetchedExistsAllDone = false;
-
-    /**
-     * @return true if the fetch is complete, false otherwise
-     */
-    public boolean isAsSlaveFirstSlotFetchedExistsAllDone() {
-        return isAsSlaveFirstSlotFetchedExistsAllDone;
-    }
-
     /**
      * @return true if this node is currently acting as a scale-up slave whose local slot count
      * is greater than the remote master's slot count (e.g. local 2N, master N)
@@ -769,13 +760,6 @@ public class LocalPersist implements NeedCleanUp {
                 });
             }
         }
-    }
-
-    /**
-     * @param asSlaveFirstSlotFetchedExistsAllDone the flag value to set
-     */
-    public void setAsSlaveFirstSlotFetchedExistsAllDone(boolean asSlaveFirstSlotFetchedExistsAllDone) {
-        isAsSlaveFirstSlotFetchedExistsAllDone = asSlaveFirstSlotFetchedExistsAllDone;
     }
 
     private MultiShard multiShard;

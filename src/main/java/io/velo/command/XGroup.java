@@ -645,16 +645,6 @@ public class XGroup extends BaseCommand {
         var lastUpdatedMasterUuid = metaChunkSegmentIndex.getMasterUuid();
         var isExistsDataAllFetched = metaChunkSegmentIndex.isExistsDataAllFetched();
 
-        // Reset the global dict-ready barrier when either the first slot re-syncs (original behavior)
-        // or the master UUID changed (failover). Without the second condition, a non-first slot that
-        // reaches hi() before slot 0 after failover can observe a stale `true` barrier and start
-        // applying binlog from the new master before slot 0 has refreshed the dict.
-        // A node that owns no client slots yet (e.g. brand-new node receiving its first migrated slot)
-        // has a null firstOneSlot(); treat this slot as the de-facto first slot so it leads the barrier.
-        var firstOneSlotForReset = localPersist.firstOneSlot();
-        if (firstOneSlotForReset == null || slot == firstOneSlotForReset.slot() || lastUpdatedMasterUuid != masterUuid) {
-            localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(false);
-        }
         if (lastUpdatedMasterUuid == masterUuid && isExistsDataAllFetched) {
             // last updated means next batch, but not fetch yet, refer end of method s_cache_up
             var lastUpdatedFileIndexAndOffset = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
@@ -699,14 +689,12 @@ public class XGroup extends BaseCommand {
                 currentFileIndex, currentOffset, slot);
         log.warn("Repl slave begin fetch all exists data from master, slot={}", slot);
 
-        // dict is global, only the first slot fetches it. A node that owns no client slots yet (null
-        // firstOneSlot()) is migrating in a single slot that leads its own fetch, so it must not skip.
-        var firstSlot = localPersist.firstOneSlot();
-        if (firstSlot != null && firstSlot.slot() != slot) {
-            log.warn("Repl slave skip fetch exists dict, slot={}", slot);
-            return fetchExistsBigString(slot, 0);
-        }
-
+        // Every slot fetches the dicts it needs from its own master during its own exists phase. The apply
+        // is idempotent and seq-preserving (dictMap.putDictIfNotExist), so overlapping dict sets across
+        // slots cost only a little redundant transfer and never corrupt the node-wide DictMap. This replaces
+        // the old "only the first slot fetches, others skip and wait on a global barrier" design, which
+        // stalled on unusual topologies (bug 62) and left cross-node migrated slots without the source's
+        // dicts (bug 63).
         // begin to fetch exist data from master
         // first fetch dict
         var cacheDictBySeqCopy = dictMap.getCacheDictBySeqCopy();
@@ -1606,7 +1594,9 @@ public class XGroup extends BaseCommand {
         for (var dictWithKeyPrefixOrSuffix : dictWithKeys) {
             var dict = dictWithKeyPrefixOrSuffix.dict();
             var keyPrefixOrSuffix = dictWithKeyPrefixOrSuffix.keyPrefixOrSuffix();
-            dictMap.putDict(keyPrefixOrSuffix, dict);
+            // idempotent, seq-preserving apply: every slot fetches dicts during its own exists phase now,
+            // so the same seq may arrive on more than one slot — store once, no-op the rest, never regenerate.
+            dictMap.putDictIfNotExist(keyPrefixOrSuffix, dict);
             log.warn("Repl slave save master exists dict: dict with key={}, slot={}", dictWithKeyPrefixOrSuffix, slot);
         }
 
@@ -1645,12 +1635,6 @@ public class XGroup extends BaseCommand {
         // update exists data all fetched done
         metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(binlogMasterUuid, true,
                 lastUpdatedFileIndex, lastUpdatedOffset);
-
-        // null firstOneSlot() (node owns no client slots yet) means this slot is the de-facto first slot.
-        var firstOneSlotForDone = localPersist.firstOneSlot();
-        if (firstOneSlotForDone == null || slot == firstOneSlotForDone.slot()) {
-            localPersist.setAsSlaveFirstSlotFetchedExistsAllDone(true);
-        }
 
         // begin incremental data catch up
         var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
@@ -1779,26 +1763,9 @@ public class XGroup extends BaseCommand {
         var lastUpdatedFileIndex = lastUpdatedFileIndexAndOffset.fileIndex();
         var lastUpdatedOffset = lastUpdatedFileIndexAndOffset.offset();
 
-        // null firstOneSlot() (node owns no client slots yet) means this slot is the de-facto first slot,
-        // so it leads rather than waits.
-        // The barrier serializes the per-key-prefix trained dicts (node-wide DictMap): non-first slots skip
-        // fetching them (see hi()) and rely on the first slot to populate the DictMap. That only matters when
-        // the first slot is itself being slave-synced. If the first slot is owned locally as master (e.g. a
-        // single non-first inner slot migrating in), the DictMap is already populated, so the imported slot
-        // must not wait — otherwise it would stall forever because the first slot never runs s_exists_all_done.
-        var firstOneSlotForWait = localPersist.firstOneSlot();
-        if (firstOneSlotForWait != null && slot != firstOneSlotForWait.slot() && firstOneSlotForWait.isAsSlave()) {
-            // wait the first slot fetched exists all done
-            if (!localPersist.isAsSlaveFirstSlotFetchedExistsAllDone()) {
-                // use margin file offset
-                var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
-                var content = toMasterCatchUp(binlogMasterUuid, lastUpdatedFileIndex, marginLastUpdatedOffset, lastUpdatedOffset);
-                oneSlot.delayRun(catchUpIntervalMillis, () -> {
-                    replPair.write(catch_up, content);
-                });
-                return Repl.emptyReply();
-            }
-        }
+        // No first-slot barrier: every slot fetches and applies its own dicts during its own exists phase
+        // (see hi()), so a slot can begin incremental catch-up as soon as its own exists fetch completes,
+        // independently of any other slot.
 
         // master has no more binlog to catch up, delay to catch up again
         // 13 -> readonly byte + current file index + current offset

@@ -72,5 +72,23 @@ Replace "skip + global barrier" with **per-stream idempotent dict sync**:
 
 ## Decision
 
-Not started. Recorded so the bug-62 minimal fix (`isAsSlave()` gate) and the bug-63 concern are on record
-with a concrete better-design path before deciding whether to invest in the rework.
+**Implemented (2026-07-08).** Done directly rather than behind a no-op flag, since the unit + process test
+coverage exercises all three sync shapes.
+
+What landed:
+- `DictMap.putDictIfNotExist(keyPrefixOrSuffix, dict)` — idempotent, seq-preserving slave apply (no-op when
+  the seq is already present, never regenerates). `putDict`/`putDictIfNotExist` share a private `storeDict`
+  helper. The seq-regenerating `putDict` is retained for master-side training.
+- Slave apply paths use it: `XGroup.s_exists_dict` and `XDict.apply` (the latter also dropped its redundant
+  `synchronized (dictMap)` block since the method is already synchronized).
+- `hi()` no longer skips the dict fetch on non-first slots — every slot fetches its own dicts.
+- Removed the `s_catch_up` first-slot barrier, the `hi()`/`s_exists_all_done` flag reset/set, and
+  `LocalPersist.isAsSlaveFirstSlotFetchedExistsAllDone` entirely.
+
+This closes the bug-62 barrier-stall class (the `isAsSlave()` gate from `dbb0228c` is now moot — the whole
+barrier is gone) and bug 63 (a migrated slot fetches its source's dicts during its own exists phase).
+
+Verified: `DictMapTest` (new `putDictIfNotExist` idempotency test), `XGroupTest` (barrier tests replaced
+with a "non-first slot catch-up proceeds without any barrier" test and a "non-first slot hi fetches its own
+dict" test), `XDictTest`, `ScaleUpReplicationTest`, and process test T4 (real non-first inner-slot
+migration).
