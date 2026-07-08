@@ -366,6 +366,31 @@ bigStringNoMemoryCopySize=4096
         throw new IllegalStateException("Could not find key for slot ${slot}")
     }
 
+    /**
+     * True if node {@code nodeIndex}'s server.log contains {@code text}. Used to assert that a code path
+     * that leaves no client-visible signal actually ran end-to-end (e.g. "Released shed one slot=2").
+     */
+    protected boolean serverLogContains(int nodeIndex, String text) {
+        def log = new File(new File(baseDir, "node-${nodeIndex}"), 'server.log')
+        log.isFile() && log.text.contains(text)
+    }
+
+    /**
+     * Polls node {@code nodeIndex}'s server.log until it contains {@code text} or the timeout elapses.
+     * Returns true on match. Server logs are written asynchronously, so a just-triggered message may not
+     * be flushed the instant the client command returns.
+     */
+    protected boolean waitServerLogContains(int nodeIndex, String text, long timeoutMillis = 30_000) {
+        long deadline = System.currentTimeMillis() + timeoutMillis
+        while (System.currentTimeMillis() < deadline) {
+            if (serverLogContains(nodeIndex, text)) {
+                return true
+            }
+            Thread.sleep(500)
+        }
+        false
+    }
+
     protected static void movedFrom(NodeHandle node, String key) {
         try {
             node.jedis.get(key)
