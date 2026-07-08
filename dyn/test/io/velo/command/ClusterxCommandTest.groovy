@@ -1718,6 +1718,78 @@ slots
         Consts.persistDir.deleteDir()
     }
 
+    def 'test setslot stays in-memory consistent after a metadata persist failure and converges on retry'() {
+        given: 'the destructive local cutover (shed/flush) runs, then the metadata persist fails'
+        def savedClusterEnabled = ConfForGlobal.clusterEnabled
+        ConfForGlobal.clusterEnabled = false // initialize the slot first
+
+        def data1 = new byte[1][]
+        def cGroup = new CGroup('cluster', data1, null)
+        cGroup.from(BaseCommand.mockAGroup())
+        def clusterx = new ClusterxCommand(cGroup)
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        def multiShard = localPersist.multiShard
+
+        and: 'inject a slot on the shed path whose flush is recorded (slot 0 is release-exempt, so it survives)'
+        boolean[] flushed = [false]
+        def hookSlot = new OneSlot(slot, Consts.slotDir, null, null) {
+            @Override
+            void flush() { flushed[0] = true }
+        }
+        localPersist.oneSlots()[slot] = hookSlot
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        and: 'this node is not in the target shard, so setslot takes the shed (flush) branch'
+        ConfForGlobal.clusterEnabled = true
+        def shards = multiShard.shards
+        shards[0].nodes[0].master = true
+        shards << new Shard(nodes: [new Node(master: true, nodeIdFix: 'to_node', host: 'localhost', port: 7379)])
+
+        and: 'make the first saveMeta throw IOException by turning the metadata file into a directory'
+        def metaFile = new File(Consts.persistDir, 'nodes.json')
+        metaFile.delete()
+        metaFile.mkdirs()
+
+        def data6 = new byte[6][]
+        data6[1] = 'setslot'.bytes
+        data6[2] = '0'.bytes
+        data6[3] = 'node'.bytes
+        data6[4] = 'to_node'.bytes
+        data6[5] = '9'.bytes
+        clusterx.data = data6
+
+        when: 'the persist fails after the local cutover already shed the slot'
+        def reply = clusterx.setslot()
+
+        then: 'a clean error is surfaced'
+        (reply as AsyncReply).settablePromise.getResult() instanceof ErrorReply
+        and: 'the local cutover did run (irreversible), and the in-memory ranges match it: the slot moved to the'
+        and: 'target shard, NOT rolled back to this node — so routing and local state stay mutually consistent'
+        flushed[0]
+        shards[1].multiSlotRange.contains(0)
+        !shards[0].multiSlotRange.contains(0)
+
+        when: 'the filesystem recovers and the controller retries the same setslot'
+        metaFile.deleteDir()
+        def replyRetry = clusterx.setslot()
+
+        then: 'the retry converges idempotently to OK and the topology is unchanged'
+        (replyRetry as AsyncReply).settablePromise.getResult() == ClusterxCommand.OK
+        shards[1].multiSlotRange.contains(0)
+        !shards[0].multiSlotRange.contains(0)
+        multiShard.clusterCurrentEpoch == 9
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = savedClusterEnabled
+        metaFile.deleteDir()
+        localPersist.oneSlots()[slot] = null
+        localPersist?.cleanUp()
+        localPersist?.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test setslot closes repl pairs and flushes on old source node'() {
         given:
         def savedClusterEnabled = ConfForGlobal.clusterEnabled
