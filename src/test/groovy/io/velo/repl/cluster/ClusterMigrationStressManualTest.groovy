@@ -208,4 +208,61 @@ class ClusterMigrationStressManualTest extends ClusterxBase {
         info.contains('cluster_state:ok')
         !info.contains('migrating_slot:8192')
     }
+
+    def 'T8: repeated slot init/release/re-init churn keeps data consistent and reclaims fds each cycle'() {
+        given:
+        startCluster()
+        bootstrapInitialTopology()
+        // inner slot 2 (client 8192) is owned by node-2; inner slot 3 (client 12288) stays on node-2 untouched
+        def tag = hashTagForSlot(8192)
+        def tag3 = hashTagForSlot(12288)
+        def k = "{${tag}}:churn".toString()
+        def k3 = "{${tag3}}:sibling".toString()
+
+        when: 'seed a key on the migrating slot and a key on the sibling slot that never moves'
+        assert nodes[2].jedis.set(k, 'churn-value') == 'OK'
+        assert nodes[2].jedis.set(k3, 'sibling-value') == 'OK'
+
+        then:
+        nodes[2].jedis.get(k) == 'churn-value'
+
+        when: 'round-trip migrate inner slot 2 (node-2 → node-0 → node-2) several times, sampling node-2 fds each cycle'
+        // each round trip makes node-2 shed+release inner slot 2 (migrate out) then re-initialize it (migrate back),
+        // and does the mirror init/release on node-0 — the full init→release→re-init lifecycle, N times
+        int cycles = 4
+        def fdSamples = []
+        (1..cycles).each { c ->
+            migrateSlot(8192, nodes[2], nodes[0])
+            waitForValue(nodes[0], k, 'churn-value')
+            movedFrom(nodes[2], k)
+
+            migrateSlot(8192, nodes[0], nodes[2])
+            waitForValue(nodes[2], k, 'churn-value')
+            movedFrom(nodes[0], k)
+
+            // slot 2 is back on node-2 and quiesced (transient repl sockets closed) — sample fd count at this
+            // fixed lifecycle phase so a per-cycle fd leak shows up as monotonic growth
+            Thread.sleep(1000)
+            fdSamples << openFdCount(2)
+        }
+
+        then: 'the value survived every release/re-init round-trip — meta stays consistent across the cycle'
+        nodes[2].jedis.get(k) == 'churn-value'
+
+        and: 'the untouched sibling inner slot 3 kept its data the whole time (release of slot 2 never disturbed it)'
+        nodes[2].jedis.get(k3) == 'sibling-value'
+
+        and: 'node-2 actually released the shed slot on every migrate-out (resource reclaim ran each cycle)'
+        countServerLog(2, 'Released shed one slot=2') >= cycles
+
+        and: 'the churn produced no repl-handling errors on either migration endpoint (no transient null-pair etc.)'
+        // scoped to the repl/persist lifecycle — a broad NullPointerException check would also flag an
+        // unrelated boot-time SocketInspector accept race (connectedClientCountArray null before init)
+        countServerLog(2, 'Repl handle error') == 0
+        countServerLog(0, 'Repl handle error') == 0
+
+        and: 'node-2 fd count at the same lifecycle phase does not grow across cycles — the shed slot fds are freed'
+        fdSamples.every { it > 0 }
+        (fdSamples.last() - fdSamples.first()) <= 12
+    }
 }

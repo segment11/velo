@@ -391,6 +391,37 @@ bigStringNoMemoryCopySize=4096
         false
     }
 
+    /** Number of non-overlapping occurrences of {@code text} in node {@code nodeIndex}'s server.log. */
+    protected int countServerLog(int nodeIndex, String text) {
+        def log = new File(new File(baseDir, "node-${nodeIndex}"), 'server.log')
+        if (!log.isFile()) {
+            return 0
+        }
+        int count = 0, from = 0
+        def content = log.text
+        while (true) {
+            int idx = content.indexOf(text, from)
+            if (idx < 0) {
+                break
+            }
+            count++
+            from = idx + text.length()
+        }
+        count
+    }
+
+    /**
+     * Number of open file descriptors held by node {@code nodeIndex}'s JVM process, read from
+     * {@code /proc/<pid>/fd} (Linux). Returns -1 if unavailable. Used to detect fd leaks across a
+     * slot init/release/re-init cycle.
+     */
+    protected int openFdCount(int nodeIndex) {
+        def pid = processes[nodeIndex].pid()
+        def fdDir = new File("/proc/${pid}/fd")
+        def names = fdDir.list()
+        names == null ? -1 : names.length
+    }
+
     protected static void movedFrom(NodeHandle node, String key) {
         try {
             node.jedis.get(key)
