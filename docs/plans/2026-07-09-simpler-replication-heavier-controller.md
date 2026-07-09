@@ -145,10 +145,46 @@ controller.
 - **Phase 2 — controller authoritative delivery + rejoin replay.** Ack/retry on broadcast; targeted replay on
   join. Tests: a node that missed a `setslot` converges after the controller replays; idempotent under epoch
   guard.
-- **Phase 3 — controller sequencing + retire repl self-healing.** Emit the replica-subscribe only after
-  `hasCaughtUpUpstream`; then remove the pong serve-flag drop, the re-hello heuristic, and the Jedis
-  side-channel. Tests: bug-67 scenario passes with **no** `Thread.sleep` head-start; no `NullPointerException`
-  / stall in the cluster process tests.
+- **Phase 3 — controller sequencing (in the controller repo), then retire repl self-healing.** See the
+  controller-reality note below: the sequencing work lives in `segment_kvrocks_controller`, not Velo.
+  Only after it lands + process-tests pass do we remove the pong serve-flag drop, the re-hello heuristic,
+  and the Jedis side-channel from Velo.
+
+### Controller reality (segment_kvrocks_controller, kvrocks-style CLI)
+
+Velo's cluster controller is an external CLI, designed like the Apache Kvrocks controller
+(`~/ws/segment_kvrocks_controller`). Migration is orchestrated by `MigrateSlotsJobTask` /
+`KvrocksDBOperator`:
+
+1. `migrateFromSlot` → target: `manage slot X migrate_from <source> force` (import).
+2. `migrateSlot` → source: `clusterx migrate`, then **`waitUntilMigrateSuccess`** polls the source's
+   `migrating_state` until `success` (target caught up), max ~5 min.
+3. `setSlotAll` → broadcasts `clusterx setslot` to every node (cutover).
+
+Two facts this establishes:
+
+- **Bug 67's precondition doesn't arise under correct controller operation.** The replica subscribes only at
+  the `setslot` broadcast — *after* `migrating_state:success` — so the new master already has
+  `hasCaughtUpUpstream == true` and accepts the hello. Bug 67 fired only because the **test harness** issued
+  the replica's `migrate_from` *during* import. So the re-hello net and the pong serve-flag drop are defense
+  against **manual / out-of-sequence** operation, not the controller happy path.
+- **The real gap is in the controller, not Velo.** The charge node's F3 gate returns
+  `ErrorReply('downstream replica not caught up, retry setslot')` (`ClusterxCommand.groovy:1423`) until its
+  replica has subscribed + caught up. But the controller's `setSlot` **throws on any non-OK and never
+  retries**, and it does **not** pre-resync the replica before cutover — so for a shard **with replicas**,
+  `setSlotAll` would hit the defer and fail the migration.
+
+**Phase 3 controller work (in `segment_kvrocks_controller`):** after `waitUntilMigrateSuccess`, add a
+pre-cutover step that resyncs the target's replicas (`manage slot X migrate_from <newMaster> force` on each
+replica) and **waits** until they are caught up (mirror `waitUntilMigrateSuccess`, or poll the charge node's
+downstream-caught-up signal), *then* broadcast `setSlotAll`. This makes the F3 gate pass on the first
+`setslot` and guarantees the replica only ever subscribes to a master that already serves — removing the last
+reason the Velo self-healing nets exist. Alternatively/additionally, make `setSlot` retry on the F3 defer
+error instead of throwing.
+
+**Velo work (only after the above + process tests):** remove the pong serve-flag drop, the re-hello net, and
+the Jedis side-channel. Until then, **keep the nets** — they are the defense against manual/out-of-sequence
+migration that the controller cannot prevent from Velo's side.
 
 Each phase: relevant tests + JaCoCo on changed lines, single-concern commit.
 
