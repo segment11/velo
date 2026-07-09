@@ -19,6 +19,13 @@ Current code paths document two important HTTP usages:
 
 These are management-style endpoints implemented through normal request handling, not a separate admin server.
 
+The query is parsed **positionally** (`&`-separated tokens become command args, no `=`). To let Prometheus
+scrape Velo directly — it can only emit `key=value` params — [`RequestDecoder`](/home/kerry/ws/velo/src/main/java/io/velo/decode/RequestDecoder.java)
+keeps only the value part of each token (after the first `=`); tokens without `=` pass through unchanged.
+A single repeated key `arg` reproduces the positional command because Prometheus preserves value order within
+one key, so `params: {arg: [manage, slot, '0', view-metrics]}` scrapes `/?arg=manage&arg=slot&arg=0&arg=view-metrics`.
+See `monitoring/prometheus.yml`.
+
 The old metrics README also included real sample output. That remains useful context: the exposed metrics are a mix of
 custom Velo gauges, request summaries, and JVM metrics registered into the default Prometheus registry.
 

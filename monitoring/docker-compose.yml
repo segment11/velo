@@ -1,15 +1,11 @@
 # Local Velo monitoring stack: Prometheus + Grafana (OSS).
 #
 # Uses host networking (Linux) so both containers can reach the Velo
-# instance(s) and the velo_slot_relay running on the host:
+# instance(s) directly:
 #   - Velo:       127.0.0.1:7379
-#   - relay:      127.0.0.1:9200   (start with ./run.sh or manually)
 #   - Prometheus: http://localhost:19090
 #   - Grafana:    http://localhost:13000  (anonymous admin enabled)
 #
-# Start the relay first (it needs host python3):
-#   python3 velo_slot_relay.py 9200 &
-# then:
 #   docker compose up -d
 
 services:

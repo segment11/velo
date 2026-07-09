@@ -133,7 +133,15 @@ public class RequestDecoder implements ByteBufsDecoder<ArrayList<Request>> {
                         var arr = h.url.substring(pos + 1).split("&");
                         data = new byte[arr.length][];
                         for (int i = 0; i < arr.length; i++) {
-                            data[i] = URLDecoder.decode(arr[i], StandardCharsets.UTF_8)
+                            // Velo parses the query positionally. Prometheus can only emit key=value
+                            // params, so accept them too: keep only the value part (after the first '=').
+                            // Tokens without '=' pass through unchanged (backward compatible).
+                            var tok = arr[i];
+                            var eq = tok.indexOf('=');
+                            if (eq >= 0) {
+                                tok = tok.substring(eq + 1);
+                            }
+                            data[i] = URLDecoder.decode(tok, StandardCharsets.UTF_8)
                                     .getBytes(StandardCharsets.UTF_8);
                         }
                     }

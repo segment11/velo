@@ -271,6 +271,73 @@ class RequestDecoderTest extends Specification {
         new String(requestList[0].data[1], StandardCharsets.UTF_8) == 'my&key'
     }
 
+    def 'test decode http query keeps only value part of key=value tokens'() {
+        given:
+        def decoder = new RequestDecoder()
+
+        when:
+        // Prometheus can only emit key=value params; a single repeated key preserves value order.
+        // ?arg=manage&arg=slot&arg=0&arg=view-metrics -> positional command MANAGE slot 0 view-metrics
+        def buf = ByteBuf.wrapForReading(
+                "GET /?arg=manage&arg=slot&arg=0&arg=view-metrics HTTP/1.1\r\nHost: localhost:8080\r\n\r\n".bytes
+        )
+        def bufs = new ByteBufs(1)
+        bufs.add(buf)
+        def requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.size() == 1
+        requestList[0].isHttp()
+        requestList[0].data.length == 4
+        requestList[0].data[0] == 'manage'.bytes
+        requestList[0].data[1] == 'slot'.bytes
+        requestList[0].data[2] == '0'.bytes
+        requestList[0].data[3] == 'view-metrics'.bytes
+
+        when:
+        // global metrics scrape: ?arg=metrics -> single token 'metrics'
+        buf = ByteBuf.wrapForReading(
+                "GET /?arg=metrics HTTP/1.1\r\nHost: localhost:8080\r\n\r\n".bytes
+        )
+        bufs = new ByteBufs(1)
+        bufs.add(buf)
+        requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.size() == 1
+        requestList[0].data.length == 1
+        requestList[0].data[0] == 'metrics'.bytes
+
+        when:
+        // backward compatible: positional tokens without '=' pass through unchanged
+        buf = ByteBuf.wrapForReading(
+                "GET /?manage&slot&0&view-metrics HTTP/1.1\r\nHost: localhost:8080\r\n\r\n".bytes
+        )
+        bufs = new ByteBufs(1)
+        bufs.add(buf)
+        requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.size() == 1
+        requestList[0].data.length == 4
+        requestList[0].data[0] == 'manage'.bytes
+        requestList[0].data[3] == 'view-metrics'.bytes
+
+        when:
+        // only the first '=' splits key from value; a value may itself contain '='
+        buf = ByteBuf.wrapForReading(
+                "GET /?k=a=b HTTP/1.1\r\nHost: localhost:8080\r\n\r\n".bytes
+        )
+        bufs = new ByteBufs(1)
+        bufs.add(buf)
+        requestList = decoder.tryDecode(bufs)
+
+        then:
+        requestList.size() == 1
+        requestList[0].data.length == 1
+        requestList[0].data[0] == 'a=b'.bytes
+    }
+
     def 'test decode malformed complete http request line throws'() {
         given:
         def decoder = new RequestDecoder()
