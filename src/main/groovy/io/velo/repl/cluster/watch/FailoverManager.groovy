@@ -570,6 +570,78 @@ class FailoverManager {
     boolean mockSetNodes
 
     /**
+     * Test hook to control the per-node setnodes result. Takes the target {@link HostAndPort} and returns the
+     * reply string ('OK' or an error); may throw to simulate an unreachable node. Takes precedence over
+     * {@link #mockSetNodes} so a test can route the ZK-meta update in-memory (mockSetNodes) while still
+     * simulating per-node broadcast failures.
+     */
+    @TestOnly
+    Closure<String> setNodesResultProviderForTest
+
+    /**
+     * Max attempts to deliver a setnodes broadcast to a single node before giving up and registering it for a
+     * delayed rejoin re-push.
+     */
+    static final int SET_NODES_MAX_ATTEMPTS = 3
+
+    /**
+     * Backoff between setnodes delivery attempts (skipped when a test hook short-circuits the send).
+     */
+    static final long SET_NODES_RETRY_BACKOFF_MILLIS = 200
+
+    /**
+     * Sends a single {@code clusterx setnodes} to one node. Honors the test hooks: {@link
+     * #setNodesResultProviderForTest} (per-node result, may throw to simulate unreachable) takes precedence,
+     * then {@link #mockSetNodes}, then a real Jedis call.
+     */
+    private String trySendSetNodes(HostAndPort hostAndPort, String clusterxNodesArgs, int clusterVersion) {
+        if (setNodesResultProviderForTest != null) {
+            return setNodesResultProviderForTest.call(hostAndPort)
+        }
+        if (mockSetNodes) {
+            return 'OK'
+        }
+        def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
+        JedisPoolHolder.exe(jedisPool) { jedis ->
+            def command = new ExtendProtocolCommand('clusterx')
+            byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes, (clusterVersion as String).bytes) as byte[]
+            new String(r)
+        }
+    }
+
+    /**
+     * Delivers a setnodes broadcast to one node with retry. Returns 'OK' on success, or the last non-OK result
+     * / error message after {@link #SET_NODES_MAX_ATTEMPTS} attempts. A node that never acks is the caller's
+     * cue to register it for a delayed rejoin re-push, so authoritative topology reaches it once it recovers.
+     */
+    @VisibleForTesting
+    String sendSetNodesWithRetry(HostAndPort hostAndPort, String clusterxNodesArgs, int clusterVersion) {
+        String lastResult = null
+        for (attempt in 1..SET_NODES_MAX_ATTEMPTS) {
+            try {
+                lastResult = trySendSetNodes(hostAndPort, clusterxNodesArgs, clusterVersion)
+                if ('OK' == lastResult) {
+                    return 'OK'
+                }
+                log.warn 'failover manager setnodes non-ok result, attempt={}/{}, result={}, host and port={}:{}',
+                        attempt, SET_NODES_MAX_ATTEMPTS, lastResult, hostAndPort.host, hostAndPort.port
+            } catch (Exception e) {
+                lastResult = 'ERR ' + e.message
+                log.warn 'failover manager setnodes attempt failed, attempt={}/{}, error={}, host and port={}:{}',
+                        attempt, SET_NODES_MAX_ATTEMPTS, e.message, hostAndPort.host, hostAndPort.port
+            }
+            if (attempt < SET_NODES_MAX_ATTEMPTS && setNodesResultProviderForTest == null && !mockSetNodes) {
+                try {
+                    Thread.sleep(SET_NODES_RETRY_BACKOFF_MILLIS)
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt()
+                }
+            }
+        }
+        lastResult
+    }
+
+    /**
      * Performs a failover for a shard in the specified cluster.
      * Intended for testing purposes only.
      * @param oneClusterName
@@ -715,6 +787,7 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
         def clusterVersion = computeNextClusterVersion(liveNodeHostAndPortSet)
         log.warn 'failover manager do failover, cluster name={}, broadcast cluster version={}', oneClusterName, clusterVersion
 
+        List<HostAndPort> unackedNodeHostAndPortList = []
         for (hostAndPort in allNodeHostAndPortSet) {
             if (hostAndPort == failHostAndPort) {
                 // set to zookeeper, loop check if server restart and then set nodes again
@@ -724,29 +797,30 @@ ${nodeId} ${ip} ${port} slave ${primaryNodeId}
 
             log.warn 'failover manager do failover, cluster name={}, broadcast to host and port={}:{}',
                     oneClusterName, hostAndPort.host, hostAndPort.port
-            String result
-            if (mockSetNodes) {
-                result = 'OK'
-            } else {
-                def jedisPool = jedisPoolHolder.createIfNotCached(hostAndPort.host, hostAndPort.port)
-                result = JedisPoolHolder.exe(jedisPool) { jedis ->
-                    def command = new ExtendProtocolCommand('clusterx')
-                    byte[] r = jedis.sendCommand(command, 'setnodes'.bytes, clusterxNodesArgs.bytes, (clusterVersion as String).bytes) as byte[]
-                    new String(r)
-                }
-            }
+            def result = sendSetNodesWithRetry(hostAndPort, clusterxNodesArgs, clusterVersion)
 
             if ('OK' != result) {
-                log.error 'failover manager clusterx setnodes fail, result={}, target host and port={}:{}',
-                        result, hostAndPort.host, hostAndPort.port
-                throw new RuntimeException('failover manager clusterx setnodes fail, result=' + result +
-                        ', target host and port=' + hostAndPort.host + ':' + hostAndPort.port)
+                // Do NOT abort the whole broadcast: one unreachable node must not stop the others from learning
+                // the new topology. Register it for a delayed rejoin re-push (the same mechanism as the failed
+                // node), so it is reconciled to authoritative topology when it recovers, then continue.
+                log.error 'failover manager clusterx setnodes fail after {} attempts, result={}, target host and port={}:{}, registering for rejoin re-push',
+                        SET_NODES_MAX_ATTEMPTS, result, hostAndPort.host, hostAndPort.port
+                addDelayRestartCheckForFailedHostAndPortNode(hostAndPort, clusterxNodesArgs)
+                unackedNodeHostAndPortList << hostAndPort
             } else {
                 log.warn 'failover manager do failover, cluster name={}, broadcast to host and port={}:{} success',
                         oneClusterName, hostAndPort.host, hostAndPort.port
             }
         }
 
+        if (unackedNodeHostAndPortList) {
+            log.error 'failover manager do failover, cluster name={}, {} node(s) did not ack setnodes and were registered for rejoin re-push: {}',
+                    oneClusterName, unackedNodeHostAndPortList.size(), unackedNodeHostAndPortList
+        }
+
+        // Record authoritative topology regardless of per-node ack: the failover decision (promoted master) is
+        // made, and any un-acked node is re-pushed on rejoin. The prior behavior threw on the first failure,
+        // leaving both a partial broadcast and no recorded meta.
         updateZookeeperOneMetaAfterDoFailover(oneClusterName, shards)
     }
 }

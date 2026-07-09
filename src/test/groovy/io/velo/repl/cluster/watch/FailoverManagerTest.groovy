@@ -327,6 +327,65 @@ zzz localhost 17381 slave aaa
         fm.clearOneEndpointStatusMapByClusterName()
     }
 
+    def 'do failover retries setnodes and registers un-acked nodes for rejoin re-push (phase 2)'() {
+        given:
+        def fm = FailoverManager.instance
+        fm.mockSetNodes = true
+        fm.clearOneEndpointStatusMapByClusterName()
+        def failHostAndPort = new HostAndPort('localhost', 7379)
+        def lines = '''
+aaa localhost 7379 master - 0-8191
+bbb localhost 7380 master - 8192-16383
+xxx localhost 17379 slave aaa
+yyy localhost 17380 slave bbb
+'''.trim().readLines().collect { it.trim() }.findAll { it }
+
+        and: 'capture rejoin re-push registrations'
+        def registered = []
+        fm.delayRestartCheckHandlerForTest = { HostAndPort hp, String clusterxNodesArgs -> registered << hp; null }
+
+        and: 'promote 17379'
+        fm.slaveReplOffsetProviderForTest = { Node node -> node.port == 17379 ? 200L : 100L }
+
+        and: 'node 7380 is unreachable (throws); node 17380 is up but rejects (non-OK); count per-node attempts'
+        def attemptsByNode = [:].withDefault { 0 }
+        fm.setNodesResultProviderForTest = { HostAndPort hp ->
+            attemptsByNode[hp.port] = (attemptsByNode[hp.port] as int) + 1
+            if (hp.port == 7380) {
+                throw new RuntimeException('simulated unreachable')
+            }
+            if (hp.port == 17380) {
+                return 'ERR stale cluster version'
+            }
+            'OK'
+        }
+
+        when:
+        fm.doFailoverOneShard('cluster1', failHostAndPort, lines)
+
+        then: 'an unreachable or rejecting node does not abort the broadcast'
+        noExceptionThrown()
+
+        and: 'both the throwing and the non-OK node were retried SET_NODES_MAX_ATTEMPTS times'
+        attemptsByNode[7380] == FailoverManager.SET_NODES_MAX_ATTEMPTS
+        attemptsByNode[17380] == FailoverManager.SET_NODES_MAX_ATTEMPTS
+
+        and: 'a reachable, accepting node got exactly one successful setnodes'
+        attemptsByNode[17379] == 1
+
+        and: 'the failed node and both un-acked nodes are registered for rejoin re-push'
+        registered.find { it.port == 7379 } != null
+        registered.find { it.port == 7380 } != null
+        registered.find { it.port == 17380 } != null
+
+        cleanup:
+        fm.mockSetNodes = false
+        fm.setNodesResultProviderForTest = null
+        fm.slaveReplOffsetProviderForTest = null
+        fm.delayRestartCheckHandlerForTest = null
+        fm.clearOneEndpointStatusMapByClusterName()
+    }
+
     def 'do failover if need skips failover when slave reports failed host ping ok'() {
         given:
         def fm = FailoverManager.instance
