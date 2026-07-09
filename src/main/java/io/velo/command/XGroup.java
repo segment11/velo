@@ -271,10 +271,11 @@ public class XGroup extends BaseCommand {
             if (replType.isSlaveSend) {
                 this.replPair = oneSlot.getReplPairAsMaster(slaveUuid);
 
-                // ping/hello create the master pair themselves; every other slave-send request (the
-                // exists-* fetch stages, catch_up, incremental_big_string) needs an existing pair, which
-                // can be transiently null while topology switches (e.g. during migrate_from). Reply empty
-                // instead of NPEing in the fetch handler; the slave's reconnect/re-hello restarts the fetch.
+                // hello creates the master pair; ping is pure liveness and may run without one (it just
+                // reports the serve flag). Every other slave-send request (the exists-* fetch stages,
+                // catch_up, incremental_big_string) needs an existing pair, which can be transiently null
+                // while topology switches (e.g. during migrate_from). Reply empty instead of NPEing in the
+                // fetch handler; the slave's reconnect/re-hello restarts the fetch.
                 if (this.replPair == null && replType != ping && replType != hello) {
                     log.warn("Repl master: downstream repl pair not found, maybe topology switching, slave uuid={}, repl type={}, slot={}",
                             slaveUuid, replType, slot);
@@ -312,23 +313,16 @@ public class XGroup extends BaseCommand {
             case ping -> {
                 // server received ping from client
                 var pingFields = Wal.keyString(contentBytes).split(Ping.FIELD_SEPARATOR, -1);
-                var netListenAddress = pingFields[0];
-                var hostAndPort = HostAndPort.parse(netListenAddress);
+                HostAndPort.parse(pingFields[0]);
 
-                // Serve (and keep a master repl pair for) a slot this node either owns, or has finished importing
-                // via an upstream (addUpstream migration target whose upstream caught up) — in the latter case it
-                // relays to downstream replicas that resync after the import. A still-importing slot is NOT served
-                // (its data is incomplete, so a replica's fetch would stall). Otherwise (a replica's fallback slot,
-                // or a slot owned elsewhere) decline and tell the slave via the pong serve flag to stop replicating
-                // this slot from us, instead of churning create/demote master pairs every ping tick.
+                // ping is a pure liveness check: it never creates a downstream master pair. The pair is
+                // established solely by hello (which carries the slave's repl properties and sends Hi); a ping
+                // arriving before/without a hello just reports liveness and the serve flag. serveSlot tells the
+                // slave whether this node serves the slot — it owns it, or has finished importing it via an
+                // upstream (addUpstream migration target whose upstream caught up). A still-importing or
+                // owned-elsewhere slot reports serve=0 so the slave stops replicating it from us.
                 var serveSlot = localPersist.isInnerSlotOwnedByMySelfShard(slot) || oneSlot.hasCaughtUpUpstream();
 
-                if (replPair == null) {
-                    if (serveSlot) {
-                        replPair = oneSlot.createIfNotExistReplPairAsMaster(slaveUuid, hostAndPort.host, hostAndPort.port);
-                        replPair.increaseStatsCountForReplType(ping);
-                    }
-                }
                 if (replPair != null) {
                     replPair.setLastPingGetTimestamp(System.currentTimeMillis());
                 }

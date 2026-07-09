@@ -515,6 +515,13 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.pong)
 
+        when: 'a pair already exists (established via hello): a subsequent ping updates it and replies pong through the pair'
+        establishMasterReplPair(ctx.x, ctx.replPairAsSlave, ctx.slaveUuid)
+        r = ctx.x.handleRepl(mockReplRequest(ctx.replPairAsSlave, ReplType.ping, ping)) as ReplReply
+        then:
+        r.isReplType(ReplType.pong)
+        ctx.oneSlot.getReplPairAsMaster(ctx.slaveUuid) != null
+
         when:
         def malformedPing = new Ping('localhost:6380:extra')
         replRequest = mockReplRequest(ctx.replPairAsSlave, ReplType.ping, malformedPing)
@@ -555,9 +562,18 @@ class XGroupTest extends Specification {
         x.replPair = null
         r = x.handleRepl(mockReplRequest(ctx.replPairAsSlave, ReplType.ping, ping)) as ReplReply
 
-        then: 'it serves the slot: serve flag 1 and a master repl pair is created'
+        then: 'it serves the slot (serve flag 1) but ping is pure liveness: no master repl pair is created (hello is the sole creator)'
         r.isReplType(ReplType.pong)
         Wal.keyString(mockReplRequest(r).data).endsWith('\n1')
+        oneSlot.getReplPairAsMaster(slaveUuid) == null
+
+        when: 'a hello arrives for the now-owned slot'
+        x.replPair = null
+        def helloOwned = new Hello(slaveUuid, 'localhost:6380')
+        r = x.handleRepl(mockReplRequest(ctx.replPairAsSlave, ReplType.hello, helloOwned)) as ReplReply
+
+        then: 'hello establishes the master repl pair (the sole creation path)'
+        r.isReplType(ReplType.hi)
         oneSlot.getReplPairAsMaster(slaveUuid) != null
 
         when: 'a hello arrives for a slot this shard does not own'
