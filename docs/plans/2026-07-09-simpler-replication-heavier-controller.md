@@ -190,6 +190,43 @@ Each phase: relevant tests + JaCoCo on changed lines, single-concern commit.
 
 ---
 
+## Validation status (2026-07-09)
+
+- **Phase 1 (velo `3d656072`)** — done. `XGroup` ping no longer creates a master pair; unit tests green.
+- **Phase 2 (velo `f356b265`)** — done. `FailoverManager` setnodes broadcast retries per node and registers
+  un-acked nodes for the existing rejoin re-push instead of aborting; unit tests green.
+- **Phase 3 (controller `90cfbc4`)** — done in `segment_kvrocks_controller`: `resyncTargetReplicasBeforeCutover`
+  (resync each target replica after `migrating_state:success`, before cutover) + `setSlotWithRetry` (waits out
+  the F3 defer). Unit tests green (5 Spock cases). This makes replica-backed migration work and keeps a replica
+  from ever subscribing to a still-importing master.
+- **End-to-end (velo)** — the full opt-in 4-JVM suite passed after Phase 1:
+  `ClusterMigrationStressManualTest` (7) + `ClusterOperationProcessManualTest` (18) = **25/25 green** in ~8 min.
+  Covers replica-backed migration + durability (T1/T2/T3/T6), the F3 gate (T6), failover, churn, MOVED, epoch
+  monotonicity, reset/rebalance, and introspection — confirming ping-as-pure-liveness causes no regression.
+
+### T9 (dedicated replica-backed health e2e) — **skipped, intentional**
+
+A standalone "replica-backed migration with no-stall / no-`Repl handle error` / no-NPE" test was planned as a
+Phase-1 regression fence. **Not added**, because the path is already covered:
+- **T1** asserts data lands on both the new owner and its replica after a replica-backed migration.
+- **T3** asserts the replica holds the data *at* cutover (synced before, not after) — i.e. the F3 gate worked.
+- **T6** exercises the F3 defer → replica resync → cutover explicitly and completed cleanly with ping-create
+  removed.
+- **T8 / T11-churn** already assert `countServerLog(..., 'Repl handle error') == 0` across migration endpoints.
+
+Adding T9 would duplicate that coverage. If a dedicated fence is wanted later, the delta over T1/T3 would be
+only the cross-all-nodes health assertions (`no 'exists data not all fetched'`, `no 'Repl handle error'`, `no
+NullPointerException`), which the churn tests already partially assert.
+
+### Self-healing nets — **kept** (not retired)
+
+Per the plan, the Velo repl-layer nets (re-hello `202ce156`, pong serve-flag drop) stay as cheap defense
+against manual/out-of-sequence `migrate_from`. The controller now sequences correctly, so under controller-
+driven operation they are redundant — but removing them is deferred; they cost ~15 lines each and protect a
+real operator-error path.
+
+---
+
 ## Open risks / decisions
 
 - **Delivery guarantees.** "Heavier controller" concentrates correctness in broadcast delivery. Needs ack +
