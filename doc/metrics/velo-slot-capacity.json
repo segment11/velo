@@ -1,0 +1,1100 @@
+{
+  "id": null,
+  "uid": "velo-slot-capacity",
+  "title": "Velo \u2014 Slot Capacity & Persistence",
+  "tags": [
+    "velo",
+    "redis",
+    "kv"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "velo-prom"
+        },
+        "definition": "label_values(global_up_time, instance)",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(global_up_time, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "slot",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "velo-prom"
+        },
+        "definition": "label_values(slot_kv_lru_hit_ratio, slot)",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(slot_kv_lru_hit_ratio, slot)",
+          "refId": "StandardVariableQuery"
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "type": "dashboard",
+        "name": "Annotations & Alerts",
+        "iconColor": "rgba(0, 211, 255, 1)"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Capacity \u2014 will I run out? (slot 0 & last)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Persisted Key Count",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "persist_key_count{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "A",
+          "legendFormat": "s{{slot}} {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "WAL Key Count",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "wal_key_count{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "B",
+          "legendFormat": "s{{slot}} {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Disk Usage Breakdown (stacked)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "wal_disk_usage{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "C",
+          "legendFormat": "wal s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "chunk_disk_usage{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "D",
+          "legendFormat": "chunk s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "key_loader_disk_usage{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "E",
+          "legendFormat": "keyloader s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "binlog_disk_usage{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "F",
+          "legendFormat": "binlog s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "big_string_files_disk_usage{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "G",
+          "legendFormat": "bigstring s{{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Chunk Segment Fill Rate",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "chunk_segment_fill_rate{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "H",
+          "legendFormat": "s{{slot}} {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "percentunit",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "used chunk segments / total; capacity headroom",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Chunk Segments Used / Reusable",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "chunk_segment_used_count{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "I",
+          "legendFormat": "used s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "chunk_segment_reusable_count{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "J",
+          "legendFormat": "reusable s{{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Chunk Segment Cursor / Max Index",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "chunk_current_segment_index{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "K",
+          "legendFormat": "cursor s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "chunk_max_segment_index{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "L",
+          "legendFormat": "max s{{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Key Loader Bucket Count",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "key_loader_bucket_count{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "M",
+          "legendFormat": "s{{slot}} {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 15
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Avg TTL (s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "slot_avg_ttl_in_second{instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "N",
+          "legendFormat": "s{{slot}} {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 15
+      }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Persist I/O & Latency \u2014 is storage fast? (slot 0 & last)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Key Bucket Read/Write Avg (\u00b5s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "{__name__=~\"fd_k_\\\\d+_read_time_avg_us\",instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "O",
+          "legendFormat": "read {{__name__}} s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "{__name__=~\"fd_k_\\\\d+_write_time_avg_us\",instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "P",
+          "legendFormat": "write {{__name__}} s{{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "\u00b5s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Chunk Data Read/Write Avg (\u00b5s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "{__name__=~\"fd_c_\\\\d+_read_time_avg_us\",instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "Q",
+          "legendFormat": "read {{__name__}} s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "{__name__=~\"fd_c_\\\\d+_write_time_avg_us\",instance=~\"$instance\",slot=~\"$slot\"}",
+          "refId": "R",
+          "legendFormat": "write {{__name__}} s{{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "\u00b5s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 23
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "WAL Persist Rate (kv/s)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "rate(wal_group_first_need_persist_kv_count_total{instance=~\"$instance\",slot=~\"$slot\"}[$__rate_interval])",
+          "refId": "S",
+          "legendFormat": "s{{slot}} {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Key Bucket Read/Write Bytes Rate",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "rate({__name__=~\"fd_k_\\\\d+_read_bytes_total\",instance=~\"$instance\",slot=~\"$slot\"}[$__rate_interval])",
+          "refId": "T",
+          "legendFormat": "read s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "rate({__name__=~\"fd_k_\\\\d+_write_bytes_total\",instance=~\"$instance\",slot=~\"$slot\"}[$__rate_interval])",
+          "refId": "U",
+          "legendFormat": "write s{{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 30
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Chunk Data Read/Write Bytes Rate",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "rate({__name__=~\"fd_c_\\\\d+_read_bytes_total\",instance=~\"$instance\",slot=~\"$slot\"}[$__rate_interval])",
+          "refId": "V",
+          "legendFormat": "read s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "rate({__name__=~\"fd_c_\\\\d+_write_bytes_total\",instance=~\"$instance\",slot=~\"$slot\"}[$__rate_interval])",
+          "refId": "W",
+          "legendFormat": "write s{{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 30
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "FD Read/Write Count Rate",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "velo-prom"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "rate({__name__=~\"fd_k_\\\\d+_read_count_total\",instance=~\"$instance\",slot=~\"$slot\"}[$__rate_interval])",
+          "refId": "X",
+          "legendFormat": "k read s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "rate({__name__=~\"fd_k_\\\\d+_write_count_total\",instance=~\"$instance\",slot=~\"$slot\"}[$__rate_interval])",
+          "refId": "Y",
+          "legendFormat": "k write s{{slot}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "velo-prom"
+          },
+          "expr": "rate({__name__=~\"fd_c_\\\\d+_write_count_total\",instance=~\"$instance\",slot=~\"$slot\"}[$__rate_interval])",
+          "refId": "Z",
+          "legendFormat": "c write s{{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 30
+      }
+    }
+  ]
+}

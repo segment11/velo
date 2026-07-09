@@ -1,0 +1,39 @@
+# Local Velo monitoring stack: Prometheus + Grafana (OSS).
+#
+# Uses host networking (Linux) so both containers can reach the Velo
+# instance(s) and the velo_slot_relay running on the host:
+#   - Velo:       127.0.0.1:7379
+#   - relay:      127.0.0.1:9200   (start with ./run.sh or manually)
+#   - Prometheus: http://localhost:19090
+#   - Grafana:    http://localhost:13000  (anonymous admin enabled)
+#
+# Start the relay first (it needs host python3):
+#   python3 velo_slot_relay.py 9200 &
+# then:
+#   docker compose up -d
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+      - --web.listen-address=:19090
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_USERS_DEFAULT_THEME=dark
+      - GF_SERVER_HTTP_PORT=13000
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

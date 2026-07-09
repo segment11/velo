@@ -1,0 +1,73 @@
+# Prometheus scrape config for Velo (singleton or cluster).
+#
+# Velo can't be scraped directly (its query parser rejects Prometheus's
+# `key=value` params), so every job targets the velo_slot_relay multi-target
+# exporter. List each Velo instance once under `targets:`; the relabel block
+# rewrites the scrape address to the relay while passing the real instance as
+# the `target` param. Works unchanged for a singleton (one target) or a whole
+# cluster (many targets).
+#
+# RELAY_ADDR below is the host:port of velo_slot_relay (default :9200).
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # ---- Global registry: JVM, request_time, global_*, compress_stats, dict ----
+  - job_name: velo-global
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 127.0.0.1:7379        # <-- Velo instance(s); add more lines for a cluster
+        labels:
+          cluster: velo
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9200   # <-- RELAY_ADDR
+
+  # ---- Per-slot metrics for slot 0 ----
+  - job_name: velo-slot0
+    metrics_path: /metrics
+    params:
+      slot: ['0']
+    static_configs:
+      - targets:
+          - 127.0.0.1:7379
+        labels:
+          cluster: velo
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__param_slot]
+        target_label: slot
+      - target_label: __address__
+        replacement: 127.0.0.1:9200
+
+  # ---- Per-slot metrics for the last slot (slotNumber-1) ----
+  # The relay resolves `last` to the real index per instance, so a
+  # heterogeneous cluster still labels this series slot="last".
+  - job_name: velo-slot-last
+    metrics_path: /metrics
+    params:
+      slot: ['last']
+    static_configs:
+      - targets:
+          - 127.0.0.1:7379
+        labels:
+          cluster: velo
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__param_slot]
+        target_label: slot
+      - target_label: __address__
+        replacement: 127.0.0.1:9200
