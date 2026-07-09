@@ -51,6 +51,67 @@ class RequestHandlerTest extends Specification {
         CompressStats.compressStatsGauge.clearRawGetterList()
     }
 
+    def 'test error reply count metric'() {
+        given:
+        RequestHandler.requestHandlerGauge.clearRawGetterList()
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+        def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, new SnowFlake(1, 1), Config.create())
+
+        // an unknown command flows through the command dispatch and returns an error reply
+        def errorData = new byte[1][]
+        errorData[0] = 'jzzz'.bytes
+        def errorRequest = new Request(errorData, false, false)
+
+        expect:
+        requestHandler.errorReplyCountTotal == 0
+
+        when:
+        def reply = requestHandler.handle(errorRequest, socket)
+        then:
+        reply instanceof ErrorReply
+        requestHandler.errorReplyCountTotal == 1
+
+        when:
+        // a non-error reply does not increment the counter
+        def pingData = new byte[1][]
+        pingData[0] = 'ping'.bytes
+        def pingReply = requestHandler.handle(new Request(pingData, false, false), socket)
+        then:
+        !(pingReply instanceof ErrorReply)
+        requestHandler.errorReplyCountTotal == 1
+
+        when:
+        // a command that throws inside dispatch (slots not parsed -> NPE) is caught and counted
+        def saddData = new byte[3][]
+        saddData[0] = 'sadd'.bytes
+        saddData[1] = 'key'.bytes
+        saddData[2] = 'member'.bytes
+        def saddRequest = new Request(saddData, false, false)
+        def errorCountBeforeThrow = requestHandler.errorReplyCountTotal
+        def thrownReply = requestHandler.handle(saddRequest, socket)
+        then:
+        thrownReply instanceof ErrorReply
+        requestHandler.errorReplyCountTotal == errorCountBeforeThrow + 1
+
+        when:
+        def gaugeMap = RequestHandler.requestHandlerGauge.rawGetterList.last().get()
+        then:
+        gaugeMap.containsKey('request_error_reply_count_total')
+        gaugeMap['request_error_reply_count_total'].value() == 2.0d
+
+        cleanup:
+        requestHandler.stop()
+        RequestHandler.requestHandlerGauge.clearRawGetterList()
+    }
+
     def 'test malformed http basic auth returns auth failed'() {
         given:
         def oldPassword = ConfForGlobal.PASSWORD
@@ -441,9 +502,12 @@ class RequestHandlerTest extends Specification {
         def lindexRequest = new Request(lindexData, false, false)
         lindexRequest.slotNumber = slotNumber
         requestHandler.parseSlots(lindexRequest)
+        def errorCountBeforeWrongType = requestHandler.errorReplyCountTotal
         reply = requestHandler.handle(lindexRequest, socket)
         then:
         reply == ErrorReply.WRONG_TYPE
+        // TypeMismatchException is caught in the command dispatch and counted
+        requestHandler.errorReplyCountTotal == errorCountBeforeWrongType + 1
 
         when:
         getData2[1] = (XGroup.X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH + ',' + XGroup.X_CONF_FOR_SLOT_AS_SUB_CMD).bytes

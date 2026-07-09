@@ -145,6 +145,10 @@ def build_global(g):
                    {"color": "green", "value": None}, {"color": "yellow", "value": 0.5}]), 6, 4)
     g.add(stat("Total Keys", f'sum by(instance)(key_analysis_all_key_count{{{I}}})',
                unit="short", graph=False), 6, 4)
+    g.add(stat("Error Reply QPS", f'sum by(instance)(rate(request_error_reply_count_total{{{I}}}[{RATE}]))',
+               unit="reqps", decimals=3, color="value", desc="error replies per second", thresholds=[
+                   {"color": "green", "value": None},
+                   {"color": "yellow", "value": 1}, {"color": "red", "value": 10}]), 6, 4)
 
     g.row("Commands & Traffic")
     g.add(ts("Commands QPS (by command)",
@@ -168,6 +172,9 @@ def build_global(g):
               target(f'global_subscribe_client_count{{{I}}}', "subscribe {{instance}}"),
               target(f'global_blocking_client_count{{{I}}}', "blocking {{instance}}")],
              unit="short"), 12, 8)
+    g.add(ts("Error Reply Rate (per worker)",
+             [target(f'rate(request_error_reply_count_total{{{I}}}[{RATE}])', "worker {{worker_id}} {{instance}}")],
+             unit="reqps", desc="error replies per second per net worker", minv=0), 12, 8)
 
     g.row("Compression & Dict")
     g.add(ts("Compression Ratio (per slot worker)",

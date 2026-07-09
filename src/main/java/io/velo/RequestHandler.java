@@ -67,6 +67,12 @@ public class RequestHandler {
     volatile boolean isStopped = false;
 
     /**
+     * Total number of error replies produced by this request handler, exposed as the {@code error_reply_count_total} metric.
+     */
+    @VisibleForTesting
+    long errorReplyCountTotal = 0;
+
+    /**
      * Stops the request handler.
      */
     void stop() {
@@ -262,8 +268,6 @@ public class RequestHandler {
             .quantile(0.99, 0.001)
             .quantile(0.999, 0.001)
             .register();
-
-    private final Debug debug = Debug.getInstance();
 
     private final AclUsers aclUsers = AclUsers.getInstance();
 
@@ -574,18 +578,26 @@ public class RequestHandler {
             var commandGroup = commandGroups[firstByte - 'a'];
             commandGroup.resetContext(cmd, data, socket, request);
             try {
-                return commandGroup.handle();
+                var reply = commandGroup.handle();
+                if (reply instanceof ErrorReply) {
+                    errorReplyCountTotal++;
+                }
+                return reply;
             } catch (CannotReadException e) {
                 log.warn("Request handle but server can not read");
+                errorReplyCountTotal++;
                 return ErrorReply.CANNOT_READ;
             } catch (ReadonlyException e) {
                 log.warn("Request handle but server is readonly");
+                errorReplyCountTotal++;
                 return ErrorReply.READONLY;
             } catch (TypeMismatchException e) {
                 log.warn(e.getMessage());
+                errorReplyCountTotal++;
                 return ErrorReply.WRONG_TYPE;
             } catch (Exception e) {
                 log.error("Request handle error.", e);
+                errorReplyCountTotal++;
                 return new ErrorReply(e.getMessage());
             }
         }
@@ -605,6 +617,7 @@ public class RequestHandler {
 
             var map = new HashMap<String, SimpleGauge.ValueWithLabelValues>();
             map.put("request_sample_to_train_size", new SimpleGauge.ValueWithLabelValues((double) sampleToTrainList.size(), labelValues));
+            map.put("request_error_reply_count_total", new SimpleGauge.ValueWithLabelValues((double) errorReplyCountTotal, labelValues));
             return map;
         });
     }
