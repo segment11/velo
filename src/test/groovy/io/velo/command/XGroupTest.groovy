@@ -619,6 +619,47 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test as slave handle pong re-hellos when master serves but no hi received yet (bug 67)'() {
+        given:
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def x = ctx.x
+        def multiShard = localPersist.multiShard
+        def myEpoch = multiShard.clusterMyEpoch
+
+        when: 'cluster on, master serves the slot (serve=1) but we never received a Hi (masterUuid still 0)'
+        ConfForGlobal.clusterEnabled = true
+        def stuckPair = oneSlot.createReplPairAsSlave('localhost', 6379)
+        x.replPair = stuckPair
+        assert stuckPair.masterUuid == 0
+        def r = x.handleRepl(mockReplRequest(stuckPair, ReplType.pong, new Pong('localhost:6379', myEpoch, true))) as ReplReply
+
+        then: 'the slave re-sends hello so the master records our repl properties and replies with a Hi'
+        r.isReplType(ReplType.hello)
+
+        when: 'a Hi has already been received (masterUuid set): a serve=1 pong does not re-hello'
+        stuckPair.masterUuid = 123L
+        r = x.handleRepl(mockReplRequest(stuckPair, ReplType.pong, new Pong('localhost:6379', myEpoch, true))) as ReplReply
+
+        then:
+        r.isEmpty()
+
+        when: 'cluster disabled: no re-hello even if masterUuid is 0'
+        ConfForGlobal.clusterEnabled = false
+        def nonClusterPair = oneSlot.createReplPairAsSlave('localhost', 6379)
+        x.replPair = nonClusterPair
+        r = x.handleRepl(mockReplRequest(nonClusterPair, ReplType.pong, new Pong('localhost:6379', myEpoch, true))) as ReplReply
+
+        then:
+        r.isEmpty()
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test as master handle hello'() {
         given:
         def ctx = setupMasterContext()

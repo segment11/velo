@@ -365,6 +365,19 @@ public class XGroup extends BaseCommand {
                     }
                 }
 
+                // The master serves this slot (serve=1) but we have not completed the handshake yet — masterUuid is
+                // still 0 because no Hi ever arrived. This happens when our initial hello was declined while the master
+                // was importing the slot, and the master then created our downstream pair from a ping tick (the ping
+                // handler does not send a Hi). Re-send hello: the master, now able to serve, records our repl
+                // properties and replies with the Hi that bootstraps the exists-fetch. Guard on masterUuid == 0 so this
+                // fires only before the first Hi, never mid-fetch or after catch-up.
+                if (ConfForGlobal.clusterEnabled && pongFields.length > 2 && "1".equals(pongFields[2])
+                        && replPair.getMasterUuid() == 0) {
+                    log.warn("Repl slave handshake: re-send hello, master serves slot but no Hi received yet, slot={}", slot);
+                    var helloContent = new Hello(replPair.getSlaveUuid(), ConfForGlobal.announcedHostPortString());
+                    yield Repl.reply(slot, replPair, hello, helloContent);
+                }
+
                 var metaChunkSegmentIndex = oneSlot.getMetaChunkSegmentIndex();
                 if (metaChunkSegmentIndex.isExistsDataAllFetched()) {
                     var millis = replPair.getLastGetCatchUpResponseMillis();

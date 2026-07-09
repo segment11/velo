@@ -110,9 +110,25 @@ near-simultaneous `Jedis` pool) reliably hit the window, so every cluster test l
 
 ## Test regression fence
 
-Added to `ClusterOperationProcessManualTest.T11-churn` via a `midTestNpe(log)` helper that
-ignores the well-known startup SocketInspector.onConnect NPE stack but fails on any other
-mid-test NPE. Once the fix lands the helper can be tightened to assert zero NPEs of any kind.
+Two regression fences (both green since the round-2 review fix):
+
+1. `src/test/groovy/io/velo/SocketInspectorTest.groovy`: the
+   `test freshly constructed inspector counts without init (bug 66 regression)` test
+   constructs a `SocketInspector(1, 1)` and calls `onConnect` / `onRead` /
+   `onWrite` / `onDisconnect` WITHOUT calling `initByNetWorkerEventloopArray` first,
+   and asserts the per-net-worker counters increment and decrement correctly
+   (`connectionCount` is the AtomicInteger admission counter; `connectedClientCount()`
+   is the per-worker array; `netInBytesLength()` and `netOutBytesLength()` return
+   the array sums). Pre-fix this would NPE; post-fix the arrays exist from
+   construction.
+
+2. `src/test/groovy/io/velo/repl/cluster/ClusterOperationProcessManualTest.T11-churn`:
+   asserts outright `!log.contains('NullPointerException')` on every node's
+   `server.log` after a 2-cycle migration churn. The previous `midTestNpe(log)`
+   whitelist was REMOVED in the round-2 review — any startup NPE on a cluster
+   node now fails the test. (`midTestNpe` still exists as a private helper for
+   other tests that might want stack-trace filtering; T11-churn uses the
+   stronger "zero NPE" assertion.)
 
 ## Cross-reference
 
@@ -175,7 +191,7 @@ null once the inspector exists — before the server can accept:
 **Round:** 1 (found by `ClusterOperationProcessManualTest` T6 / T7-TTL observing a node-3 fetch that
 never starts; reproduced deterministically with `migrateSlot` + `manage migrate_from` on the
 replica when the master's slot is not yet owned)
-**Status:** documented, not yet fixed
+**Status:** FIXED (slave re-hello on a serve=1 pong when no Hi received yet — see "Fix" below)
 
 ## Symptom
 
@@ -314,15 +330,26 @@ and creates the pair. So:
 
 ## Test regression fence
 
-`ClusterOperationProcessManualTest` currently has the F3 race worked around by:
-- `T6` — first triggers a setslot defer (retrying via `waitClusterxOk`), THEN sends the
-  `manage migrate_from` to the replica, so the F3 path stays warm while the slave negotiates
-  its pair.
-- `T7-TTL` — migrated to a node that has no replica (node-2) to sidestep the F3 gate entirely.
+`ClusterOperationProcessManualTest.T6` exercises the bug end-to-end and now passes with a
+small test-side workaround:
 
-Once the fix lands, both workarounds can be removed and a more direct test added: a clean
-`migrateSlot(0, nodes[0], nodes[1], [nodes[3]])` with no manual defer loop, asserting
-the cutover completes within a bounded time (e.g. 5s).
+1. `migrateSlotUntilCaughtUp(0, nodes[0], nodes[1])` — start the import.
+2. `waitClusterxOk` for the first `setslot` — observe the F3 defer in the log
+   (`setslot defer: downstream replica not caught up`).
+3. `manage slot 0 migrate_from localhost node-1.port force` on `node-3` (the replica) —
+   resync AFTER the import catch-up completes (`hasCaughtUpUpstream` is now true on node-1,
+   so the ping handler accepts the slave pair and the slave's next hello is accepted with
+   a Hi).
+4. `Thread.sleep(2000)` — give node-3 a moment to receive Hi and start the exists-fetch.
+5. `broadcastSetSlotChargeFirst(0, nodes[1], nodes[0])` — the F3 gate now sees
+   `hasDownstream && downstreamAllCaughtUp` and the cutover completes.
+
+The `Thread.sleep` is a heuristic to give the slave's exists-fetch a head start; once the
+fix lands (ping handler also sends Hi, or slave re-hellos), the sleep can be removed and
+the cutover completes in <5s.
+
+`ClusterOperationProcessManualTest.T7-TTL` migrates to `node-2` (no replica) to sidestep the
+F3 gate entirely and the F3 race.
 
 ## Cross-reference
 
@@ -331,3 +358,63 @@ the cutover completes within a bounded time (e.g. 5s).
 - Tied to the F3 durability gate fix (`49d7e646` — `setslot defers until a configured replica
   is caught up`) — the gate is correct; the failure is upstream in the slave-bootstrap
   pipeline.
+
+## Review Feedback (round 2) — Bug 67
+
+**Status: CONFIRMED real.** Verified every link in the chain against the current code:
+
+| Claim | Verified at | Result |
+|---|---|---|
+| ping handler creates the master pair but sends **no Hi** | `XGroup.java:326-341` — `createIfNotExistReplPairAsMaster` then only a `Pong` | ✓ |
+| `Hi` is sent **only** from the hello handler | grep: `new Hi(` appears solely at `XGroup.java:503` | ✓ |
+| hello is declined during import | `XGroup.java:475-478` — `clusterEnabled && !isInnerSlotOwnedByMySelfShard && !hasCaughtUpUpstream` → `emptyReply`, no pair created, connection stays open | ✓ |
+| slave never re-hellos | `initAsSlave` sends hello once on connect (`ReplPair.java:443`); the periodic slot task only calls `replPair.ping()` (`OneSlot.java:1432`), reusing the same `tcpClient` — no re-hello, and the decline doesn't close the socket so no reconnect | ✓ |
+| pong path can't self-recover for a fresh slave | `XGroup.java:368-377` triggers `s_catch_up` only when `isExistsDataAllFetched()`; a force-resync slave has that flag `0`/false (`MetaChunkSegmentIndex.java:147`, `clear()` sets it false) | ✓ |
+| `hi()` is what starts the exists-fetch | `hi()` sets `masterUuid` + master binlog offsets and drives the fetch chain; without it the slave never begins | ✓ |
+
+**Conclusion:** a master pair born via the `ping` path (because an earlier hello was declined mid-import)
+leaves a fresh slave with no `Hi` and no recovery route — the exists-fetch never starts. The root cause
+and impact are accurately described. It self-heals after `replDelayCloseTimeoutSeconds`: the slave
+disconnects, reconnects, and its fresh hello is now accepted because `hasCaughtUpUpstream()` is true — so
+it is a **~60s stall, not a permanent deadlock**, consistent with the impact section above.
+
+### Implementation caveats for the candidate fixes
+
+1. **Candidate #1 (send Hi from ping)** — send the `Hi` inside the `if (replPair == null)` block so it
+   fires **once at creation**, not on every ping tick (otherwise the slave restarts its exists-fetch every
+   second). The extracted `sendHi` helper must carry the **full** hello setup — `setBinlogOn(true)`,
+   `append(XSkipApply)`, and `currentFo/earliestFo` (`XGroup.java:490-503`) — not just `new Hi(...)`, or the
+   master will not actually stream. The ping path also never calls `setRemoteReplProperties` (the ping
+   payload carries no repl properties); a minor gap the later reconnect-hello closes.
+2. **Candidate #3 (always accept hello once `serveSlot`, make ping a pure liveness check)** is the cleaner
+   long-term shape — it removes the dual pair-creation path, which is the underlying design smell. More
+   invasive, but preferable if this area is touched beyond a point fix.
+
+### Fix (implemented) — slave re-hello, a refinement of candidate #2
+
+Candidate #1 (send Hi from the ping handler) is **insufficient on its own**: the master needs the slave's
+`remoteReplProperties` to serve any `exists_*` fetch (`XGroup.requireRemoteReplProperties`, used in
+`exists_wal` / `exists_chunk_segments` / `exists_big_string` / `exists_short_string`), and those properties
+are only carried by the **hello** payload — the ping payload does not have them. A ping-created pair that
+merely received a Hi would still throw `remote repl properties missing` at the first fetch. So the pair must
+be completed by a **hello**, not a ping.
+
+The fix makes the slave re-send hello over its existing connection when it detects it is stuck:
+
+- In the slave's `pong` handler (`XGroup.java`), when cluster is enabled, the pong says the master serves
+  the slot (`serve=1`), and `replPair.getMasterUuid() == 0` (no Hi ever received — the slave pair only sets
+  `masterUuid` in `hi()`; `createReplPairAsSlave` never sets it), the handler returns a `hello` reply
+  instead of an empty reply. The slave's request/response path writes that hello back to the master.
+- The master (now able to serve — `serve=1` means `isInnerSlotOwnedByMySelfShard || hasCaughtUpUpstream`,
+  so its hello handler no longer declines) accepts the hello: it finds the existing ping-created pair,
+  records `remoteReplProperties`, and replies with the `Hi` that bootstraps the exists-fetch.
+- The `masterUuid == 0` guard means this fires **only before the first Hi**, never mid-fetch or after
+  catch-up, so a legitimate in-progress sync is never disturbed (once `hi()` runs, `masterUuid != 0`).
+
+This keeps the ping handler unchanged (still a pure liveness + pair-adopt path) and needs no new wire field:
+the recovery reuses the existing hello → Hi handshake, which already sets everything the master needs.
+
+**Regression fence:** `XGroupTest.'test as slave handle pong re-hellos when master serves but no hi
+received yet (bug 67)'` — a serve=1 pong with `masterUuid == 0` returns a `hello` reply; once `masterUuid`
+is set it returns empty; with cluster disabled it returns empty. The `ClusterOperationProcessManualTest`
+T6 `Thread.sleep(2000)` head-start heuristic is no longer required for correctness.
