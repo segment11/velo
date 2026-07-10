@@ -370,3 +370,113 @@ All three findings verified against the current `review/replication` working tre
 **CONFIRMED** at the stated High severity; none were refuted or down-graded. Per-bug verification notes are appended
 under each finding above. No production code was changed in this review round. Recommended fix order matches the table
 (Bug 1 → Bug 2 → Bug 3), each following the TDD + JaCoCo + single-commit workflow in `CLAUDE.md`.
+
+
+## Review Feedback - Bug 1 Fix - AI agent 2 - 2026-07-10
+
+Reviewed commit `dcb8851c` (`fix: slave resets catch-up progress and session on received repl error`).
+
+### Summary
+
+The commit changes slave-side handling of a received REPL error to:
+
+1. Clear the durable master UUID, exists-fetched flag, and catch-up position through
+   `MetaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset()`.
+2. Reset the slave pair's in-memory `masterUuid` to zero.
+3. Return a REPL error so `TcpClient.toReplyBufferOrClose()` closes the connection.
+
+The added test verifies those state mutations and retains the existing no-op behavior when no slave-side repl pair can
+be resolved.
+
+### Strengths
+
+- Clearing the durable progress is the correct safe response to an out-of-retention offset. A future `hi()` cannot
+  mistake the old exists/catch-up state for resumable progress.
+- Resetting `replPair.masterUuid` prevents the old handshake identity from being reused accidentally.
+- The `!replPair.isAsMaster()` guard keeps a received error on a master-side pair from clearing local slave progress.
+- The focused test covers the new slave branch and the null/unresolvable-pair fallback. JaCoCo shows every added
+  production line covered.
+
+### Concerns
+
+1. **High - the socket is closed, but no new replication connection is created, so Bug 1 remains an indefinite
+   stall.**
+
+   `TcpClient.toReplyBufferOrClose()` closes the socket when the new error reply is returned
+   (`TcpClient.java:183-185`). `SocketInspector.onDisconnect()` then calls
+   `XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed()` (`SocketInspector.java:836-845`). The fix has already cleared
+   `isExistsDataAllFetched`, so that helper immediately returns at `XGroup.java:2083-2086`. It cannot perform its Jedis
+   catch-up fallback and does not reconnect.
+
+   The remaining periodic replication task only calls `replPair.ping()` (`OneSlot.java:1420-1433`). That delegates to
+   the existing `TcpClient`, whose socket is closed, and returns false. The only production call to
+   `ReplPair.initAsSlave()` is during `OneSlot.createReplPairAsSlave()`; disconnect does not remove/recreate the pair or
+   invoke `initAsSlave()` again. Therefore the code comment's promised "next hi() handshake" never occurs. The replica
+   changes from repeatedly requesting an unrecoverable offset on a live socket to repeatedly pinging a closed socket.
+
+   The focused verification run exposed this exact path in its standard output:
+
+   ```text
+   Inspector on repl disconnect ...
+   Repl slave try catch up again after slave tcp client close, but exists data not all fetched, slot=0
+   Repl socket is already closed ...
+   ```
+
+2. **The new regression stops before the behavior named in its `then` label.** It calls `XGroup.handleRepl()` directly
+   and asserts that an error reply and cleared state are returned. It does not pass that reply through
+   `TcpClient.toReplyBufferOrClose()`, invoke the disconnect inspector, observe a reconnect, receive `hi`, or prove that
+   the exists phase restarts. Thus it verifies state invalidation but not session recovery.
+
+### Required Follow-up
+
+- Keep the safe progress invalidation, but add an explicit recovery transition. Viable directions are to reconnect the
+  existing slave pair after disconnect, remove/recreate the pair through slot/controller reconciliation, or reset state
+  and immediately send a new `hello` over the still-live connection instead of closing it.
+- Add a regression spanning received error -> TCP close or re-hello -> new `hello`/`hi` -> exists fetch. It must assert
+  that a fresh replication request is actually sent after the error, not only that metadata was cleared.
+- Re-run the focused `XGroupTest`, `TcpClientTest`, and `SocketInspectorTest`, then inspect JaCoCo for both the error
+  branch and the selected reconnect/re-hello branch.
+
+### Verification
+
+- Ran:
+  `./gradlew :test --tests "io.velo.command.XGroupTest.test as slave handle received error resets catch-up progress and session (bug 68)" --tests "io.velo.command.XGroupTest.test try catch up again after slave tcp client closed" --tests "io.velo.repl.TcpClientTest" --tests "io.velo.SocketInspectorTest"`
+- Result: Gradle build successful. The tests pass, but their output confirms the disconnect helper exits without
+  recovery after the new state reset.
+- JaCoCo:
+  `python3 scripts/jacoco_cover.py io.velo.command.XGroup 308 324 --src`
+- Result: added lines 310 and 319-321 covered; condition line 318 is partial because one compound branch is not covered.
+
+**Verdict:** Changes requested. The state invalidation is useful, but commit `dcb8851c` does not complete Bug 1's
+automatic recovery and should not be treated as a finished fix.
+
+## Bug 1 Fix - Revision (recovery over live connection) - 2026-07-10
+
+Addresses the "changes requested" feedback above. Follow-up commit reworks the slave `case error` handling.
+
+**Root design decision:** there is no auto-reconnect for a closed slave replication stream — the only production
+call to `ReplPair.initAsSlave()` is `OneSlot.createReplPairAsSlave()`, and `onDisconnect ->
+tryCatchUpAgainAfterSlaveTcpClientClosed` early-returns once progress is cleared. So *closing* the socket (the
+original approach) leaves replication stalled until an external re-subscribe. A transport-level reconnect with
+backoff/jitter is the heavier, design-level alternative, but the cheapest complete recovery reuses the machinery that
+already exists: the pong path already re-sends `hello` over the live connection to bootstrap a stuck handshake
+(`XGroup.java` `case pong`, bug 67).
+
+**Change:** on a received error, the slave now (1) clears durable catch-up progress via
+`clearMasterBinlogFileIndexAndOffset()`, (2) resets `replPair.masterUuid` to 0, and (3) **re-sends `hello` over the
+same still-live connection** instead of returning an error that closes the socket. The master replies `hi`; because
+the progress was cleared, `hi()` takes the full exists-fetch branch and the exists phase restarts. Works in both
+cluster and non-cluster topologies and needs no reconnect state machine.
+
+**Test:** the regression now asserts the recovery request is actually emitted — `handleRepl` returns a `hello`-type
+reply (a fresh replication request on the wire), not merely that metadata was cleared. The existing
+`test as slave handle pong` error-branch assertion was updated from `error` to `hello` for the same reason.
+
+**Verification:** `./gradlew :test --tests "io.velo.command.XGroupTest"` — build successful. JaCoCo: the `case error`
+recovery lines (clear progress, reset uuid, build Hello, return hello reply) are all covered; only the defensive
+`replPair == null / isAsMaster` fallback branch is partial (a master-side pair receiving an error).
+
+**Residual (tracked, not blocking):** for a *persistently* failing master (e.g. config mismatch), re-hello will retry
+each error, mirroring how a freshly-connecting slave would also retry — no new backoff was added, matching existing
+pong/handshake behavior. A bounded same-master transport reconnect with exponential backoff + jitter remains a
+worthwhile separate hardening item if repeated full-sync attempts under a broken master become a concern.
