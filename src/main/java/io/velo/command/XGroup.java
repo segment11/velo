@@ -308,6 +308,18 @@ public class XGroup extends BaseCommand {
         return switch (replType) {
             case error -> {
                 log.error("Repl handle receive error={}, slot={}", Wal.keyString(contentBytes), slot);
+                // A received master error (e.g. the requested binlog file aged out of retention, or a master
+                // uuid mismatch) means this replication session cannot continue from the saved catch-up offset.
+                // Silently discarding it leaves the socket open and the slave keeps re-requesting the same
+                // unrecoverable offset forever. Instead invalidate the durable catch-up progress so the next
+                // hi() handshake re-fetches all exists data and re-catches-up from the master's earliest
+                // retained position, reset the pair handshake so a serve pong re-hellos, and return an error
+                // reply so the slave TcpClient tears down the session (see TcpClient.toReplyBufferOrClose).
+                if (replPair != null && !replPair.isAsMaster()) {
+                    oneSlot.getMetaChunkSegmentIndex().clearMasterBinlogFileIndexAndOffset();
+                    replPair.setMasterUuid(0);
+                    yield Repl.error(slot, replPair, "Repl slave reset session after master error, slot=" + slot);
+                }
                 yield Repl.emptyReply();
             }
             case ping -> {

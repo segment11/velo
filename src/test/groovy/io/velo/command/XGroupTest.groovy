@@ -676,6 +676,46 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test as slave handle received error resets catch-up progress and session (bug 68)'() {
+        given:
+        def ctx = setupSlaveContext()
+        def localPersist = ctx.localPersist
+        def oneSlot = ctx.oneSlot
+        def x = ctx.x
+        def masterUuid = ctx.masterUuid
+
+        and: 'a slave that has finished the exists phase and saved a catch-up offset into a now-deleted master file'
+        def slavePair = oneSlot.createReplPairAsSlave('localhost', 6379)
+        slavePair.masterUuid = masterUuid
+        x.replPair = slavePair
+        def metaChunkSegmentIndex = oneSlot.metaChunkSegmentIndex
+        metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(masterUuid, true, 3, 4096L)
+        assert metaChunkSegmentIndex.isExistsDataAllFetched()
+
+        when: 'the master replies with an error (e.g. requested binlog file aged out of retention)'
+        def errReply = Repl.error(slot, slavePair, 'Repl master handle error: read binlog file error')
+        def r = x.handleRepl(mockReplRequest(errReply)) as ReplReply
+
+        then: 'the slave tears down the session and invalidates its catch-up progress so the next hi() does a full re-sync'
+        r.isReplType(ReplType.error)
+        !metaChunkSegmentIndex.isExistsDataAllFetched()
+        metaChunkSegmentIndex.masterBinlogFileIndexAndOffset.fileIndex() == 0
+        metaChunkSegmentIndex.masterBinlogFileIndexAndOffset.offset() == 0L
+        slavePair.masterUuid == 0
+
+        when: 'a received error with no resolvable slave repl pair falls back to a no-op'
+        oneSlot.removeReplPairAsSlave()
+        def x2 = new XGroup(null, null, null)
+        x2.from(BaseCommand.mockAGroup())
+        def r2 = x2.handleRepl(mockReplRequest(Repl.error(slot, slavePair, 'no pair'))) as ReplReply
+        then:
+        r2.isEmpty()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test as master handle hello'() {
         given:
         def ctx = setupMasterContext()
@@ -1321,11 +1361,11 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.error)
 
-        when:
+        when: 'a received master error now tears down the session instead of being silently discarded (bug 68)'
         replRequest = mockReplRequest(Repl.error(slot, replPairAsMaster, 'error'))
         r = ctx.x.handleRepl(replRequest) as ReplReply
         then:
-        r.isEmpty()
+        r.isReplType(ReplType.error)
 
         cleanup:
         localPersist.cleanUp()
