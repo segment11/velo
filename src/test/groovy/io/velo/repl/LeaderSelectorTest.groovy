@@ -224,6 +224,67 @@ class LeaderSelectorTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test failed promotion does not leave slots split across roles (bug 68)'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def slot0 = localPersist.oneSlot((short) 0)
+        def slot1 = localPersist.oneSlot((short) 1)
+
+        and:
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = null
+
+        // both slots are slaves (readonly, not readable)
+        slot0.createReplPairAsSlave('localhost', 7379)
+        def replPair0 = slot0.onlyOneReplPairAsSlave
+        replPair0.masterReadonly = true
+        replPair0.allCaughtUp = true
+        slot0.readonly = true
+        slot0.canRead = false
+
+        slot1.createReplPairAsSlave('localhost', 7379)
+        def replPair1 = slot1.onlyOneReplPairAsSlave
+        replPair1.masterReadonly = true
+        // slot 1 is not caught up yet, so a non-forced promotion must fail for the whole node
+        replPair1.allCaughtUp = false
+        slot1.readonly = true
+        slot1.canRead = false
+
+        when: 'promote (not forced) while slot 1 is not caught up'
+        def future = new CompletableFuture()
+        leaderSelector.resetAsMaster(false) { e ->
+            if (e != null) {
+                println e.message
+            }
+            future.complete(e == null)
+        }
+        def r = future.get()
+
+        then: 'promotion fails and no slot flipped to master: both remain slaves with their repl pairs intact'
+        !r
+        slot0.readonly
+        !slot0.canRead
+        slot0.onlyOneReplPairAsSlave != null
+        slot1.readonly
+        !slot1.canRead
+        slot1.onlyOneReplPairAsSlave != null
+
+        cleanup:
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        leaderSelector.masterAddressLocalMocked = null
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test promote readonly stream slot without repl pair to master'() {
         given:
         ConfForGlobal.netListenAddress = 'localhost:7380'

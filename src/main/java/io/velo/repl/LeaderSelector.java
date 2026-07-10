@@ -394,83 +394,105 @@ public class LeaderSelector implements NeedCleanUp {
             // iterate only initialized slots: in cluster mode this node may own a subset of
             // ConfForGlobal.slotNumber, and unowned oneSlots[] entries are null.
             var initSlots = localPersist.initializedOneSlots();
-            Promise<Void>[] promises = new Promise[initSlots.size()];
+
+            // Phase 1 — validate readiness of every slot WITHOUT changing any role. A multi-slot promotion
+            // must be all-or-nothing: if one slot is not ready (its master is not readonly yet, or it has not
+            // caught up), no other slot may already have flipped to master, otherwise a failed promotion
+            // leaves the node split across roles and creates a split-brain window (bug 68-3). Only after every
+            // slot validates do we commit the role change in phase 2.
+            Promise<Void>[] checkPromises = new Promise[initSlots.size()];
             for (int i = 0; i < initSlots.size(); i++) {
                 var oneSlot = initSlots.get(i);
-                promises[i] = oneSlot.asyncRun(() -> {
-                    boolean canResetSelfAsMasterNow = false;
-
-                    var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
-                    if (replPairAsSlave != null) {
-                        if (replPairAsSlave.isMasterReadonly() && replPairAsSlave.isAllCaughtUp()) {
-                            canResetSelfAsMasterNow = true;
-                        }
-                    } else {
-                        canResetSelfAsMasterNow = true;
-                        log.debug("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
+                checkPromises[i] = oneSlot.asyncRun(() -> {
+                    if (force) {
+                        return;
                     }
 
-                    if (!force && !canResetSelfAsMasterNow) {
+                    var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
+                    if (replPairAsSlave == null) {
+                        log.debug("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
+                        return;
+                    }
+
+                    if (!replPairAsSlave.isMasterReadonly() || !replPairAsSlave.isAllCaughtUp()) {
                         log.warn("Repl slave can not reset as master now, need wait current master readonly and slave all caught up, slot={}",
                                 replPairAsSlave.getSlot());
                         XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPairAsSlave, null);
                         throw new IllegalStateException("Repl slave can not reset as master, slot=" + replPairAsSlave.getSlot());
                     }
-
-                    resetAsSlaveCount = 0;
-
-                    var isSelfSlave = oneSlot.removeReplPairAsSlave();
-                    if (isSelfSlave) {
-                        oneSlot.resetAsMaster();
-                        resetAsMasterCount = 0;
-                    } else if (localPersist.isAsSlaveScaleUp()
-                            && oneSlot.slot() >= ConfForGlobal.masterSlotNumber) {
-                        // 2N scale-up extra slot: no slave ReplPair (data arrived via fan-out),
-                        // but it IS in slave state (readonly, canRead=false). Promote it too.
-                        // Known limitation: this slot has data but no binlog history (offset was zeroed
-                        // at slave reset and never advanced) — downstream replication for this slot
-                        // from the promoted node is not supported in v1.
-                        log.warn("Repl promote scale-up extra slot to master (no binlog history), slot={}", oneSlot.slot());
-                        oneSlot.resetAsMaster();
-                        resetAsMasterCount = 0;
-                    } else if (oneSlot.isReadonly()) {
-                        log.warn("Repl promote readonly slot without slave repl pair, slot={}", oneSlot.slot());
-                        oneSlot.resetAsMaster();
-                        resetAsMasterCount = 0;
-                    } else {
-                        resetAsMasterCount++;
-                        if (resetAsMasterCount % 100 == 0) {
-                            log.info("Repl reset as master, is already master, do nothing, slot={}", oneSlot.slot());
-                        }
-                    }
                 });
             }
 
-            Promises.all(promises).whenComplete((r, e) -> {
-                // Restore previous failover state once the role transition actually completed (or failed),
-                // so Sentinel polling INFO replication can observe the transition window.
-                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-
-                if (e != null) {
-                    // Restore masterSlotNumber on failed promotion
+            Promises.all(checkPromises).whenComplete((rCheck, eCheck) -> {
+                if (eCheck != null) {
+                    // Validation failed before any slot changed role: restore globals and report. No slot
+                    // was mutated, so no compensating rollback is needed.
                     ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
-                    callback.accept(e);
+                    MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+                    callback.accept(eCheck);
                     return;
                 }
 
-                // Success: leaving slave mode, clear masterSlotNumber last
-                ConfForGlobal.masterSlotNumber = 0;
+                // Phase 2 — every slot validated; commit the promotion on all slots.
+                Promise<Void>[] promises = new Promise[initSlots.size()];
+                for (int i = 0; i < initSlots.size(); i++) {
+                    var oneSlot = initSlots.get(i);
+                    promises[i] = oneSlot.asyncRun(() -> {
+                        resetAsSlaveCount = 0;
 
-                // publish switch master to clients
-                var leaderSelector = LeaderSelector.getInstance();
-                var oldMasterHostAndPort = HostAndPort.parse(leaderSelector.lastGetMasterListenAddressAsSlave);
-                var selfAsMasterHostAndPort = ConfForGlobal.announcedHostPort();
-                if (oldMasterHostAndPort == null) {
-                    oldMasterHostAndPort = selfAsMasterHostAndPort;
+                        var isSelfSlave = oneSlot.removeReplPairAsSlave();
+                        if (isSelfSlave) {
+                            oneSlot.resetAsMaster();
+                            resetAsMasterCount = 0;
+                        } else if (localPersist.isAsSlaveScaleUp()
+                                && oneSlot.slot() >= ConfForGlobal.masterSlotNumber) {
+                            // 2N scale-up extra slot: no slave ReplPair (data arrived via fan-out),
+                            // but it IS in slave state (readonly, canRead=false). Promote it too.
+                            // Known limitation: this slot has data but no binlog history (offset was zeroed
+                            // at slave reset and never advanced) — downstream replication for this slot
+                            // from the promoted node is not supported in v1.
+                            log.warn("Repl promote scale-up extra slot to master (no binlog history), slot={}", oneSlot.slot());
+                            oneSlot.resetAsMaster();
+                            resetAsMasterCount = 0;
+                        } else if (oneSlot.isReadonly()) {
+                            log.warn("Repl promote readonly slot without slave repl pair, slot={}", oneSlot.slot());
+                            oneSlot.resetAsMaster();
+                            resetAsMasterCount = 0;
+                        } else {
+                            resetAsMasterCount++;
+                            if (resetAsMasterCount % 100 == 0) {
+                                log.info("Repl reset as master, is already master, do nothing, slot={}", oneSlot.slot());
+                            }
+                        }
+                    });
                 }
-                publishMasterSwitchMessage(oldMasterHostAndPort, selfAsMasterHostAndPort, true);
 
-                callback.accept(null);
+                Promises.all(promises).whenComplete((r, e) -> {
+                    // Restore previous failover state once the role transition actually completed (or failed),
+                    // so Sentinel polling INFO replication can observe the transition window.
+                    MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+
+                    if (e != null) {
+                        // Restore masterSlotNumber on failed promotion
+                        ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
+                        callback.accept(e);
+                        return;
+                    }
+
+                    // Success: leaving slave mode, clear masterSlotNumber last
+                    ConfForGlobal.masterSlotNumber = 0;
+
+                    // publish switch master to clients
+                    var leaderSelector = LeaderSelector.getInstance();
+                    var oldMasterHostAndPort = HostAndPort.parse(leaderSelector.lastGetMasterListenAddressAsSlave);
+                    var selfAsMasterHostAndPort = ConfForGlobal.announcedHostPort();
+                    if (oldMasterHostAndPort == null) {
+                        oldMasterHostAndPort = selfAsMasterHostAndPort;
+                    }
+                    publishMasterSwitchMessage(oldMasterHostAndPort, selfAsMasterHostAndPort, true);
+
+                    callback.accept(null);
+                });
             });
         } catch (RuntimeException e) {
             ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
