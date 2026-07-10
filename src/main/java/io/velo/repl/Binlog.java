@@ -326,6 +326,11 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             currentFileOffset = marginOffset;
             clearByteBuffer();
 
+            // rebase is destructive above the chosen position: drop any stale history from a previous
+            // master epoch so it can neither be read by downstream replicas nor re-selected on restart
+            removeFilesAndReadCacheAbove(resetFileIndex, marginOffset);
+            recomputeDiskUsage();
+
             log.warn("Repl binlog reopen at file index and margin offset, file index={}, offset={}, slot={}",
                     currentFileIndex, currentFileOffset, slot);
             return;
@@ -339,7 +344,13 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             }
         }
 
+        // delete stale files/rafs above the rebase point (the old current file may be one of them) and
+        // clear read-cache entries at or after the rebase point, before reopening the target file
+        removeFilesAndReadCacheAbove(resetFileIndex, marginOffset);
+
         var prevRaf = prevRaf(resetFileIndex, true);
+        // drop any stale tail in the target file so the reserved segment is not a mix of new and old bytes
+        prevRaf.setLength(marginOffset);
         prevRaf.seek(marginOffset);
 
         currentFileIndex = resetFileIndex;
@@ -347,8 +358,49 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
         clearByteBuffer();
         raf = prevRaf;
 
+        recomputeDiskUsage();
+
         log.warn("Repl binlog reopen at file index and margin offset, file index={}, offset={}, slot={}",
                 currentFileIndex, currentFileOffset, slot);
+    }
+
+    /**
+     * Makes a binlog rebase destructive above {@code (resetFileIndex, marginOffset)}: deletes every file with
+     * an index greater than {@code resetFileIndex} (closing any cached raf), and drops read-cache segments at
+     * or after the rebase point so a downstream replica can never receive stale history from a previous epoch.
+     *
+     * @param resetFileIndex the rebase target file index
+     * @param marginOffset   the rebase target offset within {@code resetFileIndex}, aligned to a segment
+     */
+    private void removeFilesAndReadCacheAbove(int resetFileIndex, long marginOffset) {
+        latestAppendForReadCacheSegmentBytesSet.removeIf(one ->
+                one.fileIndex() > resetFileIndex
+                        || (one.fileIndex() == resetFileIndex && one.offset() >= marginOffset));
+
+        for (var persistFile : listFiles()) {
+            if (persistFile.fileIndex() <= resetFileIndex) {
+                continue;
+            }
+
+            var rafRemoved = prevRafByFileIndex.remove(persistFile.fileIndex());
+            if (rafRemoved != null) {
+                IOUtils.closeQuietly(rafRemoved);
+            }
+
+            if (!persistFile.delete()) {
+                log.error("Repl binlog rebase delete stale file error, file={}, slot={}", persistFile.getName(), slot);
+            } else {
+                log.warn("Repl binlog rebase delete stale file, file={}, slot={}", persistFile.getName(), slot);
+            }
+        }
+    }
+
+    private void recomputeDiskUsage() {
+        long total = 0;
+        for (var persistFile : listFiles()) {
+            total += persistFile.length();
+        }
+        diskUsage = total;
     }
 
     // binlog file name prefix

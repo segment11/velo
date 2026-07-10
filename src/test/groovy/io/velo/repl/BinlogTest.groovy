@@ -388,6 +388,61 @@ class BinlogTest extends Specification {
         ConfForSlot.global.confRepl.binlogFileKeepMaxCount = 10
     }
 
+    def 'test reopen at file index and margin offset is destructive above rebase point (bug 68)'() {
+        given:
+        def savedCacheMaxCount = ConfForSlot.global.confRepl.binlogForReadCacheSegmentMaxCount
+        ConfForSlot.global.confRepl.binlogForReadCacheSegmentMaxCount = 100
+        def oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+
+        def oneSlot = new OneSlot(slot)
+        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile, oneSlot)
+        dynConfig.binlogOn = true
+        def slotDir = new File('/tmp/velo-data/test-persist/test-slot-rebase')
+        slotDir.deleteDir()
+        slotDir.mkdirs()
+        def binlog = new Binlog(slot, slotDir, dynConfig)
+        def binlogDir = new File(slotDir, 'binlog')
+
+        and: 'write one segment into files 0..3 plus a stale second segment into file 3'
+        def fillBytes = new byte[oneSegmentLength]
+        Arrays.fill(fillBytes, (byte) 7)
+        (0..3).each { fi -> binlog.writeFromMasterOneSegmentBytes(fillBytes, fi, 0) }
+        binlog.writeFromMasterOneSegmentBytes(fillBytes, 3, oneSegmentLength)
+        // cache a raf for a stale higher file so the rebase must close it before deleting the file
+        binlog.prevRaf(2)
+
+        expect:
+        binlog.currentFileIndex == 3
+        new File(binlogDir, 'binlog-2').exists()
+        new File(binlogDir, 'binlog-3').exists()
+
+        when: 'rebase down to an older master position: file 1 at offset 0'
+        binlog.reopenAtFileIndexAndMarginOffset(1, 0)
+
+        then: 'current position is the rebase point'
+        binlog.currentFileIndex == 1
+        binlog.currentFileOffset == 0
+        and: 'files above the rebase file are deleted'
+        !new File(binlogDir, 'binlog-2').exists()
+        !new File(binlogDir, 'binlog-3').exists()
+        and: 'the target file is truncated to the margin offset'
+        new File(binlogDir, 'binlog-1').length() == 0
+        and: 'stale read-cache bytes at the rebased current file are gone (no stale segment returned)'
+        binlog.readPrevRafOneSegment(1, 0) == null
+
+        when: 'a newly constructed Binlog reopens at the rebased position, not the stale high file'
+        binlog.cleanUp()
+        binlog = new Binlog(slot, slotDir, dynConfig)
+
+        then:
+        binlog.currentFileIndex == 1
+
+        cleanup:
+        binlog.cleanUp()
+        slotDir.deleteDir()
+        ConfForSlot.global.confRepl.binlogForReadCacheSegmentMaxCount = savedCacheMaxCount
+    }
+
     def 'test apply'() {
         given:
         def oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
