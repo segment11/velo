@@ -480,3 +480,104 @@ recovery lines (clear progress, reset uuid, build Hello, return hello reply) are
 each error, mirroring how a freshly-connecting slave would also retry — no new backoff was added, matching existing
 pong/handshake behavior. A bounded same-master transport reconnect with exponential backoff + jitter remains a
 worthwhile separate hardening item if repeated full-sync attempts under a broken master become a concern.
+
+
+## Review Feedback - Bug 2 Fix - AI agent 2 - 2026-07-10
+
+Reviewed commit `675313d7` (`fix: make binlog rebase destructive above the reset position`).
+
+### Summary
+
+The commit makes `Binlog.reopenAtFileIndexAndMarginOffset()` destructive above the selected rebase position. It:
+
+1. Removes cached segment bytes at or after the target position.
+2. Closes cached RAFs and deletes files with indexes greater than the target file.
+3. Truncates the target file before it becomes current.
+4. Recomputes `diskUsage` from the files that remain.
+
+The regression creates files through index 3, caches a RAF for a stale higher file, rebases to file 1, and verifies
+that higher files and stale cache data are gone and restart selects file 1.
+
+### Strengths
+
+- The target file is truncated before `OneSlot.resetAsMaster()` reserves the next segment, preventing old bytes in the
+  reserved segment from being served as current-epoch history.
+- Higher indexed files are removed before normal rotation can reopen them with an old tail.
+- Cached RAFs are closed before deletion, and cached segment entries at/after the rebase point are removed.
+- The restart assertion directly covers the original constructor hazard where `files.getLast()` selected a stale
+  higher file.
+- The helper is used by both same-file and different-file rebase branches. JaCoCo confirms both branches execute in the
+  focused suite.
+
+### Concerns
+
+1. **High - failure to delete a stale higher file is logged but treated as a successful rebase.**
+
+   `removeFilesAndReadCacheAbove()` calls `persistFile.delete()` and, when it returns false, only logs an error
+   (`Binlog.java:390-394`). The method then returns normally, `reopenAtFileIndexAndMarginOffset()` installs the rebased
+   target as current, and `OneSlot.resetAsMaster()` continues to make the slot readable and writable.
+
+   The undeleted higher file remains in `listFiles()`. A process restart again selects it through
+   `files.getLast()` (`Binlog.java:131-147`), recreating Bug 2. If it is the next index, normal rotation can also open it
+   through `createAndUseNextFile()` without truncating its old tail. This is a correctness operation: inability to
+   remove stale prior-epoch history must fail promotion, not degrade to a log-only condition.
+
+   The deletion-failure branch is also the only new error branch not executed by the focused test; JaCoCo reports line
+   391 not covered.
+
+2. **Low - `diskUsage` is immediately stale after the real promotion call path.**
+
+   `recomputeDiskUsage()` runs inside `reopenAtFileIndexAndMarginOffset()`. Immediately afterward,
+   `OneSlot.resetAsMaster()` calls `binlog.moveToNextSegment(true)` (`OneSlot.java:2634-2635`), which extends the file by
+   one segment with `raf.setLength(currentFileOffset)` (`Binlog.java:302-305`) but does not add that length to
+   `diskUsage`. The rebase itself reports the correct value only until the reserved segment is created; production
+   metrics then undercount by one segment.
+
+3. **Test coverage does not run the full promotion sequence.** The new test calls
+   `reopenAtFileIndexAndMarginOffset()` directly, so it does not assert that the subsequent forced segment reservation
+   is zero-filled, that `diskUsage` remains correct, or that rotation after promotion starts from a clean file. The
+   implementation handles the successful stale-data cases by inspection, but an integration regression through
+   `OneSlot.resetAsMaster()` would protect the actual contract.
+
+### Required Follow-up
+
+- Make stale-file deletion failure propagate as an `IOException` (or equivalent transition failure) so promotion does
+  not complete while prior-epoch files remain. Add a deterministic failure-injection test for this branch.
+- Update forced segment reservation to maintain `diskUsage`, or recompute usage after the complete rebase-and-reserve
+  operation.
+- Add an integration test through `OneSlot.resetAsMaster()` that checks the reserved segment, rotation, restart
+  position, and disk usage after rebasing from a higher prior file index.
+
+### Verification
+
+- Ran:
+  `./gradlew :test --tests "io.velo.repl.BinlogTest.test reopen at file index and margin offset is destructive above rebase point (bug 68)" --tests "io.velo.persist.OneSlotTest.test repeated migrate role cycles keep exactly one active repl pair" --tests "io.velo.persist.OneSlotTest.test dyn config and big string files and kv lru"`
+- Result: Gradle build successful.
+- JaCoCo:
+  `python3 scripts/jacoco_cover.py io.velo.repl.Binlog 322 404 --src`
+- Result: 40 of 46 executable lines covered; both rebase branches covered. The deletion-failure log at line 391 and one
+  unrelated cached-RAF close line are not covered. Four condition lines are partial.
+
+**Verdict:** Changes requested. The normal rebase path closes the documented Bug 2 hazards, but deletion failure still
+allows promotion with stale prior-epoch history on disk and can reproduce the original corruption path after restart.
+
+## Bug 2 Fix - Revision (delete-failure, diskUsage, e2e) - 2026-07-10
+
+Addresses the three review findings above. Follow-up commit hardens the Bug 2 rebase.
+
+1. **High — delete failure no longer silently promotes.** `removeFilesAndReadCacheAbove` now tracks any file whose
+   `delete()` returns false and, after attempting every deletion, throws `IOException`. `reopenAtFileIndexAndMarginOffset`
+   already declares `throws IOException`, so the failure propagates through `OneSlot.resetAsMaster()` and fails the
+   promotion loudly instead of leaving a stale higher file that a restart (`files.getLast()`) would re-select.
+2. **Low — diskUsage stays in sync.** The `moveToNextSegment(true)` force-margin path now does `diskUsage +=
+   oneSegmentLength` after `raf.setLength(...)`, so the reserved segment reserved right after a rebase is accounted for
+   (previously the metric was one segment low, and this also fixes the pre-existing under-count on that path).
+3. **Test — end-to-end.** Added `OneSlotTest.'test resetAsMaster destructively rebases the binlog end to end (bug 68)'`,
+   which drives the full `OneSlot.resetAsMaster()` sequence (rebase + reserve segment + role flip), not just the helper,
+   and asserts the stale higher file is gone (`readPrevRafOneSegment` throws) and the role flips. New
+   `BinlogTest.'test rebase fails when a stale higher file can not be deleted (bug 68, finding 1)'` covers the throw via
+   an undeletable (non-empty directory) `binlog-2`; the existing rebase test now also asserts `diskUsage`.
+
+**Verification:** `./gradlew :test --tests "io.velo.repl.BinlogTest" --tests "io.velo.persist.OneSlotTest"` — build
+successful. JaCoCo: the delete-failure throw (line 405), the `diskUsage` line (306), and both rebase branches are all
+covered.
