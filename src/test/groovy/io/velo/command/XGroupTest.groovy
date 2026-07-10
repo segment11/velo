@@ -696,8 +696,8 @@ class XGroupTest extends Specification {
         def errReply = Repl.error(slot, slavePair, 'Repl master handle error: read binlog file error')
         def r = x.handleRepl(mockReplRequest(errReply)) as ReplReply
 
-        then: 'the slave tears down the session and invalidates its catch-up progress so the next hi() does a full re-sync'
-        r.isReplType(ReplType.error)
+        then: 'the slave invalidates its catch-up progress and re-sends hello over the live connection to restart the exists phase'
+        r.isReplType(ReplType.hello)
         !metaChunkSegmentIndex.isExistsDataAllFetched()
         metaChunkSegmentIndex.masterBinlogFileIndexAndOffset.fileIndex() == 0
         metaChunkSegmentIndex.masterBinlogFileIndexAndOffset.offset() == 0L
@@ -1334,7 +1334,6 @@ class XGroupTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-
     def 'test as slave handle pong'() {
         given:
         def ctx = setupSlaveContext()
@@ -1361,11 +1360,11 @@ class XGroupTest extends Specification {
         then:
         r.isReplType(ReplType.error)
 
-        when: 'a received master error now tears down the session instead of being silently discarded (bug 68)'
+        when: 'a received master error now re-hellos to recover instead of being silently discarded (bug 68)'
         replRequest = mockReplRequest(Repl.error(slot, replPairAsMaster, 'error'))
         r = ctx.x.handleRepl(replRequest) as ReplReply
         then:
-        r.isReplType(ReplType.error)
+        r.isReplType(ReplType.hello)
 
         cleanup:
         localPersist.cleanUp()

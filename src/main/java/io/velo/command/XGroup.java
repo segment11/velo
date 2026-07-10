@@ -310,15 +310,18 @@ public class XGroup extends BaseCommand {
                 log.error("Repl handle receive error={}, slot={}", Wal.keyString(contentBytes), slot);
                 // A received master error (e.g. the requested binlog file aged out of retention, or a master
                 // uuid mismatch) means this replication session cannot continue from the saved catch-up offset.
-                // Silently discarding it leaves the socket open and the slave keeps re-requesting the same
-                // unrecoverable offset forever. Instead invalidate the durable catch-up progress so the next
-                // hi() handshake re-fetches all exists data and re-catches-up from the master's earliest
-                // retained position, reset the pair handshake so a serve pong re-hellos, and return an error
-                // reply so the slave TcpClient tears down the session (see TcpClient.toReplyBufferOrClose).
+                // Silently discarding it leaves the slave re-requesting the same unrecoverable offset forever.
+                // Recover over the SAME live connection: invalidate the durable catch-up progress so the
+                // handshake re-fetches all exists data (and re-catches-up from the master's earliest retained
+                // position), then re-send hello. The master replies hi, and hi() restarts the exists phase.
+                // Re-hello on the live socket (rather than closing it) is the cheapest complete recovery: there
+                // is no auto-reconnect for a closed slave stream, so closing would stall replication until an
+                // external re-subscribe.
                 if (replPair != null && !replPair.isAsMaster()) {
                     oneSlot.getMetaChunkSegmentIndex().clearMasterBinlogFileIndexAndOffset();
                     replPair.setMasterUuid(0);
-                    yield Repl.error(slot, replPair, "Repl slave reset session after master error, slot=" + slot);
+                    var helloContent = new Hello(replPair.getSlaveUuid(), ConfForGlobal.announcedHostPortString());
+                    yield Repl.reply(slot, replPair, hello, helloContent);
                 }
                 yield Repl.emptyReply();
             }
