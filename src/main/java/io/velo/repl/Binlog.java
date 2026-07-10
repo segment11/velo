@@ -302,6 +302,8 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
             currentFileOffset += oneSegmentLength;
             // padding
             raf.setLength(currentFileOffset);
+            // setLength extended the current file by one reserved segment; keep diskUsage in sync
+            diskUsage += oneSegmentLength;
             clearByteBuffer();
 
             var oneFileMaxLength = ConfForSlot.global.confRepl.binlogOneFileMaxLength;
@@ -372,11 +374,12 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
      * @param resetFileIndex the rebase target file index
      * @param marginOffset   the rebase target offset within {@code resetFileIndex}, aligned to a segment
      */
-    private void removeFilesAndReadCacheAbove(int resetFileIndex, long marginOffset) {
+    private void removeFilesAndReadCacheAbove(int resetFileIndex, long marginOffset) throws IOException {
         latestAppendForReadCacheSegmentBytesSet.removeIf(one ->
                 one.fileIndex() > resetFileIndex
                         || (one.fileIndex() == resetFileIndex && one.offset() >= marginOffset));
 
+        String failedToDeleteFile = null;
         for (var persistFile : listFiles()) {
             if (persistFile.fileIndex() <= resetFileIndex) {
                 continue;
@@ -389,9 +392,17 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
 
             if (!persistFile.delete()) {
                 log.error("Repl binlog rebase delete stale file error, file={}, slot={}", persistFile.getName(), slot);
+                failedToDeleteFile = persistFile.getName();
             } else {
                 log.warn("Repl binlog rebase delete stale file, file={}, slot={}", persistFile.getName(), slot);
             }
+        }
+
+        // A surviving stale higher file would be re-selected as current on restart (constructor picks
+        // files.getLast()), reproducing bug 68-2. Fail the rebase loudly rather than promote into a state
+        // that silently exposes prior-epoch history.
+        if (failedToDeleteFile != null) {
+            throw new IOException("Repl binlog rebase could not delete stale file=" + failedToDeleteFile + ", slot=" + slot);
         }
     }
 

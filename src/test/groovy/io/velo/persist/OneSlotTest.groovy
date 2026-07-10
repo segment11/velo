@@ -491,6 +491,47 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test resetAsMaster destructively rebases the binlog end to end (bug 68)'() {
+        given:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        def oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+        def binlog = oneSlot.binlog
+
+        and: 'binlog history up to file 3 (stale prior-epoch files), and a slave state'
+        oneSlot.dynConfig.setBinlogOn(true)
+        def fillBytes = new byte[oneSegmentLength]
+        (0..3).each { fi -> binlog.writeFromMasterOneSegmentBytes(fillBytes, fi, 0) }
+        assert binlog.currentFileIndex == 3
+        oneSlot.setReadonly(true)
+        oneSlot.setCanRead(false)
+
+        and: 'the upstream master last applied position is an OLDER file (1, 0)'
+        oneSlot.metaChunkSegmentIndex.setMasterBinlogFileIndexAndOffset(oneSlot.masterUuid, true, 1, 0L)
+
+        when: 'promote to master'
+        oneSlot.resetAsMaster()
+
+        then: 'the binlog is rebased to the older position and the role flips'
+        binlog.currentFileIndex == 1
+        binlog.currentFileOffset == oneSegmentLength
+        !oneSlot.readonly
+        oneSlot.canRead
+
+        and: 'the stale higher file is gone: reading it now fails instead of returning prior-epoch bytes'
+        when:
+        binlog.readPrevRafOneSegment(2, 0)
+        then:
+        thrown(IOException)
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test add upstream keeps downstream and binlog, drop upstream promotes to master'() {
         given:
         LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)

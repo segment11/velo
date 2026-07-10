@@ -430,17 +430,57 @@ class BinlogTest extends Specification {
         and: 'stale read-cache bytes at the rebased current file are gone (no stale segment returned)'
         binlog.readPrevRafOneSegment(1, 0) == null
 
+        when: 'reserve a fresh segment as OneSlot.resetAsMaster does right after the rebase'
+        binlog.moveToNextSegment(true)
+
+        then: 'diskUsage stays in sync with the actual on-disk bytes (bug 68, finding 2)'
+        binlog.currentFileOffset == oneSegmentLength
+        binlog.diskUsage == 2 * oneSegmentLength
+
         when: 'a newly constructed Binlog reopens at the rebased position, not the stale high file'
         binlog.cleanUp()
         binlog = new Binlog(slot, slotDir, dynConfig)
 
         then:
         binlog.currentFileIndex == 1
+        binlog.diskUsage == 2 * oneSegmentLength
 
         cleanup:
         binlog.cleanUp()
         slotDir.deleteDir()
         ConfForSlot.global.confRepl.binlogForReadCacheSegmentMaxCount = savedCacheMaxCount
+    }
+
+    def 'test rebase fails when a stale higher file can not be deleted (bug 68, finding 1)'() {
+        given:
+        def oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+        def oneSlot = new OneSlot(slot)
+        def dynConfig = new DynConfig(slot, DynConfigTest.tmpFile, oneSlot)
+        dynConfig.binlogOn = true
+        def slotDir = new File('/tmp/velo-data/test-persist/test-slot-rebase-fail')
+        slotDir.deleteDir()
+        slotDir.mkdirs()
+        def binlog = new Binlog(slot, slotDir, dynConfig)
+        def binlogDir = new File(slotDir, 'binlog')
+
+        and: 'files 0 and 1 exist, and a non-empty directory named binlog-2 that File.delete() can not remove'
+        def fillBytes = new byte[oneSegmentLength]
+        binlog.writeFromMasterOneSegmentBytes(fillBytes, 0, 0)
+        binlog.writeFromMasterOneSegmentBytes(fillBytes, 1, 0)
+        def staleDir = new File(binlogDir, 'binlog-2')
+        staleDir.mkdirs()
+        new File(staleDir, 'keep.txt').text = 'x'
+
+        when: 'rebasing down to file 0 must delete files 1 and 2, but 2 can not be deleted'
+        binlog.reopenAtFileIndexAndMarginOffset(0, 0)
+
+        then: 'the rebase fails loudly instead of promoting with a reachable stale file'
+        thrown(IOException)
+
+        cleanup:
+        staleDir.deleteDir()
+        binlog.cleanUp()
+        slotDir.deleteDir()
     }
 
     def 'test apply'() {
