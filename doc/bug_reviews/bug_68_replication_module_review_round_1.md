@@ -733,3 +733,65 @@ is unreachable in a unit test: `resetAsSlave` short-circuits when `masterAddress
 a live jedis `checkMasterConfigMatch` that needs a real reachable master (the existing `'reset as slave'` test gates
 this behind `RedisServer.isBinExists()`). So a demotion phase-2 failure test requires a RedisServer-gated integration
 setup, not a pure unit test. Pending a decision on whether to add that gated test or defer.
+
+## Review Feedback - Bug 3 Fix (promotion phase-2 compensation) - AI agent 2 - 2026-07-11
+
+Reviewed commit `4d739d6e` (`fix: roll promotion back to slave on phase-2 commit failure`).
+
+### Summary
+
+The commit closes the phase-2 half of the promotion split-brain. Each phase-2 `resetAsMaster` commit is wrapped in a
+try/catch that records the first failure in an `AtomicReference`, so `Promises.all` no longer short-circuits and waits
+for every slot to settle. If any slot failed, all slots are rolled back to slave (`resetAsSlave` to the former master
+from `lastGetMasterListenAddressAsSlave`, or slave-state-without-stream when no upstream is known) before the original
+error is reported and `masterSlotNumber` is restored. New regression
+`'test failed promotion phase-2 rolls committed slots back to slave (bug 68)'` injects an undeletable stale
+`binlog-1` directory so slot 1's rebase throws, and asserts both slots end as slaves.
+
+### Strengths
+
+- Fixes the real race from the earlier revision: catching per-slot errors makes `Promises.all` a true barrier, so
+  compensation cannot start while a sibling commit is still in flight.
+- "Roll every slot back to the prior uniform role" is the right compensation shape and matches the original
+  Bug 3 spec ("a failed promotion leaves both slots slaves").
+- The regression exercises the phase-2 commit + rollback path that was previously unexecuted (finding 3, promotion).
+- `AtomicReference.compareAndSet` correctly preserves the first failure across parallel slot loops.
+
+### Concerns
+
+1. **Best-effort rollback can still leave the node split (High-ish, inherent).** `resetAsMaster` and `resetAsSlave`
+   share the same binlog/config infrastructure, so a slot that failed to commit because of a broken binlog/config will
+   usually also fail its rollback `resetAsSlave`. That failure is only logged (`LeaderSelector.java:515-516`) and
+   swallowed, so the node can still end split — just less often. This is not surfaced to operators via status/metric
+   (contrast Bug 4, which at least logs "master cache but not replicated").
+2. **The failed slot itself is not driven to a guaranteed-consistent state.** The commit reduces split-brain by
+   reverting the *succeeded* slots, but the slot that threw mid-`resetAsMaster` (e.g. after `removeReplPairAsSlave` but
+   during rebase) is only best-effort reset; no invariant guarantees it lands cleanly slave.
+3. **Coverage gaps on new lines.** The no-known-upstream rollback branch (`resetAsSlave("", 0, false)`,
+   `LeaderSelector.java:513`) and the rollback-failure log (`515-516`) are unexecuted — `lastGetMasterListenAddressAsSlave`
+   is a leftover singleton value in the suite, so only the non-null branch runs. There is no test setter to force the
+   null path.
+4. **Finding 2 (demotion) remains unaddressed.** `doResetAsSlave` still commits per slot with no compensation, so a
+   partial demotion still produces mixed roles.
+
+### Fix Direction
+
+- **Demotion (finding 2):** apply the symmetric compensation in `doResetAsSlave` — catch per-slot `resetAsSlave` errors
+  in an `AtomicReference`, and on failure roll every slot back to master via `resetAsMaster` (best effort) before
+  reporting. Blocker: `doResetAsSlave` phase 2 is unreachable in a unit test (`resetAsSlave` short-circuits on
+  `masterAddressLocalMocked`; otherwise a live jedis `checkMasterConfigMatch` needs a real master, gated behind
+  `RedisServer.isBinExists()`). Recommended: add a small `@TestOnly` seam to reach `doResetAsSlave` phase 2 without
+  jedis, then implement + unit-test demotion compensation exactly like promotion (option C). Assertion for the demotion
+  test: the slot that *succeeded* demotion is reverted to master (`!oneSlot.isReadonly()`), independent of the broken
+  slot.
+- **Surface unrecoverable rollback failures:** when a rollback `resetAsSlave`/`resetAsMaster` itself throws, record it
+  in `masterFailoverState` (or a dedicated metric) so operators can detect a node stuck split, instead of only logging.
+- **Cover the defensive branches** (`513`, `515-516`) once the `@TestOnly` seam exists: force `lastGetMasterListenAddressAsSlave`
+  null for the no-upstream path, and inject a rollback-time failure for the log path.
+- **Optional hardening:** consider a true prepare/commit split of `resetAsMaster`/`resetAsSlave` (do all fallible I/O in
+  a prepare phase, make phase-2 only flip in-memory role flags) so commit failures — and thus split-brain — become
+  impossible rather than compensated after the fact.
+
+**Verdict:** Promotion phase-2 is now correct for the common case and the split-brain window is closed for
+cleanly-revertible slots. Remaining: demotion compensation (blocked on a test seam), operator-visible signalling of
+unrecoverable rollbacks, and coverage of the two defensive branches.
