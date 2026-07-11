@@ -102,6 +102,66 @@ class DictMapTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test putDict binlogs to every initialized slot, not just the first (bug 68)'() {
+        given:
+        FileUtils.forceMkdir(Consts.testDir)
+        def dictFile = new File(Consts.testDir, 'dict-map.dat')
+        if (dictFile.exists()) {
+            dictFile.delete()
+        }
+
+        and:
+        def dictMap = DictMap.instance
+        dictMap.cleanUp()
+        dictMap.initDictMap(Consts.testDir)
+
+        and: 'two initialized slots, both with binlog on'
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def slot0 = localPersist.oneSlot((short) 0)
+        def slot1 = localPersist.oneSlot((short) 1)
+        slot0.dynConfig.binlogOn = true
+        slot1.dynConfig.binlogOn = true
+
+        def dict = new Dict()
+        dict.dictBytes = 'cross-slot-dict'.bytes
+        dict.seq = 12345
+        dict.createdTime = System.currentTimeMillis()
+
+        expect: 'both binlogs start empty'
+        slot0.binlog.currentFileOffset == 0
+        slot1.binlog.currentFileOffset == 0
+
+        when: 'a dict is created (as a training result would be)'
+        dictMap.putDict('cross-slot-prefix', dict)
+
+        then: 'the dict-creation entry is appended to BOTH slot binlogs, so a replica of either slot receives it'
+        slot0.binlog.currentFileOffset > 0
+        slot1.binlog.currentFileOffset > 0
+
+        when: 'a slot with binlog off is skipped (no append) while a binlog-on slot still gets the dict'
+        slot1.dynConfig.binlogOn = false
+        def slot1OffsetBefore = slot1.binlog.currentFileOffset
+        def slot0OffsetBefore = slot0.binlog.currentFileOffset
+        def dict2 = new Dict()
+        dict2.dictBytes = 'second-dict'.bytes
+        dict2.seq = 6789
+        dict2.createdTime = System.currentTimeMillis()
+        dictMap.putDict('second-prefix', dict2)
+
+        then:
+        slot0.binlog.currentFileOffset > slot0OffsetBefore
+        slot1.binlog.currentFileOffset == slot1OffsetBefore
+
+        cleanup:
+        dictMap.clearAll()
+        dictMap.cleanUp()
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test putDictIfNotExist preserves the master seq and is idempotent'() {
         given:
         FileUtils.forceMkdir(Consts.testDir)

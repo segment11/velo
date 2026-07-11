@@ -172,34 +172,29 @@ public class DictMap implements NeedCleanUp {
         cacheDictBySeq.put(dict.getSeq(), dict);
         cacheDict.put(keyPrefixOrSuffix, dict);
 
-        // 3. Append to binlog last. A binlog failure here is a REPLICATION
-        // event (the slave will not see this dict), but it is NOT a put failure —
-        // the dict is already in the cache and on disk. Log loudly and let
-        // operators detect the replication drift via metrics/alerting. Do not
-        // rethrow: rethrowing would leave the cache in an inconsistent state
-        // (file written, cache not updated) and confuse the caller.
-        var firstOneSlot = localPersist.firstOneSlot();
-        if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
-            var p = firstOneSlot.asyncCall(() -> {
-                try {
-                    firstOneSlot.getBinlog().append(new XDict(keyPrefixOrSuffix, dict));
-                    return true;
-                } catch (IOException e) {
-                    throw new RuntimeException("Append binlog error, dict key prefix=" + keyPrefixOrSuffix, e);
-                }
-            });
-            var r = p.getResult();
-            var e = p.getException();
-            if (e != null) {
-                // Master-slave divergence: dict is in the master's cache and
-                // dict-map.dat, but no binlog entry was created, so the slave
-                // will not receive it. Operators must repair via re-train or
-                // a manual xdict sync.
-                log.error("Append binlog error (dict is in master cache but not replicated to slave), " +
-                        "dict key prefix={}, seq={}", keyPrefixOrSuffix, dict.getSeq(), e);
-            } else {
-                log.warn("Append binlog success, dict key prefix={}, result={}", keyPrefixOrSuffix, r);
+        // 3. Append to binlog last. Dicts are node-global and referenced by ANY slot's compressed values,
+        // but replication streams are per-slot: a slot-migration target replicates only the migrated slot's
+        // binlog, not firstOneSlot. So the dict-creation entry must flow through EVERY initialized slot's
+        // binlog — otherwise a replica/migration-target that does not stream firstOneSlot never receives an
+        // incrementally-created dict and cannot decompress the values that reference it. The apply is
+        // idempotent (putDictIfNotExist), so a full replica that streams every slot just no-ops the repeats.
+        //
+        // A binlog failure here is a REPLICATION event (that slave will not see this dict), NOT a put failure
+        // — the dict is already in the cache and on disk. Log loudly and let operators detect the drift; do
+        // not rethrow (it would leave the cache/file consistent but confuse the caller). Use a non-blocking
+        // asyncRun per slot so we never hold the DictMap monitor across a cross-eventloop wait.
+        for (var oneSlot : localPersist.initializedOneSlots()) {
+            if (!oneSlot.getDynConfig().isBinlogOn()) {
+                continue;
             }
+
+            oneSlot.asyncRun(() -> oneSlot.getBinlog().append(new XDict(keyPrefixOrSuffix, dict)))
+                    .whenException(e ->
+                            // Master-slave divergence: dict is in the master's cache and dict-map.dat, but no
+                            // binlog entry was created for this slot, so a replica of it will not receive the
+                            // dict. Operators must repair via re-train or a manual xdict sync.
+                            log.error("Append binlog error (dict is in master cache but not replicated to slave), " +
+                                    "dict key prefix={}, seq={}, slot={}", keyPrefixOrSuffix, dict.getSeq(), oneSlot.slot(), e));
         }
 
         return dict;
