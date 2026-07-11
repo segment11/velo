@@ -711,3 +711,25 @@ idempotent (`putDictIfNotExist`), a full replica that streams every slot simply 
 **Verification:** new `DictMapTest.'test putDict binlogs to every initialized slot, not just the first (bug 68)'` (TDD
 red→green) asserts a created dict lands in a non-first slot's binlog and that a binlog-off slot is skipped; full
 `DictMapTest` passes; JaCoCo covers all changed `storeDict` lines including the skip and the error-log path.
+
+## Bug 3 Fix - Revision 2 (phase-2 compensation) - 2026-07-11
+
+Addresses review findings 1 & 3 (promotion). Follow-up commit adds phase-2 rollback.
+
+**Finding 1 (promotion phase-2) — FIXED.** Phase-2 commits now catch their own error so `Promises.all` waits for all
+slots to settle (no short-circuit). On any commit failure, every slot is rolled back to slave (best effort:
+`resetAsSlave` to the former master if `lastGetMasterListenAddressAsSlave` is known, else slave-state without a stream)
+before the failure is reported — so a phase-2 I/O failure never leaves the node split across roles.
+
+**Finding 3 (test gap) — ADDRESSED for promotion.** New
+`LeaderSelectorTest.'test failed promotion phase-2 rolls committed slots back to slave (bug 68)'` injects a phase-2
+failure (slot 1's `resetAsMaster` rebase can't delete an undeletable stale `binlog-1` directory), and asserts both
+slots end as slaves. Exercises the phase-2 commit + compensation path (previously unexecuted). Defensive edges — the
+no-known-upstream rollback branch and the rollback-failure log — remain uncovered.
+
+**Finding 2 (demotion) — OPEN, blocked on test infrastructure.** The production compensation is symmetric (catch
+per-slot commit errors, roll all slots back to master via `resetAsMaster` on failure). But `doResetAsSlave`'s phase 2
+is unreachable in a unit test: `resetAsSlave` short-circuits when `masterAddressLocalMocked` is set, and otherwise runs
+a live jedis `checkMasterConfigMatch` that needs a real reachable master (the existing `'reset as slave'` test gates
+this behind `RedisServer.isBinExists()`). So a demotion phase-2 failure test requires a RedisServer-gated integration
+setup, not a pure unit test. Pending a decision on whether to add that gated test or defer.
