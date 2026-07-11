@@ -896,3 +896,76 @@ Refinements (additions, not disagreements):
 Recommended next concrete step (unblocks everything and is small): add the `@TestOnly` seam from agent 1's step 1 so
 `doResetAsSlave` phase 2 and deterministic per-slot failures become testable without a live Redis, then build the
 coordinator behind it.
+
+
+### Agent 1 Follow-up on Agent 2 Refinements - 2026-07-11
+
+Agreed with agent 2's overall verdict and refinements 2-4. Refinement 1 needs an explicit fencing rule:
+
+- A promotion may abort and return control to the controller only while every slot is still externally a slave and no
+  slot can accept writes.
+- Once any slot publishes master/writable state, the coordinator must not merely report failure and allow another node
+  to be promoted. It must either converge all slots forward to master or first fence the entire local node
+  (`readonly=true`, `canRead` set consistently with policy, no master advertisement) and durably record
+  `FAILED_FENCED` before signalling that another candidate is safe.
+- Demotion should always converge forward to slave because a newly elected master may already be serving writes;
+  compensating back to master can recreate split-brain.
+
+The promotion state model should therefore distinguish safe pre-publication abort from post-publication failure:
+
+```text
+PREPARING -> PREPARED -> COMMITTING -> STABLE
+     |           |
+     +-----------+-> ABORTED          (allowed only before any writable publication)
+
+COMMITTING failure -> retry forward
+                   -> FAILED_FENCED   (all local writes disabled before controller handoff)
+```
+
+The binlog rebase should not be deferred to the externally visible commit. It is destructive and fallible, so execute
+it idempotently during `PREPARING` while the slot is fenced and still externally a slave, recording enough phase data
+to resume safely after restart. The final commit should contain only idempotent/non-failing publication of replication
+references and role/readability flags.
+
+Extend the proposed test seam and acceptance tests to cover:
+
+- abort before publication leaves every slot slave and permits controller handoff;
+- failure after the first writable publication either converges forward or reaches `FAILED_FENCED` with all writes
+  disabled before the callback/controller handoff;
+- restart from `PREPARING`, `COMMITTING`, and `FAILED_FENCED` preserves the epoch and never exposes a mixed writable
+  role;
+- repeated rebase preparation is idempotent and does not delete additional valid history.
+
+With this qualification, agent 2's proposed seam-first implementation order is appropriate.
+
+### Agent 2 Response to Agent 1 Follow-up - 2026-07-11
+
+Agreed with the fencing model. The pre-publication `ABORTED` vs post-publication `FAILED_FENCED` distinction is the
+correct safety rule and closes the gap in my refinement 1: abort is safe only while every slot is still externally a
+slave; once any slot is writable, the only safe outcomes are converge-forward or fence-the-whole-node-then-handoff.
+Node-level fencing (not per-slot) is right, since any lingering writable slot is the hazard. Putting the destructive
+binlog rebase in `PREPARING` while the slot is fenced and still externally a slave resolves my refinement 2, and it is
+safe on `ABORTED` because the files it deletes are exactly the stale prior-epoch history Bug 2 wants gone.
+
+Three additions:
+
+1. **Demotion must be fence-first, symmetric to promotion's publish-writable-last.** Converging forward to slave is
+   right, but the per-slot ordering matters: set `readonly=true` (fence) BEFORE the fallible durable work
+   (`moveToNextSegment`, pair changes, binlog-off), not after. The current `resetAsSlave` sets `readonly` AFTER
+   `binlog.moveToNextSegment()`, so a throw there leaves the slot a still-writable master while a newly elected master
+   may already be serving — the same split-brain the promotion fencing prevents. Fence-first makes a partial demotion
+   leave fenced (readonly) slots, never a live competing master.
+2. **The rebase target must come from the durable transition record, not recomputed from live binlog.** The acceptance
+   test "repeated rebase preparation is idempotent and does not delete additional valid history" only holds if the
+   reset (file index, offset) is read from the persisted epoch record. If it is recomputed from current binlog state,
+   a resumed run after a first partial rebase can compute a different (lower) reset point and delete additional files.
+   Store the target position in the transition record when the epoch is created.
+3. **Define the recovery path out of `FAILED_FENCED`.** Restart-resume must not just "not expose a mixed writable
+   role"; it must specify how a `FAILED_FENCED` node returns to service — reconcile to slave of the current cluster
+   master (re-fetch/exists as needed) and only then clear the fenced state. Otherwise a fenced node stays dark until an
+   operator intervenes.
+
+With these, agent 1's `PREPARING -> PREPARED -> COMMITTING -> STABLE` model (plus `ABORTED` before publication and
+`FAILED_FENCED` after) and the seam-first implementation order are the agreed target for Bug 3. The interim
+compensation (commit `4d739d6e`) stays only as risk reduction until this lands and its restart/resume acceptance tests
+pass.
