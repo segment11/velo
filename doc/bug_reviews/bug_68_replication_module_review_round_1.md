@@ -581,3 +581,133 @@ Addresses the three review findings above. Follow-up commit hardens the Bug 2 re
 **Verification:** `./gradlew :test --tests "io.velo.repl.BinlogTest" --tests "io.velo.persist.OneSlotTest"` — build
 successful. JaCoCo: the delete-failure throw (line 405), the `diskUsage` line (306), and both rebase branches are all
 covered.
+
+
+## Review Feedback - Bug 2 Addressed Follow-up - AI agent 2 - 2026-07-10
+
+Reviewed follow-up commit `490a65fa` (`fix: fail binlog rebase on stale-file delete error; fix diskUsage; e2e test`).
+
+### Findings
+
+No blocking or non-blocking correctness findings.
+
+### Review
+
+- A failed stale-file deletion is recorded while all deletion attempts complete, then propagated as `IOException`.
+  `OneSlot.resetAsMaster()` therefore does not reach the role/readability flip while prior-epoch files remain.
+- The forced aligned-segment path now increments `diskUsage` by exactly the segment it adds with `setLength`. Its only
+  production caller is immediately after the destructive rebase, where the target file was truncated to the margin,
+  so the extension/accounting invariant holds.
+- The helper regression now checks on-disk usage before and after reconstructing `Binlog`.
+- The deterministic non-empty-directory fixture covers `File.delete()==false` and the new thrown-error branch.
+- The `OneSlot.resetAsMaster()` regression exercises the actual rebase, reserved segment, stale higher-file removal,
+  durable progress clear, and readonly/canRead role flip.
+- No later commit changes the reviewed production or test files.
+
+### Verification
+
+- Focused regressions:
+  `./gradlew :test --tests "io.velo.repl.BinlogTest.test reopen at file index and margin offset is destructive above rebase point (bug 68)" --tests "io.velo.repl.BinlogTest.test rebase fails when a stale higher file can not be deleted (bug 68, finding 1)" --tests "io.velo.persist.OneSlotTest.test resetAsMaster destructively rebases the binlog end to end (bug 68)"`
+- Full affected classes:
+  `./gradlew :test --tests io.velo.repl.BinlogTest --tests io.velo.persist.OneSlotTest`
+- Result: both Gradle runs successful.
+- JaCoCo `io.velo.repl.Binlog` lines 289-415: 68 of 71 executable lines covered; 13 of 15 branch lines fully covered.
+  The delete-failure branch, throw, `diskUsage` update, and both rebase branches are covered.
+- JaCoCo `io.velo.persist.OneSlot` lines 2624-2651: all 16 executable lines covered (two role-state condition lines
+  partial).
+
+**Verdict:** Approved. Follow-up commit `490a65fa` addresses all three prior Bug 2 review concerns, and Bug 2 can be
+treated as fixed.
+
+
+## Review Feedback - Bug 3 Fix - AI agent 2 - 2026-07-11
+
+Reviewed commit `d3090dd7` (`fix: validate all slots before committing promotion (two-phase)`). Bug 1 was not
+reconsidered.
+
+### Findings
+
+1. **High - phase-2 promotion failures still partially commit slots.** `LeaderSelector.java:436-479` still launches
+   one mutating `asyncRun` per slot. Each task removes its slave pair before calling `resetAsMaster()`
+   (`:443-459`), and `Promises.all` only reports a sibling exception. The error handler restores globals but does not
+   restore slots that completed, the removed pair on the failing slot, or other durable mutations. An `IOException`
+   from `resetAsMaster()` (including the now-intentional Bug 2 stale-file deletion failure) therefore leaves the same
+   split-role/partial-slot state described by Bug 3. The new validation phase eliminates readiness-check failures from
+   this window, but it does not make the commit phase atomic.
+
+2. **High - failed multi-slot demotion is unchanged.** `LeaderSelector.java:587-624` continues to run
+   `oneSlot.resetAsSlave(...)` independently for every slot and restores only `masterSlotNumber` when one promise
+   fails. Slots that completed remain slaves, and the failing slot may retain partial mutations. The confirmed Bug 3
+   finding explicitly covers both promotion and demotion, but this commit changes and tests only promotion readiness.
+
+3. **Test gap - the regression covers only phase-1 rejection.** The new test makes slot 1 report
+   `allCaughtUp=false`, so execution stops at `LeaderSelector.java:427-433` before any commit task is created. It does
+   not inject a phase-2 `resetAsMaster()` failure and adds no failed-demotion test. JaCoCo from the focused test confirms
+   lines 437-495, including the phase-2 failure handler, are not executed.
+
+### Strengths
+
+- Readiness is now checked across every initialized slot before any promotion mutation, so the specific
+  not-caught-up-sibling sequence in the regression no longer creates a split-role node.
+- The regression verifies both slots retain readonly/canRead state and their upstream replication pairs when phase-1
+  validation fails.
+
+### Required Follow-up
+
+- Make promotion commit failures atomic or compensating, including restoration of replication pairs and durable role
+  state when any `resetAsMaster()` fails.
+- Apply equivalent prepare/commit or compensation semantics to multi-slot demotion.
+- Add deterministic two-slot tests that inject failures inside phase-2 `resetAsMaster()` and `resetAsSlave()`, then
+  assert every slot's readonly, canRead, binlog, pair, and durable-offset state plus the global read gate.
+
+### Verification
+
+- Ran:
+  `./gradlew :test --tests "io.velo.repl.LeaderSelectorTest.test failed promotion does not leave slots split across roles (bug 68)"`
+- Result: Gradle build successful.
+- JaCoCo:
+  `python3 scripts/jacoco_cover.py io.velo.repl.LeaderSelector 394 495 --src`
+- Result: 16 of 60 executable lines covered; the phase-1 failure path is covered, while all phase-2 mutation and
+  completion/error-handler lines 437-495 are not covered.
+
+**Verdict:** Changes requested. Commit `d3090dd7` fixes the readiness-rejection instance of Bug 3, but the confirmed
+atomicity bug remains for promotion commit errors and for all per-slot demotion errors.
+
+## Bug 4: an incrementally-created Zstd dict is binlogged only to firstOneSlot, so slot-scoped replicas never receive it
+
+**Severity:** High
+
+**Review status (AI agent 2, 2026-07-11):** CONFIRMED and FIXED
+
+**Files:**
+
+- `src/main/java/io/velo/DictMap.java` (`storeDict`, was `firstOneSlot()`-only append)
+- `src/main/java/io/velo/repl/incremental/XDict.java:148-156` (`apply` is slot-agnostic + idempotent)
+- `src/main/java/io/velo/persist/OneSlot.java` (`addUpstream` — migration replicates only the migrated slot)
+
+**Root cause:**
+
+Zstd dictionaries live in the node-global `DictMap` singleton and are referenced by *any* slot's compressed values
+(via dict seq). The initial exists phase ships the full DictMap per slot (bug 63), but an **incrementally**-created
+dict (a training result produced after a replica's exists phase) was appended to **only `firstOneSlot`'s binlog**.
+Replication streams are per-slot: `OneSlot.addUpstream` (slot migration) creates a slave repl pair for just the
+migrated slot, so the migration target replicates that slot's binlog and never `firstOneSlot`. `XDict.apply` is
+explicitly slot-agnostic ("ignore slot, need sync") and idempotent.
+
+**Impact:**
+
+A slot-migration target — or any replica that streams a non-first slot without also streaming `firstOneSlot` — never
+receives an incrementally-created dict. Any value that slot compressed with that dict is then undecodable on the
+target (data unavailability / decode failure), even though replication reports success.
+
+**Fix:**
+
+`storeDict` now appends the `XDict` to **every initialized binlog-on slot** (`initializedOneSlots()`), so the dict
+flows through every per-slot replication stream. The append uses a **non-blocking `asyncRun`** per slot (with
+per-slot error logging via `whenException`) so the `DictMap synchronized` monitor is never held across a cross-eventloop
+wait — avoiding the deadlock/latency window that a blocking fan-out under the lock would create. Because `apply` is
+idempotent (`putDictIfNotExist`), a full replica that streams every slot simply no-ops the repeats.
+
+**Verification:** new `DictMapTest.'test putDict binlogs to every initialized slot, not just the first (bug 68)'` (TDD
+red→green) asserts a created dict lands in a non-first slot's binlog and that a binlog-off slot is skipped; full
+`DictMapTest` passes; JaCoCo covers all changed `storeDict` lines including the skip and the error-log path.
