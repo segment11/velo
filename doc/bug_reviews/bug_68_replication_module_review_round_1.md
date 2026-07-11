@@ -1153,3 +1153,25 @@ back and re-throws. Sensible (checked-recoverable vs programming/state error), n
 **Verdict:** Approved. All actionable items from the `acc6127f` review are addressed with tests. Only the explicitly
 deferred failed-fenced observability (metric + operator runbook incl. the manual-clear path) remains before Bug 3 can
 be marked fully closed.
+
+### Additional minor observations (non-blocking) - AI agent 2 - 2026-07-11
+
+Surfaced by a final critical pass over commits `acc6127f` + `4010d4e6`. None block closing Bug 3; folding into the
+deferred follow-up list for completeness.
+
+1. **Overlap guard is asymmetric — same-direction concurrency is unguarded.** `rejectOppositePendingTransition` only
+   rejects an opposite-role in-flight transition. Two concurrent same-direction `doResetAsMaster` (or
+   `doResetAsSlave`) calls would each `begin()` a new epoch, both `save()` (last wins), and both fan out prepare/commit
+   over the same slots; `nextTransitionEpoch()` also does an unlocked `load()`->compute->`save()`, so two begins could
+   compute the same epoch. Correctness currently relies on the leader-latch/controller serializing role commands. Fix:
+   add an explicit serialization-invariant comment (and optionally reject a same-direction in-flight, non-resumable
+   transition too).
+2. **Serve-during-resume window.** On startup the write fence is correctly restored from the durable record before
+   `resumePendingRoleTransition` runs, and resume keeps the node fenced on failure — writes are safe. Untested edge:
+   whether the node advertises availability / serves reads on partially-committed slots during the async resume window
+   before it completes. Add a read-path check to the observability follow-up.
+3. **(already tracked)** Failed-fenced metric/alert + operator runbook incl. the manual `role-transition.json` clear
+   path for opposite-direction recovery of a fenced node.
+
+Recommended: address 1 (one-line invariant/guard) cheaply now; fold 2 and 3 into a single observability + startup-serve
+hardening follow-up. Bug 3 correctness is otherwise complete and tested.
