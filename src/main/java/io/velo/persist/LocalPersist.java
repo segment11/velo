@@ -466,6 +466,14 @@ public class LocalPersist implements NeedCleanUp {
         return innerSlotsForClientSlotRanges(mySelfShard.getMultiSlotRange().getList()).contains(innerSlot);
     }
 
+    /**
+     * Resolves a list of client-slot ranges to the inner slot indexes they cover. Each inner slot owns a contiguous
+     * block of {@link MultiShard#TO_CLIENT_SLOT_NUMBER} / {@link ConfForGlobal#slotNumber} client slots, so only
+     * client-slot boundaries aligned to that block size map to a real inner slot.
+     *
+     * @param ranges the client-slot ranges to map
+     * @return a sorted set of inner slot indexes covered by the given ranges
+     */
     public static @NotNull TreeSet<Short> innerSlotsForClientSlotRanges(@NotNull List<SlotRange> ranges) {
         var slots = new TreeSet<Short>();
         var step = MultiShard.TO_CLIENT_SLOT_NUMBER / ConfForGlobal.slotNumber;
