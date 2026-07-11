@@ -285,7 +285,7 @@ class LeaderSelectorTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
-    def 'test failed promotion phase-2 rolls committed slots back to slave (bug 68)'() {
+    def 'test failed promotion publication remains failed-fenced (bug 68)'() {
         given:
         def savedSlotNumber = ConfForGlobal.slotNumber
         def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
@@ -339,6 +339,194 @@ class LeaderSelectorTest extends Specification {
         ConfForGlobal.slotNumber = savedSlotNumber
         ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
         leaderSelector.masterAddressLocalMocked = null
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test promotion rejects an unfinished demotion transition (bug 68)'() {
+        given:
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.onlyOneReplPairAsSlave.masterReadonly = true
+        oneSlot.onlyOneReplPairAsSlave.allCaughtUp = true
+        oneSlot.setReadonly(true)
+        oneSlot.setCanRead(false)
+        def pending = RoleTransitionState.begin(71L, RoleTransitionState.TargetRole.SLAVE,
+                'localhost', 7379, [:]).withError(RoleTransitionState.Phase.FAILED_FENCED, 'demotion failed')
+        localPersist.roleTransitionStore.save(pending)
+        localPersist.roleTransitionWriteFenced = true
+
+        when:
+        def future = new CompletableFuture()
+        def thrownError = null
+        try {
+            LeaderSelector.instance.resetAsMaster(true) { e -> future.complete(e) }
+        } catch (IllegalStateException ex) {
+            thrownError = ex
+        }
+        def error = future.get()
+
+        then:
+        thrownError instanceof IllegalStateException
+        error instanceof IllegalStateException
+        localPersist.roleTransitionStore.load() == pending
+        localPersist.roleTransitionWriteFenced
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test demotion rejects an unfinished promotion transition (bug 68)'() {
+        given:
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def pending = RoleTransitionState.begin(72L, RoleTransitionState.TargetRole.MASTER, '', 0,
+                [(slot): new RoleTransitionState.BinlogTarget(0, 0L)])
+        localPersist.roleTransitionStore.save(pending)
+        localPersist.roleTransitionWriteFenced = true
+        def leaderSelector = LeaderSelector.instance
+        def checkValues = ConfForSlot.global.getSlaveCheckValues()
+        checkValues.slotNumber = 1
+        leaderSelector.masterConfigCheckValuesForTest = checkValues
+
+        when:
+        def future = new CompletableFuture()
+        def thrownError = null
+        try {
+            leaderSelector.resetAsSlave('localhost', 7379) { e -> future.complete(e) }
+        } catch (IllegalStateException ex) {
+            thrownError = ex
+        }
+        def error = future.get()
+
+        then:
+        thrownError instanceof IllegalStateException
+        error instanceof IllegalStateException
+        localPersist.roleTransitionStore.load() == pending
+        localPersist.roleTransitionWriteFenced
+
+        cleanup:
+        leaderSelector.masterConfigCheckValuesForTest = null
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test promotion committing-state save failure aborts before publication (bug 68)'() {
+        given:
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.onlyOneReplPairAsSlave.masterReadonly = true
+        oneSlot.onlyOneReplPairAsSlave.allCaughtUp = true
+        oneSlot.setReadonly(true)
+        oneSlot.setCanRead(false)
+        localPersist.roleTransitionStore.setFailSavePhaseForTest(RoleTransitionState.Phase.COMMITTING)
+
+        when:
+        def future = new CompletableFuture()
+        LeaderSelector.instance.resetAsMaster(true) { e -> future.complete(e) }
+        def error = future.get()
+
+        then:
+        error instanceof IOException
+        oneSlot.readonly
+        !localPersist.roleTransitionWriteFenced
+        localPersist.roleTransitionStore.load().phase() == RoleTransitionState.Phase.ABORTED
+
+        cleanup:
+        localPersist.roleTransitionStore.setFailSavePhaseForTest(null)
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test promotion transition-state read failure stops before role work (bug 68)'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        def previousFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState
+        localPersist.roleTransitionStore.setFailLoadForTest(true)
+
+        when:
+        def future = new CompletableFuture()
+        LeaderSelector.instance.resetAsMaster(true) { e -> future.complete(e) }
+        def error = future.get()
+
+        then:
+        error instanceof IOException
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == previousFailoverState
+
+        cleanup:
+        localPersist.roleTransitionStore.setFailLoadForTest(false)
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test demotion transition-state read failure stops before role work (bug 68)'() {
+        given:
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        def previousFailoverState = MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState
+        localPersist.roleTransitionStore.setFailLoadForTest(true)
+
+        when:
+        def future = new CompletableFuture()
+        LeaderSelector.instance.resetAsSlave('localhost', 7379) { e -> future.complete(e) }
+        def error = future.get()
+
+        then:
+        error instanceof IOException
+        ConfForGlobal.masterSlotNumber == savedMasterSlotNumber
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState == previousFailoverState
+
+        cleanup:
+        localPersist.roleTransitionStore.setFailLoadForTest(false)
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test promotion state-clear failure remains failed-fenced (bug 68)'() {
+        given:
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.createReplPairAsSlave('localhost', 7379)
+        oneSlot.onlyOneReplPairAsSlave.masterReadonly = true
+        oneSlot.onlyOneReplPairAsSlave.allCaughtUp = true
+        oneSlot.setReadonly(true)
+        oneSlot.setCanRead(false)
+        localPersist.roleTransitionStore.setFailClearForTest(true)
+
+        when:
+        def future = new CompletableFuture()
+        LeaderSelector.instance.resetAsMaster(true) { e -> future.complete(e) }
+        def error = future.get()
+
+        then:
+        error instanceof IOException
+        localPersist.roleTransitionWriteFenced
+        localPersist.roleTransitionStore.load().phase() == RoleTransitionState.Phase.FAILED_FENCED
+
+        cleanup:
+        localPersist.roleTransitionStore.setFailClearForTest(false)
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
@@ -495,6 +683,40 @@ class LeaderSelectorTest extends Specification {
         localPersist.roleTransitionStore.load() == null
 
         cleanup:
+        leaderSelector.masterConfigCheckValuesForTest = null
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test demotion state-clear failure remains failed-fenced (bug 68)'() {
+        given:
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        localPersist.oneSlot(slot).setReadonly(false)
+        localPersist.roleTransitionStore.setFailClearForTest(true)
+        def leaderSelector = LeaderSelector.instance
+        def checkValues = ConfForSlot.global.getSlaveCheckValues()
+        checkValues.slotNumber = 1
+        leaderSelector.masterConfigCheckValuesForTest = checkValues
+
+        when:
+        def future = new CompletableFuture()
+        leaderSelector.resetAsSlave('localhost', 7379) { e -> future.complete(e) }
+        def error = future.get()
+
+        then:
+        error instanceof IOException
+        localPersist.roleTransitionWriteFenced
+        localPersist.roleTransitionStore.load().phase() == RoleTransitionState.Phase.FAILED_FENCED
+        localPersist.roleTransitionStore.load().targetRole() == RoleTransitionState.TargetRole.SLAVE
+
+        cleanup:
+        localPersist.roleTransitionStore.setFailClearForTest(false)
         leaderSelector.masterConfigCheckValuesForTest = null
         ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
         localPersist.cleanUp()

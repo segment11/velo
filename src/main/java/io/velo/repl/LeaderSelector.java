@@ -507,6 +507,8 @@ public class LeaderSelector implements NeedCleanUp {
         // masterFailoverState stuck at "promotion-in-progress" forever.
         try {
             var localPersist = LocalPersist.getInstance();
+            rejectOppositePendingTransition(localPersist.getRoleTransitionStore().load(),
+                    RoleTransitionState.TargetRole.MASTER);
 
             // iterate only initialized slots: in cluster mode this node may own a subset of
             // ConfForGlobal.slotNumber, and unowned oneSlots[] entries are null.
@@ -641,6 +643,10 @@ public class LeaderSelector implements NeedCleanUp {
                     });
                 });
             });
+        } catch (IOException e) {
+            ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
+            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+            callback.accept(e);
         } catch (RuntimeException e) {
             ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
             MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
@@ -658,6 +664,17 @@ public class LeaderSelector implements NeedCleanUp {
     private long nextTransitionEpoch(LocalPersist localPersist) throws IOException {
         var current = localPersist.getRoleTransitionStore().load();
         return current == null ? System.currentTimeMillis() : Math.max(System.currentTimeMillis(), current.epoch() + 1);
+    }
+
+    private void rejectOppositePendingTransition(@Nullable RoleTransitionState pending,
+                                                 RoleTransitionState.TargetRole requestedRole) {
+        if (pending != null
+                && pending.phase() != RoleTransitionState.Phase.STABLE
+                && pending.phase() != RoleTransitionState.Phase.ABORTED
+                && pending.targetRole() != requestedRole) {
+            throw new IllegalStateException("Can not start " + requestedRole + " transition while epoch="
+                    + pending.epoch() + " targets " + pending.targetRole());
+        }
     }
 
     private void finishFailedTransition(LocalPersist localPersist,
@@ -758,6 +775,10 @@ public class LeaderSelector implements NeedCleanUp {
         // Same synchronous-throw guard as doResetAsMaster — anything that throws before the
         // whenComplete callback runs must still restore the failover state.
         try {
+            var localPersist = LocalPersist.getInstance();
+            rejectOppositePendingTransition(localPersist.getRoleTransitionStore().load(),
+                    RoleTransitionState.TargetRole.SLAVE);
+
             var checkValuesFromMaster = checkMasterConfigMatch(host, port, callback);
             if (checkValuesFromMaster == null) {
                 // already callback handle with exception — restore state so we don't get stuck
@@ -766,8 +787,6 @@ public class LeaderSelector implements NeedCleanUp {
             }
 
             ConfForGlobal.masterSlotNumber = (short) checkValuesFromMaster.getSlotNumber();
-
-            var localPersist = LocalPersist.getInstance();
 
             // Reset the read gate unconditionally: scale-up mode sizes the array to masterSlotNumber;
             // equal-slot mode sizes it to 0 so all publish calls are no-ops and any stale array from a
@@ -837,6 +856,10 @@ public class LeaderSelector implements NeedCleanUp {
                 publishMasterSwitchMessage(selfAsOldMasterHostAndPort, new HostAndPort(host, port), false);
                 callback.accept(null);
             });
+        } catch (IOException e) {
+            ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
+            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+            callback.accept(e);
         } catch (RuntimeException e) {
             ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
             MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;

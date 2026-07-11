@@ -3,6 +3,7 @@ package io.velo.repl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
 
 import java.io.File;
 import java.io.IOException;
@@ -135,6 +136,11 @@ public record RoleTransitionState(long epoch,
         private final File tempFile;
         private final ObjectMapper objectMapper = new ObjectMapper();
 
+        @Nullable
+        private Phase failSavePhaseForTest;
+        private boolean failLoadForTest;
+        private boolean failClearForTest;
+
         /**
          * @param persistDir node persistence directory
          */
@@ -144,12 +150,46 @@ public record RoleTransitionState(long epoch,
         }
 
         /**
+         * Injects a one-shot save failure for the selected phase.
+         *
+         * @param phase phase whose next save should fail, or null to disable injection
+         */
+        @TestOnly
+        public void setFailSavePhaseForTest(@Nullable Phase phase) {
+            failSavePhaseForTest = phase;
+        }
+
+        /**
+         * Injects a one-shot load failure.
+         *
+         * @param fail true to fail the next load operation
+         */
+        @TestOnly
+        public void setFailLoadForTest(boolean fail) {
+            failLoadForTest = fail;
+        }
+
+        /**
+         * Injects a one-shot clear failure.
+         *
+         * @param fail true to fail the next clear operation
+         */
+        @TestOnly
+        public void setFailClearForTest(boolean fail) {
+            failClearForTest = fail;
+        }
+
+        /**
          * Atomically replaces the durable transition state.
          *
          * @param state state to persist
          * @throws IOException if serialization or replacement fails
          */
         public void save(@NotNull RoleTransitionState state) throws IOException {
+            if (state.phase() == failSavePhaseForTest) {
+                failSavePhaseForTest = null;
+                throw new IOException("Role transition save forced failure for phase=" + state.phase());
+            }
             Files.createDirectories(stateFile.toPath().getParent());
             objectMapper.writeValue(tempFile, state);
             try {
@@ -165,6 +205,10 @@ public record RoleTransitionState(long epoch,
          * @throws IOException if the state cannot be read or decoded
          */
         public @Nullable RoleTransitionState load() throws IOException {
+            if (failLoadForTest) {
+                failLoadForTest = false;
+                throw new IOException("Role transition load forced failure");
+            }
             if (!stateFile.exists()) {
                 return null;
             }
@@ -177,6 +221,10 @@ public record RoleTransitionState(long epoch,
          * @throws IOException if a state file cannot be removed
          */
         public void clear() throws IOException {
+            if (failClearForTest) {
+                failClearForTest = false;
+                throw new IOException("Role transition clear forced failure");
+            }
             Files.deleteIfExists(tempFile.toPath());
             Files.deleteIfExists(stateFile.toPath());
         }

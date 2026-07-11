@@ -1021,7 +1021,7 @@ Reviewed commit `acc6127f` (`fix: converge multi-slot role transitions`). This s
 
 Adds `RoleTransitionState` — an immutable record (epoch, target role, phase, upstream, per-slot `BinlogTarget`,
 prepared/committed sets) persisted atomically via temp-file + `ATOMIC_MOVE`. `LeaderSelector` now drives promotion and
-demotion as `PREPARING -> PREPARED/COMMITTING -> STABLE` with `ABORTED` (pre-publication) and `FAILED_FENCED`
+demotion as `PREPARING -> COMMITTING -> STABLE` with `ABORTED` (pre-publication) and `FAILED_FENCED`
 (post-publication). `OneSlot` gains a prepare/commit split: `prepareAsMaster(fileIndex, offset)` does the fallible,
 destructive binlog rebase from the durable target while the slot stays externally a slave; `commitPreparedAsMaster()`
 only flips role flags; `prepareAsSlave(...)` is fence-first (sets `readonly` before any fallible work). A node-level
@@ -1077,3 +1077,41 @@ This resolves all four agent-2 refinements (fence-first demotion, durable rebase
 
 **Verdict:** Approved as the correct architecture and a real fix for Bug 3 (both directions, with restart-resume). The
 interim compensation is superseded. Remaining items are minor hardening/observability, not correctness gaps.
+
+## Bug 3 Post-review Hardening - Agent 1 - 2026-07-11
+
+Addressed the correctness and coverage follow-ups from the review:
+
+- Both role entry points now read the durable transition record before readiness checks, remote configuration lookup,
+  or role work. An unfinished opposite-role transition is rejected without changing its epoch or durable contents;
+  same-role demotion recovery remains supported.
+- Added one-shot `@TestOnly` store failures for load, phase-selective save, and clear operations. These cover the
+  fail-closed behavior without changing production persistence semantics.
+- Verified `COMMITTING` save failure aborts before publication and releases the node fence.
+- Verified promotion and demotion clear failures persist `FAILED_FENCED` and retain the node write fence.
+- Verified transition-state read failures stop both role directions before role work and restore failover globals.
+- Renamed the stale rollback test to describe the actual failed-fenced publication behavior.
+- Corrected the review summary: the persisted success path is `PREPARING -> COMMITTING -> STABLE`; `PREPARED` is
+  currently reserved in the state enum and is not persisted by the coordinator.
+
+TDD evidence: the two overlap tests first failed because the pending record was overwritten. The persistence tests
+first failed on missing deterministic store controls, and the load-failure tests did the same before the load seam was
+added.
+
+Verification:
+
+```text
+./gradlew :test \
+  --tests io.velo.repl.RoleTransitionStateTest \
+  --tests io.velo.repl.LeaderSelectorTest
+
+BUILD SUCCESSFUL in 27s
+```
+
+JaCoCo inspection confirms the new opposite-target guard, both checked load-failure handlers, phase-selective save
+failure, and both clear-failure coordinator branches execute. In the inspected store range, 31/33 lines are covered;
+the only uncovered lines are the existing platform-specific `AtomicMoveNotSupportedException` fallback. In the
+inspected `LeaderSelector` range, all lines added by this hardening follow-up are covered.
+
+The failed-fenced metric/operator runbook remains an observability follow-up and does not block Bug 3 correctness
+closure.
