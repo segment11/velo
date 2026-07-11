@@ -8,6 +8,7 @@ import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.*;
 import io.velo.persist.index.IndexHandlerPool;
+import io.velo.repl.RoleTransitionState;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.cluster.SlotRange;
 import io.velo.reply.AsyncReply;
@@ -351,6 +352,30 @@ public class LocalPersist implements NeedCleanUp {
     private File persistDir;
     private Config persistConfig;
 
+    private volatile boolean roleTransitionWriteFenced;
+    private RoleTransitionState.Store roleTransitionStore;
+
+    /**
+     * @return durable node role-transition store
+     */
+    public RoleTransitionState.Store getRoleTransitionStore() {
+        return roleTransitionStore;
+    }
+
+    /**
+     * @return true when a node-level role transition currently fences client writes
+     */
+    public boolean isRoleTransitionWriteFenced() {
+        return roleTransitionWriteFenced;
+    }
+
+    /**
+     * @param roleTransitionWriteFenced true to fence client writes across every initialized slot
+     */
+    public void setRoleTransitionWriteFenced(boolean roleTransitionWriteFenced) {
+        this.roleTransitionWriteFenced = roleTransitionWriteFenced;
+    }
+
     /**
      * @param netWorkers    the number of network workers
      * @param slotNumber    the number of slots to initialize
@@ -365,6 +390,13 @@ public class LocalPersist implements NeedCleanUp {
                           @NotNull Config persistConfig) throws IOException {
         this.persistDir = persistDir;
         this.persistConfig = persistConfig;
+
+        this.roleTransitionStore = new RoleTransitionState.Store(persistDir);
+        var pendingRoleTransition = roleTransitionStore.load();
+        roleTransitionWriteFenced = pendingRoleTransition != null
+                && pendingRoleTransition.phase() != RoleTransitionState.Phase.STABLE
+                && pendingRoleTransition.phase() != RoleTransitionState.Phase.ABORTED;
+
         this.netWorkers = netWorkers;
         this.slotNumber = slotNumber;
         this.snowFlakes = snowFlakes;
@@ -790,6 +822,7 @@ public class LocalPersist implements NeedCleanUp {
     @TestOnly
     @Override
     public void cleanUp() {
+        roleTransitionWriteFenced = false;
         for (var oneSlot : initializedOneSlots()) {
             oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId();
             oneSlot.cleanUp();
@@ -809,6 +842,8 @@ public class LocalPersist implements NeedCleanUp {
         multiShard = null;
         persistDir = null;
         persistConfig = null;
+        roleTransitionStore = null;
+        roleTransitionWriteFenced = false;
         indexHandlerPool = null;
 
         // lazy-init cached state — must be cleared so a later test session does not construct

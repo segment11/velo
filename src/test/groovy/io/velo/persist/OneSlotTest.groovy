@@ -532,6 +532,62 @@ class OneSlotTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test promotion preparation is idempotent and publishes writable role only on commit (bug 68)'() {
+        given:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def oneSegmentLength = ConfForSlot.global.confRepl.binlogOneSegmentLength
+        oneSlot.dynConfig.setBinlogOn(true)
+        (0..2).each { fi -> oneSlot.binlog.writeFromMasterOneSegmentBytes(new byte[oneSegmentLength], fi, 0) }
+        oneSlot.setReadonly(true)
+        oneSlot.setCanRead(false)
+
+        when:
+        oneSlot.prepareAsMaster(1, 0L)
+        oneSlot.prepareAsMaster(1, 0L)
+
+        then: 'fallible rebase is repeatable and the slot is still fenced'
+        oneSlot.binlog.currentFileIndex == 1
+        oneSlot.binlog.currentFileOffset == oneSegmentLength
+        oneSlot.readonly
+        !oneSlot.canRead
+
+        when:
+        oneSlot.commitPreparedAsMaster()
+
+        then:
+        !oneSlot.readonly
+        oneSlot.canRead
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test demotion preparation fences before fallible work (bug 68)'() {
+        given:
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        oneSlot.setReadonly(false)
+        oneSlot.resetAsSlaveForceThrowAfterFenceForTest = true
+
+        when:
+        oneSlot.prepareAsSlave('localhost', 7379, true)
+
+        then:
+        thrown(IOException)
+        oneSlot.readonly
+
+        cleanup:
+        oneSlot.resetAsSlaveForceThrowAfterFenceForTest = false
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test add upstream keeps downstream and binlog, drop upstream promotes to master'() {
         given:
         LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)

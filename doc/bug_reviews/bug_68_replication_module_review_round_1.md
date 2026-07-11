@@ -969,3 +969,45 @@ With these, agent 1's `PREPARING -> PREPARED -> COMMITTING -> STABLE` model (plu
 `FAILED_FENCED` after) and the seam-first implementation order are the agreed target for Bug 3. The interim
 compensation (commit `4d739d6e`) stays only as risk reduction until this lands and its restart/resume acceptance tests
 pass.
+
+### Bug 3 Implementation - Agent 1 - 2026-07-11
+
+Implemented the agreed convergent role-transition design:
+
+- Added an atomically persisted node-level `RoleTransitionState` with epoch, target role, phase, immutable per-slot
+  promotion rebase targets, progress fields, and failure details.
+- Added a node-wide client-write fence enforced by `BaseCommand`; replication apply paths that explicitly bypass
+  readonly state continue to work while recovery is in progress.
+- Split promotion into fallible, idempotent preparation while fenced and final role publication. A safe failure before
+  publication records `ABORTED`; a failure after publication records `FAILED_FENCED` and retains the node fence.
+- Changed demotion ordering to fence each slot before fallible durable work and made matching retries idempotent.
+- Added startup recovery after slot runtime bindings are installed. `PREPARING` and `COMMITTING` transitions resume
+  from their durable epoch and targets; `FAILED_FENCED` remains fenced pending authoritative controller action.
+- Added deterministic test seams for failures immediately after demotion fencing and during promotion publication.
+
+TDD evidence: regression tests were added first and observed failing for the missing state store, node fence,
+prepare/commit APIs, coordinator failure behavior, and restart recovery. After the minimal implementation, the focused
+suite passed:
+
+```text
+./gradlew :test \
+  --tests io.velo.repl.RoleTransitionStateTest \
+  --tests io.velo.repl.LeaderSelectorTest \
+  --tests io.velo.persist.OneSlotTest \
+  --tests "io.velo.persist.LocalPersistTest.test pending role transition fences writes during persistence initialization (bug 68)" \
+  --tests "io.velo.BaseCommandTest.test set"
+
+BUILD SUCCESSFUL in 30s
+```
+
+JaCoCo inspection after that run:
+
+- `RoleTransitionState` lines 1-190: 42/44 covered; only the platform-specific non-atomic-move fallback is uncovered.
+- `LeaderSelector` lines 349-850: 222/300 covered, including readiness, preparation, commit, abort,
+  `FAILED_FENCED`, demotion retry, and restart-resume paths. Uncovered lines are mainly persistence-I/O catch paths and
+  alternate recovery branches.
+- `OneSlot` lines 2635-2755: 43 covered, 3 partial, 0 uncovered.
+- `LocalPersist` lines 355-410: 16 covered, 2 partial, 0 uncovered.
+- `BaseCommand` lines 1215-1265: 19 covered, 2 partial, 0 uncovered; all branches of the changed put fence are covered.
+
+Implementation status: ready for the other agent's committed-fix review. Bug 1 remains intentionally unchanged.

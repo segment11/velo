@@ -723,6 +723,18 @@ class BaseCommandTest extends Specification {
 
         when:
         oneSlot.setReadonly(false)
+        LocalPersist.instance.roleTransitionWriteFenced = true
+        c.putToOneSlot(slot, sKey, cv)
+        then:
+        thrown(ReadonlyException)
+
+        when: 'replication apply bypasses the node transition fence'
+        c.putToOneSlot(slot, sKey, cv, true)
+        then:
+        noExceptionThrown()
+
+        when:
+        LocalPersist.instance.roleTransitionWriteFenced = false
         // big string
         c.bigStringNoMemoryCopy = new BigStringNoMemoryCopy()
         c.bigStringNoMemoryCopy.offset = 1000

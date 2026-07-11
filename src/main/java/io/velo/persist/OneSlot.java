@@ -1336,6 +1336,28 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     @TestOnly
     boolean intervalDeleteOverwriteBigStringFilesForceThrowForTest = false;
 
+    @TestOnly
+    boolean resetAsSlaveForceThrowAfterFenceForTest = false;
+
+    @TestOnly
+    boolean commitPreparedAsMasterForceThrowForTest = false;
+
+    /**
+     * @param value true to inject a demotion failure immediately after fencing
+     */
+    @TestOnly
+    public void setResetAsSlaveForceThrowAfterFenceForTest(boolean value) {
+        resetAsSlaveForceThrowAfterFenceForTest = value;
+    }
+
+    /**
+     * @param value true to inject a prepared-promotion commit failure
+     */
+    @TestOnly
+    public void setCommitPreparedAsMasterForceThrowForTest(boolean value) {
+        commitPreparedAsMasterForceThrowForTest = value;
+    }
+
     void intervalDeleteOverwriteBigStringFiles() {
         // unit test
         if (keyLoader == null) {
@@ -2622,32 +2644,43 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     @MasterReset
     public void resetAsMaster() throws IOException {
-        log.warn("Repl reset as master, slot={}", slot);
+        var target = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
+        prepareAsMaster(target.fileIndex(), target.offset());
+        commitPreparedAsMaster();
+    }
 
-        // set binlog same as old master last updated
-        var lastUpdatedFileIndexAndOffset = metaChunkSegmentIndex.getMasterBinlogFileIndexAndOffset();
-        var lastUpdatedFileIndex = lastUpdatedFileIndexAndOffset.fileIndex();
-        var lastUpdatedOffset = lastUpdatedFileIndexAndOffset.offset();
-
-        var marginLastUpdatedOffset = Binlog.marginFileOffset(lastUpdatedOffset);
-
-        binlog.reopenAtFileIndexAndMarginOffset(lastUpdatedFileIndex, marginLastUpdatedOffset);
+    /**
+     * Performs all fallible promotion work while the slot remains externally fenced.
+     *
+     * @param fileIndex immutable binlog file index captured for the transition epoch
+     * @param offset immutable binlog offset captured for the transition epoch
+     * @throws IOException if binlog rebasing or durable metadata clearing fails
+     */
+    public void prepareAsMaster(int fileIndex, long offset) throws IOException {
+        log.warn("Repl prepare as master, slot={}", slot);
+        var marginOffset = Binlog.marginFileOffset(offset);
+        binlog.reopenAtFileIndexAndMarginOffset(fileIndex, marginOffset);
         binlog.moveToNextSegment(true);
-        log.warn("Repl reset binlog file index and offset as old master, file index={}, offset={}, slot={}",
-                lastUpdatedFileIndex, marginLastUpdatedOffset, slot);
-
-        // clear old as slave catch up binlog info
-        // need fetch from the beginning, for data consistency
-        // when next time begin slave again
         metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
+        log.warn("Repl prepared binlog as master, file index={}, offset={}, slot={}", fileIndex, marginOffset, slot);
+    }
 
+    /**
+     * Publishes a prepared promotion. Fallible preparation must have completed first.
+     *
+     * @throws IOException if the role flags cannot be persisted
+     */
+    public void commitPreparedAsMaster() throws IOException {
+        if (commitPreparedAsMasterForceThrowForTest) {
+            throw new IOException("Commit prepared master forced failure");
+        }
         if (isReadonly()) {
             setReadonly(false);
         }
         if (!isCanRead()) {
             setCanRead(true);
         }
-        log.warn("Repl reset readonly false and can read, slot={}", slot);
+        log.warn("Repl commit prepared master role, slot={}", slot);
     }
 
     /**
@@ -2676,31 +2709,48 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      */
     @SlaveReset
     public void resetAsSlave(@NotNull String host, int port, boolean openReplStream) throws IOException {
-        // clear old as slave catch up binlog info
-        // need fetch from the beginning, for data consistency
-        metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
-        log.warn("Repl clear fetched binlog file index and offset as old slave, slot={}", slot);
+        prepareAsSlave(host, port, openReplStream);
+    }
 
-        binlog.moveToNextSegment();
-
-        // demotion: drop any master-side repl pairs so old downstream replicas stop treating this node as their master
-        removeReplPairAsMaster();
-
-        if (openReplStream) {
-            createReplPairAsSlave(host, port);
-        }
-
+    /**
+     * Fences writes first, then performs the fallible durable work needed for demotion.
+     *
+     * @param host upstream master host
+     * @param port upstream master port
+     * @param openReplStream true to create an upstream replication stream
+     * @throws IOException if fencing, binlog movement, pair changes, or configuration persistence fails
+     */
+    public void prepareAsSlave(@NotNull String host, int port, boolean openReplStream) throws IOException {
         if (!isReadonly()) {
             setReadonly(true);
         }
         if (isCanRead()) {
             setCanRead(false);
         }
-        log.warn("Repl reset readonly true and can not read, slot={}", slot);
+        if (resetAsSlaveForceThrowAfterFenceForTest) {
+            throw new IOException("Reset as slave forced failure after fence");
+        }
 
-        // do not write binlog as slave
+        var existing = getOnlyOneReplPairAsSlave();
+        if (existing != null && existing.getHost().equals(host) && existing.getPort() == port) {
+            dynConfig.setBinlogOn(false);
+            return;
+        }
+
+        metaChunkSegmentIndex.clearMasterBinlogFileIndexAndOffset();
+        binlog.moveToNextSegment();
+        removeReplPairAsMaster();
+
+        if (existing != null && (!existing.getHost().equals(host) || existing.getPort() != port)) {
+            removeReplPairAsSlave();
+            existing = null;
+        }
+        if (openReplStream && existing == null) {
+            createReplPairAsSlave(host, port);
+        }
+
         dynConfig.setBinlogOn(false);
-        log.warn("Repl reset binlog on false as slave, slot={}", slot);
+        log.warn("Repl prepared slave role, slot={}", slot);
     }
 
     /**

@@ -11,6 +11,7 @@ import io.velo.NeedCleanUp;
 import io.velo.command.PGroup;
 import io.velo.command.XGroup;
 import io.velo.persist.LocalPersist;
+import io.velo.persist.OneSlot;
 import io.velo.repl.support.JedisPoolHolder;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -22,6 +23,9 @@ import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -344,6 +348,118 @@ public class LeaderSelector implements NeedCleanUp {
     private long lastResetAsSlaveTimeMillis;
 
     /**
+     * Resumes an unfinished durable role transition after slot event loops have been bound.
+     *
+     * @param callback callback invoked with an exception when recovery remains fenced, or null after convergence
+     */
+    public void resumePendingRoleTransition(Consumer<Exception> callback) {
+        var localPersist = LocalPersist.getInstance();
+        final RoleTransitionState transition;
+        try {
+            transition = localPersist.getRoleTransitionStore().load();
+        } catch (IOException ex) {
+            localPersist.setRoleTransitionWriteFenced(true);
+            callback.accept(ex);
+            return;
+        }
+        if (transition == null || transition.phase() == RoleTransitionState.Phase.STABLE
+                || transition.phase() == RoleTransitionState.Phase.ABORTED) {
+            callback.accept(null);
+            return;
+        }
+
+        localPersist.setRoleTransitionWriteFenced(true);
+        if (transition.phase() == RoleTransitionState.Phase.FAILED_FENCED) {
+            MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = "failed-fenced";
+            callback.accept(new IllegalStateException("Role transition requires authoritative reconciliation, epoch="
+                    + transition.epoch()));
+            return;
+        }
+        if (transition.targetRole() == RoleTransitionState.TargetRole.SLAVE) {
+            resetAsSlave(transition.upstreamHost(), transition.upstreamPort(), callback);
+            return;
+        }
+
+        resumeMasterTransition(localPersist, transition, callback);
+    }
+
+    private void resumeMasterTransition(LocalPersist localPersist,
+                                        RoleTransitionState transition,
+                                        Consumer<Exception> callback) {
+        var slots = localPersist.initializedOneSlots();
+        var prepareError = new AtomicReference<Exception>();
+        Promise<Void>[] preparePromises = new Promise[slots.size()];
+        for (int i = 0; i < slots.size(); i++) {
+            var oneSlot = slots.get(i);
+            preparePromises[i] = oneSlot.asyncRun(() -> {
+                if (transition.phase() == RoleTransitionState.Phase.COMMITTING) {
+                    return;
+                }
+                try {
+                    var target = transition.binlogTargets().get(oneSlot.slot());
+                    if (target != null) {
+                        oneSlot.prepareAsMaster(target.fileIndex(), target.offset());
+                    }
+                } catch (Exception ex) {
+                    prepareError.compareAndSet(null, ex);
+                }
+            });
+        }
+
+        Promises.all(preparePromises).whenComplete((prepared, preparePromiseError) -> {
+            var err = prepareError.get();
+            if (err != null) {
+                finishFailedTransition(localPersist, transition, RoleTransitionState.Phase.ABORTED,
+                        err, false, "no-failover", ConfForGlobal.masterSlotNumber, callback);
+                return;
+            }
+            try {
+                localPersist.getRoleTransitionStore().save(
+                        transition.withPhase(RoleTransitionState.Phase.COMMITTING));
+            } catch (IOException ex) {
+                finishFailedTransition(localPersist, transition, RoleTransitionState.Phase.FAILED_FENCED,
+                        ex, true, "failed-fenced", ConfForGlobal.masterSlotNumber, callback);
+                return;
+            }
+
+            var commitError = new AtomicReference<Exception>();
+            Promise<Void>[] commitPromises = new Promise[slots.size()];
+            for (int i = 0; i < slots.size(); i++) {
+                var oneSlot = slots.get(i);
+                commitPromises[i] = oneSlot.asyncRun(() -> {
+                    try {
+                        if (transition.binlogTargets().containsKey(oneSlot.slot())) {
+                            oneSlot.removeReplPairAsSlave();
+                            oneSlot.commitPreparedAsMaster();
+                        }
+                    } catch (Exception ex) {
+                        commitError.compareAndSet(null, ex);
+                    }
+                });
+            }
+            Promises.all(commitPromises).whenComplete((committed, commitPromiseError) -> {
+                var commitFailure = commitError.get();
+                if (commitFailure != null) {
+                    finishFailedTransition(localPersist, transition, RoleTransitionState.Phase.FAILED_FENCED,
+                            commitFailure, true, "failed-fenced", ConfForGlobal.masterSlotNumber, callback);
+                    return;
+                }
+                try {
+                    localPersist.getRoleTransitionStore().clear();
+                } catch (IOException ex) {
+                    finishFailedTransition(localPersist, transition, RoleTransitionState.Phase.FAILED_FENCED,
+                            ex, true, "failed-fenced", ConfForGlobal.masterSlotNumber, callback);
+                    return;
+                }
+                ConfForGlobal.masterSlotNumber = 0;
+                localPersist.setRoleTransitionWriteFenced(false);
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = "no-failover";
+                callback.accept(null);
+            });
+        });
+    }
+
+    /**
      * Resets this node as master and invokes the callback when done.
      *
      * @param callback the callback invoked with an exception on failure, or null on success
@@ -401,25 +517,26 @@ public class LeaderSelector implements NeedCleanUp {
             // caught up), no other slot may already have flipped to master, otherwise a failed promotion
             // leaves the node split across roles and creates a split-brain window (bug 68-3). Only after every
             // slot validates do we commit the role change in phase 2.
+            var promotionTargets = new ConcurrentHashMap<Short, RoleTransitionState.BinlogTarget>();
             Promise<Void>[] checkPromises = new Promise[initSlots.size()];
             for (int i = 0; i < initSlots.size(); i++) {
                 var oneSlot = initSlots.get(i);
                 checkPromises[i] = oneSlot.asyncRun(() -> {
-                    if (force) {
-                        return;
-                    }
-
                     var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
-                    if (replPairAsSlave == null) {
-                        log.debug("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
-                        return;
-                    }
-
-                    if (!replPairAsSlave.isMasterReadonly() || !replPairAsSlave.isAllCaughtUp()) {
+                    if (!force && replPairAsSlave != null
+                            && (!replPairAsSlave.isMasterReadonly() || !replPairAsSlave.isAllCaughtUp())) {
                         log.warn("Repl slave can not reset as master now, need wait current master readonly and slave all caught up, slot={}",
                                 replPairAsSlave.getSlot());
                         XGroup.tryCatchUpAgainAfterSlaveTcpClientClosed(replPairAsSlave, null);
                         throw new IllegalStateException("Repl slave can not reset as master, slot=" + replPairAsSlave.getSlot());
+                    }
+                    if (replPairAsSlave == null) {
+                        log.debug("Repl old repl pair as slave is null, slot={}", oneSlot.slot());
+                    }
+                    if (shouldPromoteSlot(localPersist, oneSlot)) {
+                        var position = oneSlot.getMetaChunkSegmentIndex().getMasterBinlogFileIndexAndOffset();
+                        promotionTargets.put(oneSlot.slot(),
+                                new RoleTransitionState.BinlogTarget(position.fileIndex(), position.offset()));
                     }
                 });
             }
@@ -434,93 +551,93 @@ public class LeaderSelector implements NeedCleanUp {
                     return;
                 }
 
-                // Phase 2 — every slot validated; commit the promotion on all slots. Each slot catches its
-                // own error so Promises.all waits for ALL slots to settle (no short-circuit), letting us
-                // detect a partial commit and roll every slot back to slave before reporting — otherwise a
-                // phase-2 I/O failure would leave the node split across roles (bug 68-3).
-                var commitError = new AtomicReference<Exception>();
-                Promise<Void>[] promises = new Promise[initSlots.size()];
+                final RoleTransitionState transition;
+                try {
+                    transition = RoleTransitionState.begin(nextTransitionEpoch(localPersist),
+                            RoleTransitionState.TargetRole.MASTER, "", 0, promotionTargets);
+                    localPersist.getRoleTransitionStore().save(transition);
+                    localPersist.setRoleTransitionWriteFenced(true);
+                } catch (IOException ex) {
+                    ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
+                    MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+                    callback.accept(ex);
+                    return;
+                }
+
+                var prepareError = new AtomicReference<Exception>();
+                Promise<Void>[] preparePromises = new Promise[initSlots.size()];
                 for (int i = 0; i < initSlots.size(); i++) {
                     var oneSlot = initSlots.get(i);
-                    promises[i] = oneSlot.asyncRun(() -> {
+                    preparePromises[i] = oneSlot.asyncRun(() -> {
                         try {
-                            resetAsSlaveCount = 0;
-
-                            var isSelfSlave = oneSlot.removeReplPairAsSlave();
-                            if (isSelfSlave) {
-                                oneSlot.resetAsMaster();
-                                resetAsMasterCount = 0;
-                            } else if (localPersist.isAsSlaveScaleUp()
-                                    && oneSlot.slot() >= ConfForGlobal.masterSlotNumber) {
-                                // 2N scale-up extra slot: no slave ReplPair (data arrived via fan-out),
-                                // but it IS in slave state (readonly, canRead=false). Promote it too.
-                                // Known limitation: this slot has data but no binlog history (offset was zeroed
-                                // at slave reset and never advanced) — downstream replication for this slot
-                                // from the promoted node is not supported in v1.
-                                log.warn("Repl promote scale-up extra slot to master (no binlog history), slot={}", oneSlot.slot());
-                                oneSlot.resetAsMaster();
-                                resetAsMasterCount = 0;
-                            } else if (oneSlot.isReadonly()) {
-                                log.warn("Repl promote readonly slot without slave repl pair, slot={}", oneSlot.slot());
-                                oneSlot.resetAsMaster();
-                                resetAsMasterCount = 0;
-                            } else {
-                                resetAsMasterCount++;
-                                if (resetAsMasterCount % 100 == 0) {
-                                    log.info("Repl reset as master, is already master, do nothing, slot={}", oneSlot.slot());
-                                }
+                            var target = transition.binlogTargets().get(oneSlot.slot());
+                            if (target != null) {
+                                oneSlot.prepareAsMaster(target.fileIndex(), target.offset());
                             }
                         } catch (Exception ex) {
-                            log.error("Repl promote commit failed, will roll back all slots to slave, slot={}", oneSlot.slot(), ex);
-                            commitError.compareAndSet(null, ex);
+                            prepareError.compareAndSet(null, ex);
                         }
                     });
                 }
 
-                Promises.all(promises).whenComplete((r, e) -> {
-                    var err = commitError.get();
-                    if (err == null) {
-                        // Success: leaving slave mode.
-                        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-                        ConfForGlobal.masterSlotNumber = 0;
-
-                        // publish switch master to clients
-                        var leaderSelector = LeaderSelector.getInstance();
-                        var oldMasterHostAndPort = HostAndPort.parse(leaderSelector.lastGetMasterListenAddressAsSlave);
-                        var selfAsMasterHostAndPort = ConfForGlobal.announcedHostPort();
-                        if (oldMasterHostAndPort == null) {
-                            oldMasterHostAndPort = selfAsMasterHostAndPort;
-                        }
-                        publishMasterSwitchMessage(oldMasterHostAndPort, selfAsMasterHostAndPort, true);
-
-                        callback.accept(null);
+                Promises.all(preparePromises).whenComplete((prepared, preparePromiseError) -> {
+                    var err = prepareError.get();
+                    if (err != null) {
+                        finishFailedTransition(localPersist, transition, RoleTransitionState.Phase.ABORTED,
+                                err, false, prevFailoverState, prevMasterSlotNumber, callback);
                         return;
                     }
 
-                    // Partial commit: roll every slot back to slave (its pre-promotion role), best effort, so
-                    // the node is not left split across roles, then report the original failure.
-                    var masterAddr = HostAndPort.parse(lastGetMasterListenAddressAsSlave);
-                    Promise<Void>[] rollback = new Promise[initSlots.size()];
+                    try {
+                        localPersist.getRoleTransitionStore().save(
+                                transition.withPhase(RoleTransitionState.Phase.COMMITTING));
+                    } catch (IOException ex) {
+                        finishFailedTransition(localPersist, transition, RoleTransitionState.Phase.ABORTED,
+                                ex, false, prevFailoverState, prevMasterSlotNumber, callback);
+                        return;
+                    }
+
+                    var commitError = new AtomicReference<Exception>();
+                    Promise<Void>[] commitPromises = new Promise[initSlots.size()];
                     for (int i = 0; i < initSlots.size(); i++) {
                         var oneSlot = initSlots.get(i);
-                        rollback[i] = oneSlot.asyncRun(() -> {
+                        commitPromises[i] = oneSlot.asyncRun(() -> {
                             try {
-                                if (masterAddr != null) {
-                                    oneSlot.resetAsSlave(masterAddr.host, masterAddr.port, true);
-                                } else {
-                                    // no known upstream: restore slave state (readonly, not readable, binlog off)
-                                    // without a stream; the controller re-establishes the upstream later
-                                    oneSlot.resetAsSlave("", 0, false);
+                                if (transition.binlogTargets().containsKey(oneSlot.slot())) {
+                                    oneSlot.removeReplPairAsSlave();
+                                    oneSlot.commitPreparedAsMaster();
                                 }
                             } catch (Exception ex) {
-                                log.error("Repl promote rollback to slave failed, slot={}", oneSlot.slot(), ex);
+                                commitError.compareAndSet(null, ex);
                             }
                         });
                     }
-                    Promises.all(rollback).whenComplete((rr, re) -> {
+
+                    Promises.all(commitPromises).whenComplete((committed, commitPromiseError) -> {
+                        var commitFailure = commitError.get();
+                        if (commitFailure != null) {
+                            finishFailedTransition(localPersist, transition,
+                                    RoleTransitionState.Phase.FAILED_FENCED, commitFailure, true,
+                                    "failed-fenced", prevMasterSlotNumber, callback);
+                            return;
+                        }
+
+                        try {
+                            localPersist.getRoleTransitionStore().clear();
+                        } catch (IOException ex) {
+                            finishFailedTransition(localPersist, transition,
+                                    RoleTransitionState.Phase.FAILED_FENCED, ex, true,
+                                    "failed-fenced", prevMasterSlotNumber, callback);
+                            return;
+                        }
+
+                        localPersist.setRoleTransitionWriteFenced(false);
                         MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-                        ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
-                        callback.accept(err);
+                        ConfForGlobal.masterSlotNumber = 0;
+                        var oldMaster = HostAndPort.parse(lastGetMasterListenAddressAsSlave);
+                        var self = ConfForGlobal.announcedHostPort();
+                        publishMasterSwitchMessage(oldMaster == null ? self : oldMaster, self, true);
+                        callback.accept(null);
                     });
                 });
             });
@@ -532,7 +649,52 @@ public class LeaderSelector implements NeedCleanUp {
         }
     }
 
+    private boolean shouldPromoteSlot(LocalPersist localPersist, OneSlot oneSlot) {
+        return oneSlot.getOnlyOneReplPairAsSlave() != null
+                || oneSlot.isReadonly()
+                || (localPersist.isAsSlaveScaleUp() && oneSlot.slot() >= ConfForGlobal.masterSlotNumber);
+    }
+
+    private long nextTransitionEpoch(LocalPersist localPersist) throws IOException {
+        var current = localPersist.getRoleTransitionStore().load();
+        return current == null ? System.currentTimeMillis() : Math.max(System.currentTimeMillis(), current.epoch() + 1);
+    }
+
+    private void finishFailedTransition(LocalPersist localPersist,
+                                        RoleTransitionState transition,
+                                        RoleTransitionState.Phase phase,
+                                        Exception error,
+                                        boolean keepFenced,
+                                        String failoverState,
+                                        short masterSlotNumber,
+                                        Consumer<Exception> callback) {
+        try {
+            localPersist.getRoleTransitionStore().save(transition.withError(phase, error.toString()));
+        } catch (IOException persistError) {
+            error.addSuppressed(persistError);
+            log.error("Repl persist failed role transition state error", persistError);
+        }
+        localPersist.setRoleTransitionWriteFenced(keepFenced);
+        ConfForGlobal.masterSlotNumber = masterSlotNumber;
+        MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = failoverState;
+        callback.accept(error);
+    }
+
+    @VisibleForTesting
+    ConfForSlot.SlaveCheckValues masterConfigCheckValuesForTest;
+
+    /**
+     * @param values injected master configuration, or null to use the live lookup
+     */
+    @TestOnly
+    public void setMasterConfigCheckValuesForTest(@Nullable ConfForSlot.SlaveCheckValues values) {
+        masterConfigCheckValuesForTest = values;
+    }
+
     private @Nullable ConfForSlot.SlaveCheckValues checkMasterConfigMatch(String host, int port, Consumer<Exception> callback) {
+        if (masterConfigCheckValuesForTest != null) {
+            return masterConfigCheckValuesForTest;
+        }
         log.debug("Repl reset self as slave begin, check new master global config first, self={}", ConfForGlobal.netListenAddress);
         // sync, perf bad
         try {
@@ -612,53 +774,67 @@ public class LeaderSelector implements NeedCleanUp {
             // prior 2N session is cleared.
             localPersist.resetScaleUpReadGate(localPersist.isAsSlaveScaleUp() ? ConfForGlobal.masterSlotNumber : 0);
 
-            // iterate only initialized slots: in cluster mode this node may own a subset of
-            // ConfForGlobal.slotNumber, and unowned oneSlots[] entries are null.
             var initSlots = localPersist.initializedOneSlots();
+            final RoleTransitionState transition;
+            try {
+                var pending = localPersist.getRoleTransitionStore().load();
+                if (pending != null
+                        && pending.targetRole() == RoleTransitionState.TargetRole.SLAVE
+                        && pending.upstreamHost().equals(host)
+                        && pending.upstreamPort() == port
+                        && pending.phase() != RoleTransitionState.Phase.STABLE
+                        && pending.phase() != RoleTransitionState.Phase.ABORTED) {
+                    transition = pending;
+                } else {
+                    transition = RoleTransitionState.begin(nextTransitionEpoch(localPersist),
+                            RoleTransitionState.TargetRole.SLAVE, host, port, Map.of());
+                }
+                localPersist.getRoleTransitionStore().save(transition);
+                localPersist.setRoleTransitionWriteFenced(true);
+            } catch (IOException ex) {
+                ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+                callback.accept(ex);
+                return;
+            }
+
+            var prepareError = new AtomicReference<Exception>();
             Promise<Void>[] promises = new Promise[initSlots.size()];
             for (int i = 0; i < initSlots.size(); i++) {
                 var oneSlot = initSlots.get(i);
                 promises[i] = oneSlot.asyncRun(() -> {
-                    var replPairAsSlave = oneSlot.getOnlyOneReplPairAsSlave();
-                    if (replPairAsSlave != null) {
-                        if (replPairAsSlave.getHost().equals(host) && replPairAsSlave.getPort() == port) {
-                            log.debug("Repl old repl pair as slave is same as new master, slot={}", oneSlot.slot());
-                            if (oneSlot.isCanRead()) {
-                                oneSlot.setCanRead(false);
-                            }
-                            return;
-                        } else {
-                            oneSlot.removeReplPairAsSlave();
-                        }
+                    try {
+                        var masterSlotNumberForStream = ConfForGlobal.masterSlotNumber > 0
+                                ? ConfForGlobal.masterSlotNumber : ConfForGlobal.slotNumber;
+                        oneSlot.prepareAsSlave(host, port, oneSlot.slot() < masterSlotNumberForStream);
+                        resetAsMasterCount = 0;
+                        resetAsSlaveCount++;
+                    } catch (Exception ex) {
+                        prepareError.compareAndSet(null, ex);
                     }
-
-                    var masterSlotNumberForStream = ConfForGlobal.masterSlotNumber > 0
-                            ? ConfForGlobal.masterSlotNumber : ConfForGlobal.slotNumber;
-                    boolean openReplStream = oneSlot.slot() < masterSlotNumberForStream;
-                    oneSlot.resetAsSlave(host, port, openReplStream);
-
-                    resetAsMasterCount = 0;
-                    resetAsSlaveCount++;
                 });
             }
 
             Promises.all(promises).whenComplete((r, e) -> {
-                // Restore previous failover state once the role transition actually completed (or failed),
-                // so Sentinel polling INFO replication can observe the transition window.
-                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
-
-                if (e != null) {
-                    // Rollback masterSlotNumber on failed per-slot reset
-                    ConfForGlobal.masterSlotNumber = prevMasterSlotNumber;
-                    callback.accept(e);
+                var err = prepareError.get();
+                if (err != null) {
+                    finishFailedTransition(localPersist, transition, RoleTransitionState.Phase.FAILED_FENCED,
+                            err, true, "failed-fenced", ConfForGlobal.masterSlotNumber, callback);
                     return;
                 }
 
-                // publish switch master to clients
-                var selfAsOldMasterHostAndPort = ConfForGlobal.announcedHostPort();
-                var newMasterHostAndPort = new HostAndPort(host, port);
-                publishMasterSwitchMessage(selfAsOldMasterHostAndPort, newMasterHostAndPort, false);
+                try {
+                    localPersist.getRoleTransitionStore().clear();
+                } catch (IOException ex) {
+                    finishFailedTransition(localPersist, transition, RoleTransitionState.Phase.FAILED_FENCED,
+                            ex, true, "failed-fenced", ConfForGlobal.masterSlotNumber, callback);
+                    return;
+                }
 
+                localPersist.setRoleTransitionWriteFenced(false);
+                MultiWorkerServer.STATIC_GLOBAL_V.masterFailoverState = prevFailoverState;
+                var selfAsOldMasterHostAndPort = ConfForGlobal.announcedHostPort();
+                publishMasterSwitchMessage(selfAsOldMasterHostAndPort, new HostAndPort(host, port), false);
                 callback.accept(null);
             });
         } catch (RuntimeException e) {

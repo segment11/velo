@@ -1217,7 +1217,7 @@ public abstract class BaseCommand {
             byPassGetSet.put(slot, slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv);
         } else {
             var oneSlot = localPersist.oneSlot(slot);
-            if (oneSlot.isReadonly() && !ignoreReadonly) {
+            if ((oneSlot.isReadonly() || localPersist.isRoleTransitionWriteFenced()) && !ignoreReadonly) {
                 throw new ReadonlyException();
             }
             oneSlot.put(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, cv, false, ignoreReadonly);
@@ -1236,7 +1236,7 @@ public abstract class BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
-        if (oneSlot.isReadonly()) {
+        if (oneSlot.isReadonly() || localPersist.isRoleTransitionWriteFenced()) {
             throw new ReadonlyException();
         }
         return oneSlot.remove(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
@@ -1254,7 +1254,7 @@ public abstract class BaseCommand {
         }
 
         var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot);
-        if (oneSlot.isReadonly()) {
+        if (oneSlot.isReadonly() || localPersist.isRoleTransitionWriteFenced()) {
             throw new ReadonlyException();
         }
         oneSlot.removeDelay(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);

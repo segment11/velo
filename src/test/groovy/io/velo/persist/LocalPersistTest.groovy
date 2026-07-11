@@ -4,6 +4,7 @@ import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.ConfForGlobal
 import io.velo.SnowFlake
+import io.velo.repl.RoleTransitionState
 import io.velo.repl.cluster.MultiShard
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
@@ -64,6 +65,26 @@ class LocalPersistTest extends Specification {
         Thread.sleep(100)
         localPersist.cleanUp()
         localPersist.resetForTest()
+        Consts.persistDir.deleteDir()
+    }
+
+    def 'test pending role transition fences writes during persistence initialization (bug 68)'() {
+        given:
+        Consts.persistDir.mkdirs()
+        def state = RoleTransitionState.begin(41L, RoleTransitionState.TargetRole.SLAVE,
+                'master', 7379, [:]).withPhase(RoleTransitionState.Phase.FAILED_FENCED)
+        new RoleTransitionState.Store(Consts.persistDir).save(state)
+
+        when:
+        prepareLocalPersist()
+
+        then:
+        LocalPersist.instance.roleTransitionWriteFenced
+        LocalPersist.instance.roleTransitionStore.load() == state
+
+        cleanup:
+        LocalPersist.instance.cleanUp()
+        LocalPersist.instance.resetForTest()
         Consts.persistDir.deleteDir()
     }
 

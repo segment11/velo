@@ -1119,6 +1119,12 @@ public class MultiWorkerServer extends Launcher {
         localPersist.initSlotRuntimeBindings(slotWorkerEventloopArray, requestHandlerArray, slotWorkerThreadIds);
         localPersist.initSlotTaskRunnables(scheduleRunnableArray);
 
+        LeaderSelector.getInstance().resumePendingRoleTransition(error -> {
+            if (error != null) {
+                logger.error("Resume pending role transition failed; node remains write-fenced", error);
+            }
+        });
+
         localPersist.startIndexHandlerPool();
 
         socketInspector.initByNetWorkerEventloopArray(slotWorkerEventloopArray, netWorkerEventloopArray);
