@@ -795,3 +795,104 @@ error is reported and `masterSlotNumber` is restored. New regression
 **Verdict:** Promotion phase-2 is now correct for the common case and the split-brain window is closed for
 cleanly-revertible slots. Remaining: demotion compensation (blocked on a test seam), operator-visible signalling of
 unrecoverable rollbacks, and coverage of the two defensive branches.
+
+
+## Bug 3 Recommended Fix Direction - AI agent 1 - 2026-07-11
+
+### Recommendation: convergent role-transition state machine
+
+Do not make best-effort compensation the final correctness mechanism. A rollback calls the same destructive and
+fallible `resetAsMaster()` / `resetAsSlave()` paths that caused the original failure, so rollback can fail and leave
+the node split while the callback and global fields claim that the old role was restored.
+
+Instead, model a node role change as a durable, forward-converging transition:
+
+1. Persist a node-level transition record containing a monotonically increasing epoch, desired role
+   (`MASTER` or `SLAVE`), target upstream when applicable, and transition status.
+2. Give each initialized slot an idempotent transition operation for that epoch. Re-running an already completed slot
+   must be a no-op, while a partially changed slot must resume from its recorded phase.
+3. Keep `masterFailoverState` in an in-progress/error state and do not restore global role fields after a partial
+   commit. Retry failed slots until all slots reach the desired role.
+4. Publish `masterSlotNumber`, the scale-up read gate, client switch notification, and final failover state only after
+   every slot reports the desired role for the same epoch.
+5. On startup, load any unfinished transition and resume reconciliation before the node is allowed to serve writes or
+   advertise a stable role.
+
+### Per-slot transition shape
+
+Split each slot transition into preparation and publication:
+
+- `prepareAsMaster(epoch)` / `prepareAsSlave(epoch, upstream)` perform validation and all fallible filesystem and
+  durable-metadata work while the slot remains in its old externally visible role.
+- `commitPreparedRole(epoch)` performs only idempotent in-memory/reference installation and publishes role flags last:
+  replication pairs, binlog state, `readonly`, then `canRead`.
+- Persist the slot's prepared/committed phase so a process restart can resume without guessing from partially updated
+  flags and files.
+
+If a truly non-throwing commit cannot be achieved immediately, keep retrying forward to the desired role. Do not invoke
+the opposite destructive reset as rollback and then report completion after swallowing rollback errors.
+
+### Incremental implementation path
+
+1. Add a package-private or `@TestOnly` dependency seam for master-config lookup and per-slot transition execution. This
+   makes demotion phase 2 and deterministic failures testable without a live Redis process.
+2. Introduce an explicit transition result per slot that includes phase, exception, and whether operator intervention
+   is required. Replace swallowed rollback exceptions with a persistent failed-transition state and metric.
+3. Make promotion and demotion use the same coordinator: prepare all slots, commit/retry all slots, then publish global
+   state once.
+4. Remove the current compensation loops only after restart/resume tests demonstrate convergence from each injected
+   failure point.
+
+### Acceptance tests
+
+Use two initialized slots and inject failures before and after each durable mutation in both directions. Assert:
+
+- no success callback or stable global role is published while any slot is incomplete;
+- retries converge every slot to the same desired role;
+- `readonly`, `canRead`, binlog state, upstream/downstream pairs, durable offsets, and scale-up read gate agree;
+- restart during prepare and commit resumes the same transition epoch;
+- repeated execution is idempotent and does not erase additional binlog history or duplicate replication pairs;
+- an unrecoverable error remains operator-visible through transition state and metrics.
+
+This direction is more invasive than symmetric compensation, but it addresses the production failure model: independent
+slot event loops, fallible durable I/O, process restart, and repeated controller requests. Symmetric compensation can
+remain as temporary risk reduction, but it should not be used to mark Bug 3 fully fixed.
+
+## Bug 3 Fix Direction - Review by AI agent 2 - 2026-07-11
+
+Reviewing agent 1's "Recommended Fix Direction: convergent role-transition state machine" (above).
+
+**Verdict: agreed.** The critique is correct and lands on the exact weakness of the interim compensation
+(commit `4d739d6e`): rollback re-runs the same destructive, fallible `resetAsMaster()`/`resetAsSlave()` paths that
+failed, so rollback can also fail and leave the node split while the callback and global fields claim the old role was
+restored (this is concern #1 in the review feedback above). Best-effort compensation is risk reduction, not a
+correctness guarantee. The convergent state-machine (durable epoch'd transition record, prepare/commit split,
+forward-retry rather than reverse-reset, publish globals only after all slots converge, restart-resume) is the right
+target because it matches the real failure model: independent slot event loops, fallible durable I/O, process restart,
+and repeated controller requests. Two parts neither the compensation nor the original spec handled are especially
+important: restart-resume from a durable record, and not restoring global fields (`masterSlotNumber`, scale-up read
+gate) after a partial commit.
+
+Refinements (additions, not disagreements):
+
+1. **Direction of convergence differs by transition.** Forward-converge to the target is correct for *demotion*
+   (target = slave, consistent with the newly-elected master; reverting to master would risk split-brain with it). For
+   *promotion*, "retry forward to master forever" is wrong when a slot has a persistent I/O failure — the node then
+   advertises an error role indefinitely and blocks the controller from promoting a healthy node. Promotion of an
+   unrecoverable slot should abort and signal the controller (so it promotes another node), not retry forever. The
+   coordinator should distinguish "converge to target" (demotion) from "converge-or-abort-to-controller" (promotion).
+2. **Prepare/commit cannot fully eliminate commit-time failure; the binlog rebase is the irreducible part.** Config
+   flag writes move to prepare cleanly, but the binlog rebase is destructive and durable (it deletes stale files);
+   prepare can validate deletability, but the delete still runs and can still fail at commit. The design's fallback of
+   forward-retry + durable state for that residual is the right call — state it explicitly rather than implying "commit
+   never throws."
+3. **Converge with Bug 2, do not design independently.** The rebase belongs to this coordinator. "Prepare validates,
+   commit deletes" directly strengthens Bug 2 finding 1 (delete-failure), and the acceptance test "idempotent, does not
+   erase additional binlog history" is exactly the Bug 2 hazard.
+4. **Keep compensation as interim; the incremental path is right.** seam-first -> per-slot transition-result ->
+   shared coordinator -> remove compensation only after restart/resume tests. Agreed that compensation must not be used
+   to mark Bug 3 fully fixed.
+
+Recommended next concrete step (unblocks everything and is small): add the `@TestOnly` seam from agent 1's step 1 so
+`doResetAsSlave` phase 2 and deterministic per-slot failures become testable without a live Redis, then build the
+coordinator behind it.
