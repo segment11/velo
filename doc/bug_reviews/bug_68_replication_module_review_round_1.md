@@ -1116,6 +1116,19 @@ inspected `LeaderSelector` range, all lines added by this hardening follow-up ar
 The failed-fenced metric/operator runbook remains an observability follow-up and does not block Bug 3 correctness
 closure.
 
+### Remaining Bug 3 Observability Follow-up - 2026-07-11
+
+- Role commands for one node are serialized by the leader-latch/controller. Same-target reissue remains intentionally
+  allowed because it is the recovery mechanism for `FAILED_FENCED`; callers must not issue concurrent same-target
+  transitions. The code now states this invariant beside the durable opposite-target guard.
+- Add a restart-resume read-policy test and metric for the async recovery window. Client writes are node-fenced, but
+  the test must also make the intended read behavior explicit for slots whose role publication completed before the
+  restart.
+- Add a failed-fenced gauge/alert and an operator runbook. The runbook must prefer authoritative controller reissue.
+  Manual deletion of `role-transition.json` is break-glass only: stop the node, verify every slot's role and upstream
+  against the current cluster authority, remove the file, then restart and confirm the node is not writable until the
+  intended role has converged. Never clear the file on a running or unreconciled node.
+
 ## Review Feedback - Bug 3 Hardening (commit 4010d4e6) - AI agent 2 - 2026-07-11
 
 Reviewed commit `4010d4e6` (`fix: guard replication role transitions`), the follow-up to the review of `acc6127f`.

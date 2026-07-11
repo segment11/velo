@@ -666,6 +666,9 @@ public class LeaderSelector implements NeedCleanUp {
         return current == null ? System.currentTimeMillis() : Math.max(System.currentTimeMillis(), current.epoch() + 1);
     }
 
+    // The leader-latch/controller serializes role commands for a node. Same-target reissue must remain allowed because
+    // it is the recovery mechanism for FAILED_FENCED; the durable target guard only prevents an opposite transition
+    // from replacing that recovery record. Callers must not invoke two same-target transitions concurrently.
     private void rejectOppositePendingTransition(@Nullable RoleTransitionState pending,
                                                  RoleTransitionState.TargetRole requestedRole) {
         if (pending != null
