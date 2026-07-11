@@ -285,6 +285,66 @@ class LeaderSelectorTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test failed promotion phase-2 rolls committed slots back to slave (bug 68)'() {
+        given:
+        def savedSlotNumber = ConfForGlobal.slotNumber
+        def savedMasterSlotNumber = ConfForGlobal.masterSlotNumber
+        ConfForGlobal.netListenAddress = 'localhost:7380'
+        LocalPersist.instance.socketInspector = new SocketInspector()
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def slot0 = localPersist.oneSlot((short) 0)
+        def slot1 = localPersist.oneSlot((short) 1)
+
+        and:
+        def leaderSelector = LeaderSelector.instance
+        leaderSelector.masterAddressLocalMocked = null
+
+        // both slots are caught-up slaves
+        slot0.createReplPairAsSlave('localhost', 7379)
+        slot0.onlyOneReplPairAsSlave.masterReadonly = true
+        slot0.onlyOneReplPairAsSlave.allCaughtUp = true
+        slot0.readonly = true
+        slot0.canRead = false
+
+        slot1.createReplPairAsSlave('localhost', 7379)
+        slot1.onlyOneReplPairAsSlave.masterReadonly = true
+        slot1.onlyOneReplPairAsSlave.allCaughtUp = true
+        slot1.readonly = true
+        slot1.canRead = false
+
+        and: 'inject: slot1 resetAsMaster rebase can not delete a stale higher file, so its phase-2 commit throws'
+        def undeletable = new File(new File(Consts.persistDir, 'slot-1/binlog'), 'binlog-1')
+        undeletable.mkdirs()
+        new File(undeletable, 'keep.txt').text = 'x'
+
+        when: 'force promote so both slots reach the phase-2 commit'
+        def future = new CompletableFuture()
+        leaderSelector.resetAsMaster(true) { e ->
+            if (e != null) {
+                println e.message
+            }
+            future.complete(e == null)
+        }
+        def r = future.get()
+
+        then: 'promotion fails and the slot that already flipped to master is rolled back, so no slot stays master'
+        !r
+        slot0.readonly
+        slot1.readonly
+
+        cleanup:
+        undeletable.deleteDir()
+        ConfForGlobal.slotNumber = savedSlotNumber
+        ConfForGlobal.masterSlotNumber = savedMasterSlotNumber
+        leaderSelector.masterAddressLocalMocked = null
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test promote readonly stream slot without repl pair to master'() {
         given:
         ConfForGlobal.netListenAddress = 'localhost:7380'
