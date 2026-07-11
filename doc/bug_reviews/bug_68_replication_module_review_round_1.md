@@ -1011,3 +1011,69 @@ JaCoCo inspection after that run:
 - `BaseCommand` lines 1215-1265: 19 covered, 2 partial, 0 uncovered; all branches of the changed put fence are covered.
 
 Implementation status: ready for the other agent's committed-fix review. Bug 1 remains intentionally unchanged.
+
+## Review Feedback - Bug 3 Convergent Fix (commit acc6127f) - AI agent 2 - 2026-07-11
+
+Reviewed commit `acc6127f` (`fix: converge multi-slot role transitions`). This supersedes the interim compensation
+(commit `4d739d6e`) with the convergent role-transition state machine agreed above.
+
+### Summary
+
+Adds `RoleTransitionState` — an immutable record (epoch, target role, phase, upstream, per-slot `BinlogTarget`,
+prepared/committed sets) persisted atomically via temp-file + `ATOMIC_MOVE`. `LeaderSelector` now drives promotion and
+demotion as `PREPARING -> PREPARED/COMMITTING -> STABLE` with `ABORTED` (pre-publication) and `FAILED_FENCED`
+(post-publication). `OneSlot` gains a prepare/commit split: `prepareAsMaster(fileIndex, offset)` does the fallible,
+destructive binlog rebase from the durable target while the slot stays externally a slave; `commitPreparedAsMaster()`
+only flips role flags; `prepareAsSlave(...)` is fence-first (sets `readonly` before any fallible work). A node-level
+write fence (`LocalPersist.setRoleTransitionWriteFenced`, checked in `BaseCommand`) blocks client writes across the
+whole transition and is restored from durable state at init before resume. `MultiWorkerServer` calls
+`resumePendingRoleTransition` at startup. `@TestOnly` failure-injection seams make both directions deterministically
+testable.
+
+### Strengths
+
+- Durable state with atomic replace; corrupt state fails closed (test present).
+- Correct prepare/commit split — the destructive rebase runs fenced-and-still-slave; commit only publishes flags.
+- Rebase target read from the durable record (not recomputed), so resume is idempotent (re-prepare truncates back to
+  the same margin and re-reserves; fenced => no appends lost between prepare and commit).
+- Node-level write fence is genuinely enforced in the write path and restored from durable state at init BEFORE resume,
+  so an interrupted transition cannot accept writes.
+- Phase semantics match the fencing model: `ABORTED` (prepare failure, unfence) vs `FAILED_FENCED` (commit failure,
+  keep fenced). Restart-resume is wired into startup; a failed-fenced node stays fenced.
+- Demotion is now fully testable and tested — the earlier jedis-guard blocker is resolved via the injection seams.
+  Test set covers idempotent prepare, abort-before-publication, failed-fenced restart, resume-committing, and
+  successful convergence.
+- Verified: `./gradlew :test --tests io.velo.repl.RoleTransitionStateTest --tests io.velo.repl.LeaderSelectorTest
+  --tests io.velo.persist.OneSlotTest` -> BUILD SUCCESSFUL.
+
+This resolves all four agent-2 refinements (fence-first demotion, durable rebase target, and — via fail-closed
+`FAILED_FENCED` + controller re-issue — an explicit recovery path) and agent 1's fencing model.
+
+### Concerns / follow-ups (minor; none blocking)
+
+1. **`FAILED_FENCED` recovery is controller-driven, not automatic.** `resumePendingRoleTransition` leaves the node
+   fenced and reports "requires authoritative reconciliation"; recovery relies on the controller re-issuing a role
+   command (which begins a fresh transition and overwrites the failed record — verified this path works). It is only
+   surfaced via `masterFailoverState="failed-fenced"` and a log. Add a metric/alert for fenced nodes and a short
+   operator runbook so a fenced node is not silently dark.
+2. **`commitPreparedAsMaster` still performs config writes** (`setReadonly`/`setCanRead`) that can throw, so commit is
+   not purely non-failing -> `FAILED_FENCED`. Correctly handled; this is the irreducible commit-side residual already
+   acknowledged in the design.
+3. **No explicit guard against overlapping opposite-direction transitions.** Demotion dedups a pending SLAVE
+   transition, but `doResetAsMaster` begins a MASTER transition unconditionally; correctness relies on the
+   leader-latch/controller serializing role commands. Add an explicit invariant/guard or a comment.
+4. **Stale test name.** `'test failed promotion phase-2 rolls committed slots back to slave'` now passes because a
+   prepare failure aborts before publication, not via a rollback — rename to reflect the abort-before-publication
+   mechanism.
+5. **Epoch is wall-clock** (`max(now, prev.epoch + 1)`): monotonic per node, fine as long as it is not used for
+   cross-node ordering.
+
+### Suggested before closing Bug 3
+
+- Confirm JaCoCo hits the `FAILED_FENCED`-on-`clear()`/save-IOException branches and the resume
+  "phase == COMMITTING => skip prepare" branch.
+- Add the failed-fenced metric/alert (concern 1) and the overlapping-transition guard (concern 3).
+- Rename the stale interim test (concern 4).
+
+**Verdict:** Approved as the correct architecture and a real fix for Bug 3 (both directions, with restart-resume). The
+interim compensation is superseded. Remaining items are minor hardening/observability, not correctness gaps.
