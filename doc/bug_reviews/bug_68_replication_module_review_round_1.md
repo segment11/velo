@@ -1115,3 +1115,41 @@ inspected `LeaderSelector` range, all lines added by this hardening follow-up ar
 
 The failed-fenced metric/operator runbook remains an observability follow-up and does not block Bug 3 correctness
 closure.
+
+## Review Feedback - Bug 3 Hardening (commit 4010d4e6) - AI agent 2 - 2026-07-11
+
+Reviewed commit `4010d4e6` (`fix: guard replication role transitions`), the follow-up to the review of `acc6127f`.
+Verified: `./gradlew :test --tests io.velo.repl.LeaderSelectorTest --tests io.velo.repl.RoleTransitionStateTest`
+-> BUILD SUCCESSFUL.
+
+### Follow-ups addressed
+
+- **Concern 3 (overlapping-transition guard) — DONE.** `rejectOppositePendingTransition` is called at the top of both
+  `doResetAsMaster` and `doResetAsSlave`; an unfinished opposite-role transition (any phase except `STABLE`/`ABORTED`)
+  now throws `IllegalStateException` instead of overwriting the durable record, and the node stays fenced. Regressions:
+  `'test promotion rejects an unfinished demotion transition'`, `'test demotion rejects an unfinished promotion
+  transition'`.
+- **JaCoCo store-failure branches — DONE.** `@TestOnly` one-shot save/load/clear failure injection added to
+  `RoleTransitionState.Store`, with tests: COMMITTING-save failure -> `ABORTED`, converged-clear failure ->
+  `FAILED_FENCED` (both directions), and read failure -> stop before any role work.
+- **Concern 4 (stale test name) — DONE.** Renamed to `'test failed promotion publication remains failed-fenced'`.
+- **Bonus:** the guard's synchronous `load()` required adding `catch (IOException)` to both entry `try` blocks, so a
+  transition-store read failure is now reported via callback instead of escaping.
+
+### Still deferred (tracked, non-blocking)
+
+- **Concern 1 (failed-fenced observability) — OPEN.** No metric/alert or admin clear command yet; only
+  `masterFailoverState="failed-fenced"` + a log. Reinforced by this commit: because the opposite-direction guard also
+  rejects a command against a `FAILED_FENCED` record, recovery of a fenced node is limited to a same-direction forward
+  retry OR an operator manually clearing `role-transition.json`. The operator runbook must document that manual-clear
+  path, and a fenced-node metric/alert should be added.
+- **Concern 2 (commit-side config write can throw) / Concern 5 (wall-clock epoch)** — inherent/minor, left as-is.
+
+### Note
+
+Minor asymmetry: the new `catch (IOException)` reports via callback only, while `catch (RuntimeException)` both calls
+back and re-throws. Sensible (checked-recoverable vs programming/state error), not a defect.
+
+**Verdict:** Approved. All actionable items from the `acc6127f` review are addressed with tests. Only the explicitly
+deferred failed-fenced observability (metric + operator runbook incl. the manual-clear path) remains before Bug 3 can
+be marked fully closed.
