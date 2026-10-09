@@ -16,6 +16,13 @@ The current design is mostly thread-affine: mutable slot state is owned by one s
 scheduled onto the owner eventloop. A few shared structures intentionally use immutable snapshots, concurrent maps, or
 atomic counters instead of per-thread copies.
 
+The net/slot boundary is worth stating plainly, because it is a common source of confusion:
+
+| Stage | Thread | Responsibility |
+|---|---|---|
+| Net worker | `net-worker-<id>` | decode, slot parsing, auth/ACL/gates, cross-worker detection, reply encoding, socket write |
+| Slot worker | `slot-worker-<i>` | command dispatch, `OneSlot` access, compression samples, binlog work |
+
 ## Worker Domains
 
 ### Primary Reactor
@@ -31,13 +38,21 @@ the slot thread guard and should not be used as production cleanup.
 
 ### Net Workers
 
-Net workers are ActiveJ worker reactors. They:
+Net workers are ActiveJ worker reactors (thread name `net-worker-<id>`). They:
 
 - own client sockets
 - decode RESP, HTTP, and replication requests
-- perform request gating that can be decided before slot execution
-- forward requests toward slot-execution paths
+- perform request gating that can be decided before slot execution — auth, ACL, `shutdown`, `echo`/`ping`,
+  readonly connections, cluster `MOVED`, cross-worker detection
+- **resolve the slot list** for every request in a pipeline, via
+  `RequestHandler.parseSlots(...)` on the command groups owned by `requestHandlerArray[0]`
+  (`MultiWorkerServer.java:703-706`). This is safe on the net worker only because slot parsing is pure
+  computation over the request bytes — it never touches slot-owned state
+- forward requests to the owning slot worker
 - encode and write replies
+
+Encoding is deliberately on this side of the handoff, so command code returns `Reply` objects rather than writing
+to sockets. See [Reply Encoding](/home/kerry/ws/velo/doc/design/04_command_processing_design.md#reply-encoding).
 
 Socket state lives on the socket user-data object (`VeloUserDataInSocket`) and is accessed through `SocketInspector`.
 Most socket fields are expected to be touched by the owning net worker. Some state can be read or updated from command
@@ -51,16 +66,23 @@ not drift.
 
 ### Slot Workers
 
-Slot workers execute command logic. `RequestHandler` instances are created per slot worker and are marked
-with `@ThreadNeedLocal` because they reuse mutable command-group instances and request-local helper state.
+Slot workers execute command logic (thread name `slot-worker-<i>`). `RequestHandler` instances are created one per
+slot worker (`MultiWorkerServer.java:1711-1713`) and are marked with `@ThreadNeedLocal` because they reuse mutable
+command-group instances and request-local helper state.
 
 This is the main execution domain for:
 
-- slot parsing
-- command dispatch
+- command dispatch into the reused A-Z group instances
 - persistence access through `OneSlot`
 - request-local compression sample collection
 - slot-owned replication/binlog work
+
+Note what is *not* on this list: **slot parsing happens on the net worker**, not here. It is a pure hashing step
+completed before the handoff.
+
+When `slotWorkers == 1 && netWorkers == 1`, `MultiWorkerServer` sets `isReuseNetWorkerEventloop = true`
+(`MultiWorkerServer.java:1041-1052`) and the slot worker eventloop *is* the net worker eventloop, so
+`RequestHandler.handle` runs inline on the net worker thread instead of being submitted.
 
 `OneSlot` protects slot-owned state with `threadIdProtectedForSafe`. Direct calls into `OneSlot` must happen on the
 owning slot worker. Cross-slot command paths use `OneSlot.asyncCall()`, `OneSlot.asyncRun()`, or
@@ -105,16 +127,36 @@ operation according to the old rule, but it keeps ACL reads lock-free and simple
 
 ## Cross-Thread Coordination
 
+The net-to-slot handoff is a plain eventloop submit:
+
+```java
+// MultiWorkerServer.java:630
+var p = Promise.ofFuture(targetEventloop.submit(AsyncComputation.of(() -> targetHandler.handle(request, socket))));
+```
+
+The target worker is `slot % slotWorkerCount`, chosen from `request.getSingleSlot()`. Commands with no slot
+(`Request.SLOT_CAN_HANDLE_BY_ANY_WORKER == -1`: `ping`, `echo`, `hello`, `auth`, and anything else with an empty slot
+list) get a random worker, because they touch no slot state.
+
 Cross-slot or cross-worker operations are handled with asynchronous dispatch and reply aggregation rather than by
 sharing slot internals directly between threads. This pattern appears in command groups such as `MGroup`, `PGroup`,
-`SGroup`, `ZGroup`, and replication-related `XGroup` paths.
+`SGroup`, `ZGroup`, and replication-related `XGroup` paths. Such commands return an `AsyncReply`, which the net worker
+resolves in `transferAsyncReply` using the same HTTP/RESP3/RESP2 rules as a synchronous reply.
 
 `LocalPersist.doSthInSlots()` dispatches one function to each slot and aggregates the results. Code running inside that
 function is on the owning slot worker and may access the matching `OneSlot` directly. Code outside that function should
 not assume it owns slot state.
 
-Pipeline handling may involve several commands for the same socket while socket metadata changes. Protocol mode and
-reply mode are socket-level state; a pipeline is not treated as an atomic snapshot of those fields.
+### Pipeline Barriers
+
+One decode produces a pipeline of `Request` objects, and `handlePipelineSegmented`
+(`MultiWorkerServer.java:731`) splits it at connection-state commands — `auth`, `hello`, `readonly`, `readwrite`
+(`isConnectionStateCommand`, `MultiWorkerServer.java:685`). The barrier's reply is awaited before later requests in
+the pipeline run, so a connection-state change is visible to everything after it.
+
+This is a narrow guarantee, not a general atomicity one. Protocol mode and reply mode remain socket-level state
+outside those barriers, so a pipeline is **not** an atomic snapshot of those fields, and replies already in flight may
+use the older value.
 
 ## Bulk Load And WAL Durability
 
@@ -165,6 +207,8 @@ During bootstrap:
 - Do not use global flags to change durability behavior for slot-owned WALs.
 - Do not publish mutable shared collections to net/slot workers.
 - Do not assume socket protocol metadata is stable for an entire pipeline unless the code explicitly snapshots it.
+- Do not move slot parsing onto the slot worker, or command execution onto the net worker, without re-checking the
+  thread-affinity assumptions on both sides of the handoff.
 - Prefer existing eventloop handoff helpers over ad hoc thread creation or direct cross-thread access.
 
 ## Related Documents
