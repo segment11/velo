@@ -77,6 +77,84 @@ class CategoryTest extends Specification {
         missing.isEmpty()
     }
 
+    def 'test command categories match redis 7.2'() {
+        when:
+        def actual = (Category.getCategoryListByCmd(cmd) ?: []).collect { it.name() } as Set
+
+        then:
+        actual == (expected as Set)
+
+        where:
+        cmd          | expected
+        // multi pop family, redis 7.2 ACL CAT list/sortedset/blocking/slow/write
+        'lmpop'      | ['list', 'write', 'slow']
+        'zmpop'      | ['sortedset', 'write', 'slow']
+        'blmpop'     | ['list', 'write', 'slow', 'blocking']
+        'bzmpop'     | ['sortedset', 'write', 'slow', 'blocking']
+        // hash field ttl family, velo extensions, must be fast like redis fast commands
+        'hgetdel'    | ['hash', 'write', 'fast']
+        'hgetex'     | ['hash', 'write', 'fast']
+        'hsetex'     | ['hash', 'write', 'fast']
+        'hexpire'    | ['hash', 'write', 'fast']
+        'hpersist'   | ['hash', 'write', 'fast']
+        'decrbyfloat' | ['string', 'write', 'fast']
+        'bf.add'     | ['write', 'fast']
+        // keyspace / read / fast
+        'expiretime' | ['keyspace', 'read', 'fast']
+        'pexpiretime' | ['keyspace', 'read', 'fast']
+        // set / sortedset inter card, redis 7.2 ACL CAT read/slow
+        'sintercard' | ['set', 'read', 'slow']
+        'zintercard' | ['sortedset', 'read', 'slow']
+        // connection family, redis 7.2 ACL CAT connection
+        'select'     | ['connection', 'fast']
+        'asking'     | ['connection', 'fast']
+        'readonly'   | ['connection', 'fast']
+        'readwrite'  | ['connection', 'fast']
+        'wait'       | ['connection', 'slow']
+        // role is in redis admin category
+        'role'       | ['admin', 'dangerous', 'fast']
+        // top level PUBSUB is not in the pubsub category, only its subcommands are
+        'pubsub'     | ['slow']
+    }
+
+    def 'test fast and slow categories are mutually exclusive'() {
+        when:
+        new AGroup(null, null, null)
+        new BGroup(null, null, null)
+        new CGroup(null, null, null)
+        new DGroup(null, null, null)
+        new EGroup(null, null, null)
+        new FGroup(null, null, null)
+        new GGroup(null, null, null)
+        new HGroup(null, null, null)
+        new IGroup(null, null, null)
+        new JGroup(null, null, null)
+        new KGroup(null, null, null)
+        new LGroup(null, null, null)
+        new MGroup(null, null, null)
+        new NGroup(null, null, null)
+        new OGroup(null, null, null)
+        new PGroup(null, null, null)
+        new QGroup(null, null, null)
+        new RGroup(null, null, null)
+        new SGroup(null, null, null)
+        new TGroup(null, null, null)
+        new UGroup(null, null, null)
+        new VGroup(null, null, null)
+        new WGroup(null, null, null)
+        new XGroup(null, null, null)
+        new YGroup(null, null, null)
+        new ZGroup(null, null, null)
+
+        def bad = CommandRegistry.all()
+                .collect { it.name().toLowerCase() }
+                .findAll { (Category.getCategoryListByCmd(it) ?: []).contains(Category.fast) ==
+                        (Category.getCategoryListByCmd(it) ?: []).contains(Category.slow) }
+
+        then:
+        bad.isEmpty()
+    }
+
     def 'test read only key pattern does not grant write commands'() {
         given:
         def u = new U('ro')
