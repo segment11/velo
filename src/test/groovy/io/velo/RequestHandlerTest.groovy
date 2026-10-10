@@ -157,6 +157,125 @@ class RequestHandlerTest extends Specification {
         ConfForGlobal.PASSWORD = oldPassword
     }
 
+    def 'test failed single token http basic auth is recorded in acl log'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+        def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, new SnowFlake(1, 1), Config.create())
+        AclUsers.instance.initForTest()
+        ConfForGlobal.PASSWORD = 'password'
+
+        AclUsers.instance.upInsert('httpuser') { u ->
+            u.on = true
+            u.password = U.Password.plain('rightpass')
+        }
+
+        def metricsData = new byte[1][]
+        metricsData[0] = '?metrics'.bytes
+        def httpRequest = new Request(metricsData, true, false)
+        httpRequest.httpHeaders = ['Authorization': 'Basic ' + new String(Base64.encoder.encode('nosuchuser:bad'.bytes))]
+
+        when: 'unknown user'
+        AclUsers.resetAclLogs()
+        def reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+        AclUsers.getAclLogs(10).length == 1
+        AclUsers.getAclLogs(10)[0].reason == 'auth'
+        AclUsers.getAclLogs(10)[0].object == 'nosuchuser'
+
+        when: 'wrong password for an existing user'
+        SocketInspector.clearUserData(socket)
+        httpRequest.httpHeaders = ['Authorization': 'Basic ' + new String(Base64.encoder.encode('httpuser:wrongpass'.bytes))]
+        AclUsers.resetAclLogs()
+        reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+        AclUsers.getAclLogs(10).length == 1
+        AclUsers.getAclLogs(10)[0].reason == 'auth'
+        AclUsers.getAclLogs(10)[0].object == 'httpuser'
+
+        when: 'user is disabled'
+        SocketInspector.clearUserData(socket)
+        AclUsers.instance.upInsert('httpuser') { u ->
+            u.on = false
+        }
+        httpRequest.httpHeaders = ['Authorization': 'Basic ' + new String(Base64.encoder.encode('httpuser:rightpass'.bytes))]
+        AclUsers.resetAclLogs()
+        reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+        AclUsers.getAclLogs(10).length == 1
+        AclUsers.getAclLogs(10)[0].reason == 'auth'
+        AclUsers.getAclLogs(10)[0].object == 'httpuser'
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+        AclUsers.resetAclLogs()
+    }
+
+    def 'test single token http basic auth success and malformed cases'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+        def requestHandler = new RequestHandler(workerId, netWorkers, slotNumber, new SnowFlake(1, 1), Config.create())
+        AclUsers.instance.initForTest()
+        ConfForGlobal.PASSWORD = 'password'
+
+        AclUsers.instance.upInsert('httpuser') { u ->
+            u.on = true
+            u.password = U.Password.plain('rightpass')
+        }
+
+        def metricsData = new byte[1][]
+        metricsData[0] = '?metrics'.bytes
+        def httpRequest = new Request(metricsData, true, false)
+
+        when: 'a valid credential authenticates the socket and logs nothing'
+        httpRequest.httpHeaders = ['Authorization': 'Basic ' + new String(Base64.encoder.encode('httpuser:rightpass'.bytes))]
+        AclUsers.resetAclLogs()
+        def reply = requestHandler.handle(httpRequest, socket)
+        then:
+        SocketInspector.getAuthUser(socket) == 'httpuser'
+        AclUsers.getAclLogs(10).length == 0
+
+        when: 'a header without a colon is rejected'
+        SocketInspector.clearUserData(socket)
+        httpRequest.httpHeaders = ['Authorization': 'Basic ' + new String(Base64.encoder.encode('nocolon'.bytes))]
+        AclUsers.resetAclLogs()
+        reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+        SocketInspector.getAuthUser(socket) == null
+
+        when: 'a non basic scheme is rejected'
+        SocketInspector.clearUserData(socket)
+        httpRequest.httpHeaders = ['Authorization': 'Bearer whatever']
+        reply = requestHandler.handle(httpRequest, socket)
+        then:
+        reply == ErrorReply.AUTH_FAILED
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+        AclUsers.resetAclLogs()
+    }
+
     def 'test auth keeps username case'() {
         given:
         def eventloopCurrent = Eventloop.builder()
