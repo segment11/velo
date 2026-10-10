@@ -626,7 +626,7 @@ public abstract class BaseCommand {
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
 
         var keyHash = KeyHash.hash(keyBytes);
-        var bucketIndex = Math.abs(keyHash & (bucketsPerSlot - 1));
+        var bucketIndex = (int) (keyHash & (bucketsPerSlot - 1));
 
         if (ConfForGlobal.clusterEnabled) {
             var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);

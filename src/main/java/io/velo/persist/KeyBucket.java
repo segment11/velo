@@ -28,6 +28,10 @@ public class KeyBucket {
      */
     public static final int DEFAULT_BUCKETS_PER_SLOT = 16384 * 4;
     /**
+     * Minimum number of buckets per slot.
+     */
+    public static final int MIN_BUCKETS_PER_SLOT = 4096;
+    /**
      * Maximum number of buckets per slot.
      */
     public static final int MAX_BUCKETS_PER_SLOT = 16384 * 16;

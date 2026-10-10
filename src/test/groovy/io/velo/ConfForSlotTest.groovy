@@ -62,6 +62,7 @@ class ConfForSlotTest extends Specification {
 
         when:
         exception = false
+        // Below MIN_BUCKETS_PER_SLOT
         c.confBucket.bucketsPerSlot = 1024 + 512
         try {
             c.confBucket.checkIfValid()
@@ -71,6 +72,34 @@ class ConfForSlotTest extends Specification {
         }
         then:
         exception
+
+        when:
+        exception = false
+        // A multiple of MIN_BUCKETS_PER_SLOT but NOT a power of 2. This is the value that the old
+        // "% 1024" check let through: it would break the `keyHash & (bucketsPerSlot - 1)` mask used
+        // by KeyHash.bucketIndex, leaving 1/3 of the bucket indexes unreachable.
+        c.confBucket.bucketsPerSlot = KeyBucket.MIN_BUCKETS_PER_SLOT * 3
+        try {
+            c.confBucket.checkIfValid()
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        exception
+
+        when:
+        exception = false
+        // The smallest legal value must be accepted
+        c.confBucket.bucketsPerSlot = KeyBucket.MIN_BUCKETS_PER_SLOT
+        try {
+            c.confBucket.checkIfValid()
+        } catch (IllegalArgumentException e) {
+            println e.message
+            exception = true
+        }
+        then:
+        !exception
 
         when:
         exception = false

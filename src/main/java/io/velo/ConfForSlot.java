@@ -279,8 +279,16 @@ public enum ConfForSlot {
             if (bucketsPerSlot > KeyBucket.MAX_BUCKETS_PER_SLOT) {
                 throw new IllegalArgumentException("Bucket count per slot too large, bucket count per slot should be less than " + KeyBucket.MAX_BUCKETS_PER_SLOT);
             }
-            if (bucketsPerSlot % 1024 != 0) {
-                throw new IllegalArgumentException("Bucket count per slot should be multiple of 1024");
+            if (bucketsPerSlot < KeyBucket.MIN_BUCKETS_PER_SLOT) {
+                throw new IllegalArgumentException("Bucket count per slot should be at least " + KeyBucket.MIN_BUCKETS_PER_SLOT + ", given: " + bucketsPerSlot);
+            }
+            // Must be a power of 2: KeyHash.bucketIndex maps a key hash onto a bucket with
+            // `keyHash & (bucketsPerSlot - 1)`, and that mask only spans [0, bucketsPerSlot)
+            // when bucketsPerSlot is a power of 2. A non-power-of-2 value such as 12288
+            // (3 * 4096) would silently leave a third of the bucket indexes unreachable.
+            // This also implies the value is a multiple of MIN_BUCKETS_PER_SLOT.
+            if (Integer.bitCount(bucketsPerSlot) != 1) {
+                throw new IllegalArgumentException("Bucket count per slot should be a power of 2, given: " + bucketsPerSlot);
             }
             if (initialSplitNumber != 1 && initialSplitNumber != 3 && initialSplitNumber != 9) {
                 throw new IllegalArgumentException("Initial split number should be 1, 3, or 9, given: " + initialSplitNumber);

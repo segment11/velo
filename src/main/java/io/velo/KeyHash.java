@@ -138,12 +138,18 @@ public class KeyHash {
 
     /**
      * Computes the bucket index for a given key hash.
+     * <p>
+     * The hash is folded onto a bucket with the mask {@code keyHash & (bucketsPerSlot - 1)}.
+     * {@code ConfBucket.checkIfValid()} guarantees {@code bucketsPerSlot} is a power of 2, so the
+     * mask yields a value in {@code [0, bucketsPerSlot)} and no {@code Math.abs} is needed. Do not
+     * drop that validation: a non-power-of-2 {@code bucketsPerSlot} (for example {@code 3 * 4096})
+     * would make this mask return only a subset of the bucket indexes, leaving the rest unreachable.
      *
      * @param keyHash the key hash
      * @return the bucket index
      */
     public static int bucketIndex(long keyHash) {
         var bucketsPerSlot = ConfForSlot.global.confBucket.bucketsPerSlot;
-        return Math.abs((int) (keyHash & (bucketsPerSlot - 1)));
+        return (int) (keyHash & (bucketsPerSlot - 1));
     }
 }
