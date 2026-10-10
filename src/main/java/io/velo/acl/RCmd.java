@@ -2,6 +2,8 @@ package io.velo.acl;
 
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.util.Locale;
+
 /**
  * Access control rule for commands.
  */
@@ -137,12 +139,13 @@ public class RCmd {
                 throw new IllegalArgumentException("Invalid literal: " + str);
             }
             type = Type.cmd_with_first_arg;
-            cmd = parts[0].substring(1);
-            firstArg = parts[1];
+            // command and subcommand names are case insensitive in redis
+            cmd = parts[0].substring(1).toLowerCase(Locale.ROOT);
+            firstArg = parts[1].toLowerCase(Locale.ROOT);
         } else if (str.contains("@")) {
             type = Type.category;
             var parts = str.split("@");
-            category = parts[1].equals("*") ? Category.all : Category.valueOf(parts[1].toLowerCase());
+            category = parts[1].equals("*") ? Category.all : Category.valueOf(parts[1].toLowerCase(Locale.ROOT));
         } else {
             var cmdPart = str.substring(1);
             if ("*".equals(cmdPart)) {
@@ -152,7 +155,7 @@ public class RCmd {
                 throw new IllegalArgumentException("Wildcard command names are not supported: " + str);
             } else {
                 type = Type.cmd;
-                cmd = cmdPart;
+                cmd = cmdPart.toLowerCase(Locale.ROOT);
             }
         }
 

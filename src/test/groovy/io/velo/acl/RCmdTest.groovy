@@ -200,4 +200,40 @@ class RCmdTest extends Specification {
         where:
         literal << ['+config|', '-config|', '+|', '+|get', '+config|get|extra']
     }
+
+    def 'test from literal - command name is case insensitive like redis'() {
+        expect:
+        RCmd.fromLiteral(literal).match(cmd, null)
+
+        where:
+        literal    | cmd
+        '+GET'     | 'get'
+        '+Get'     | 'get'
+        '-GET'     | 'get'
+        '+hGetDel' | 'hgetdel'
+        '-SeT'     | 'set'
+    }
+
+    def 'test from literal - uppercase command name is normalized in literal output'() {
+        expect:
+        RCmd.fromLiteral(literal).literal() == normalized
+
+        where:
+        literal    | normalized
+        '+GET'     | '+get'
+        '-HGETDEL' | '-hgetdel'
+        '+SeT'     | '+set'
+    }
+
+    def 'test from literal - subcommand is case insensitive and normalized'() {
+        expect:
+        RCmd.fromLiteral(literal).match(cmd, firstArg)
+        RCmd.fromLiteral(literal).literal() == normalized
+
+        where:
+        literal            | cmd      | firstArg | normalized
+        '+CONFIG|get'      | 'config' | 'get'    | '+config|get'
+        '+Config|GET'      | 'config' | 'get'    | '+config|get'
+        '-CONFIG|Set'      | 'config' | 'set'    | '-config|set'
+    }
 }
