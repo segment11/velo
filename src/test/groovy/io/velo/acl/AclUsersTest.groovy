@@ -447,6 +447,55 @@ class AclUsersTest extends Specification {
         AclUsers.resetAclLogs()
     }
 
+    def 'test acl log count keeps increasing after the circular buffer wraps'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        AclUsers.resetAclLogs()
+
+        when:
+        for (int i = 0; i < 130; i++) {
+            AclUsers.recordAclLog("command", "io-loop", "CMD" + i, "user" + i, "/127.0.0.1:" + i)
+        }
+        def logs = AclUsers.getAclLogs(128)
+
+        then: 'entry ids are unique and strictly increasing'
+        logs.collect { it.entryId }.toSet().size() == 128
+        logs.collect { it.entryId } == logs.collect { it.entryId }.sort()
+
+        and: 'count identifies each entry and does not saturate'
+        logs.collect { it.count }.toSet().size() == 128
+        logs[0].count < logs[1].count
+        logs[126].count < logs[127].count
+
+        cleanup:
+        AclUsers.resetAclLogs()
+    }
+
+    def 'test acl log reset resets the entry id counter'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+
+        when:
+        AclUsers.resetAclLogs()
+        AclUsers.recordAclLog("command", "io-loop", "CMD1", "user", "/127.0.0.1:1")
+        def firstId = AclUsers.getAclLogs(10)[0].entryId
+
+        then:
+        firstId == 1
+
+        when:
+        AclUsers.resetAclLogs()
+        AclUsers.recordAclLog("command", "io-loop", "CMD2", "user", "/127.0.0.1:2")
+
+        then: 'entry ids restart from 1 after a reset'
+        AclUsers.getAclLogs(10)[0].entryId == 1
+
+        cleanup:
+        AclUsers.resetAclLogs()
+    }
+
     def 'test acl log getAclLogs returns empty when no logs'() {
         given:
         def aclUsers = AclUsers.instance

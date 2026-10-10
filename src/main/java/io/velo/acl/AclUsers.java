@@ -223,6 +223,8 @@ public class AclUsers {
     private static final LogRow[] aclLogBuffer = new LogRow[ACL_LOG_MAX_SIZE];
     private static int aclLogIndex = 0;
     private static int aclLogCount = 0;
+    /** Total number of entries ever recorded, keeps growing after the buffer wraps. */
+    private static long aclLogTotalCount = 0;
     private static long aclLogEntryIdCounter = 1;
 
     /**
@@ -234,7 +236,7 @@ public class AclUsers {
      */
     public static synchronized void recordAclLog(String reason, String context, String object, String username, String clientInfo) {
         var entry = new LogRow();
-        entry.count = aclLogCount;
+        entry.count = (int) aclLogTotalCount;
         entry.reason = reason;
         entry.context = context;
         entry.object = object;
@@ -247,6 +249,7 @@ public class AclUsers {
 
         aclLogBuffer[aclLogIndex % ACL_LOG_MAX_SIZE] = entry;
         aclLogIndex++;
+        aclLogTotalCount++;
         if (aclLogCount < ACL_LOG_MAX_SIZE) {
             aclLogCount++;
         }
@@ -290,6 +293,8 @@ public class AclUsers {
         Arrays.fill(aclLogBuffer, null);
         aclLogIndex = 0;
         aclLogCount = 0;
+        aclLogTotalCount = 0;
+        aclLogEntryIdCounter = 1;
     }
 
 }
