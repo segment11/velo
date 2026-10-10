@@ -119,12 +119,22 @@ class AGroupTest extends Specification {
         oneSlot.dynConfig.binlogOn = true
 
         // ***** *****
+        // 'all' is a pseudo category used internally by +@all, redis does not expose it in ACL CAT
         when:
         def reply = aGroup.execute('acl cat')
         then:
         reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'all'.bytes
+        def catNames = (reply as MultiBulkReply).replies.collect { new String(((BulkReply) it).raw) }
+        !catNames.contains('all')
+        catNames.contains('dangerous')
+        catNames.contains('write')
+
+        // ACL CAT all must return an error, not throw NullPointerException
+        when:
+        reply = aGroup.execute('acl cat all')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('all')
 
         when:
         reply = aGroup.execute('acl cat dangerous')
@@ -136,7 +146,8 @@ class AGroupTest extends Specification {
         when:
         reply = aGroup.execute('acl cat dangerous_x')
         then:
-        reply == ErrorReply.SYNTAX
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "Unknown category 'dangerous_x'"
 
         when:
         reply = aGroup.execute('acl cat a b')

@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -141,26 +142,30 @@ public class AGroup extends BaseCommand {
             }
 
             var category = data.length == 3 ? new String(data[2]).toLowerCase() : null;
-            var categories = Category.values();
+            // 'all' is an internal pseudo category used by '+@all'/'+*', it is not a real
+            // category, redis does not list it and rejects it as unknown
+            var realCategories = Arrays.stream(Category.values())
+                    .filter(c -> c != Category.all)
+                    .toArray(Category[]::new);
             if (category == null) {
-                var replies = new Reply[categories.length];
-                for (int i = 0; i < categories.length; i++) {
-                    replies[i] = new BulkReply(categories[i].name());
+                var replies = new Reply[realCategories.length];
+                for (int i = 0; i < realCategories.length; i++) {
+                    replies[i] = new BulkReply(realCategories[i].name());
                 }
                 return new MultiBulkReply(replies);
             } else {
-                int index = -1;
-                for (int i = 0; i < categories.length; i++) {
-                    if (categories[i].name().equals(category)) {
-                        index = i;
+                Category target = null;
+                for (var c : realCategories) {
+                    if (c.name().equals(category)) {
+                        target = c;
                         break;
                     }
                 }
-                if (index == -1) {
-                    return ErrorReply.SYNTAX;
+                if (target == null) {
+                    return new ErrorReply("Unknown category '" + category + "'");
                 }
 
-                var cmdList = Category.getCmdListByCategory(categories[index]);
+                var cmdList = Category.getCmdListByCategory(target);
                 var replies = new Reply[cmdList.size()];
                 for (int i = 0; i < cmdList.size(); i++) {
                     replies[i] = new BulkReply(cmdList.get(i));
