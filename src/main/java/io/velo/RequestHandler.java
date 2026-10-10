@@ -329,17 +329,7 @@ public class RequestHandler {
                     var passwordRaw = auth.substring(splitIndex + 1);
 
                     var u = aclUsers.get(user);
-                    if (u == null) {
-                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
-                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
-                        return ErrorReply.AUTH_FAILED;
-                    }
-                    if (!u.isOn()) {
-                        var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
-                        AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
-                        return ErrorReply.AUTH_FAILED;
-                    }
-                    if (!u.checkPassword(passwordRaw)) {
+                    if (u == null || !u.isOn() || !u.checkPassword(passwordRaw)) {
                         var clientInfo = ((TcpSocket) socket).getRemoteAddress().toString();
                         AclUsers.recordAclLog("auth", "auth", user, user, clientInfo);
                         return ErrorReply.AUTH_FAILED;
