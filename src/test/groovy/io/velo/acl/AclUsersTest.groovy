@@ -78,6 +78,24 @@ class AclUsersTest extends Specification {
         aclUsers.get('default') != null
 
         when:
+        // blank lines are skipped by redis, they must not abort the load
+        aclFile.text = 'user default on nopass ~* +@all &*\n\n\nuser blankok on >pw ~* +@all &*\n\n'
+        aclUsers.loadAclFile()
+        then:
+        aclUsers.get('default') != null
+        aclUsers.get('blankok') != null
+
+        when:
+        // a user line with only on/off must round trip through save/load
+        aclFile.text = 'user default on nopass ~* +@all &*\nuser juston on\n'
+        aclUsers.loadAclFile()
+        then:
+        aclUsers.get('default') != null
+        aclUsers.get('juston') != null
+        aclUsers.get('juston').on
+        aclUsers.get('juston').getFirstPassword() == null
+
+        when:
         boolean exception = false
         // no default user
         aclFile.text = 'user test on nopass ~* +@all &*'

@@ -374,7 +374,9 @@ public class U {
         }
 
         var parts = str.split(" ");
-        if (parts.length < 4) {
+        // 'user <name> <on|off>' is a valid, complete user definition with no rules,
+        // redis accepts it and ACL SAVE can emit it, so 3 tokens is enough
+        if (parts.length < 3) {
             return null;
         }
 

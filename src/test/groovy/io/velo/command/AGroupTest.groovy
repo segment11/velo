@@ -324,11 +324,11 @@ class AGroupTest extends Specification {
         (reply as ErrorReply).message == 'no default user in acl file'
 
         when:
+        // 'user default on' is a valid minimal user definition, redis accepts it
         aclFile.text = 'user default on'
         reply = aGroup.execute('acl load')
         then:
-        reply instanceof ErrorReply
-        (reply as ErrorReply).message.contains 'parse acl file error'
+        reply instanceof OKReply
 
         when:
         // invalid key pattern

@@ -117,6 +117,10 @@ public class AclUsers {
                 if (line.startsWith("#")) {
                     continue;
                 }
+                // redis skips empty lines in the acl file
+                if (line.isBlank()) {
+                    continue;
+                }
 
                 var u = U.fromLiteral(line);
                 if (u == null) {

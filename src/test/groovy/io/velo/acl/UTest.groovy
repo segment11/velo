@@ -132,7 +132,19 @@ class UTest extends Specification {
         when:
         def u3 = U.fromLiteral('user kerry off')
         then:
-        u3 == null
+        u3 != null
+        u3.user == 'kerry'
+        !u3.on
+        u3.getFirstPassword() == null
+        u3.rCmdList.isEmpty()
+        u3.rKeyList.isEmpty()
+        u3.rPubSubList.isEmpty()
+
+        when:
+        def u3on = U.fromLiteral('user kerry on')
+        then:
+        u3on != null
+        u3on.on
 
         when:
         def u4 = U.fromLiteral('kerry on')
@@ -738,5 +750,54 @@ class UTest extends Specification {
         u4.rKeyList.size() == 1
         u4.rCmdList.size() == 1
         u4.passwords.size() == 1
+    }
+
+    def 'test literal round-trip works for users with no rules'() {
+        given:
+        def u = new U('empty')
+
+        when:
+        def lit = u.literal()
+        then:
+        lit == 'user empty off'
+
+        when:
+        def restored = U.fromLiteral(lit)
+        then:
+        restored != null
+        restored.user == 'empty'
+        !restored.on
+
+        when:
+        def u2 = new U('resetme')
+        u2.resetPassword()
+        u2.resetCmd()
+        u2.resetKey()
+        u2.resetPubSub()
+        def lit2 = u2.literal()
+        then:
+        lit2 == 'user resetme off'
+
+        when:
+        def restored2 = U.fromLiteral(lit2)
+        then:
+        restored2 != null
+        restored2.user == 'resetme'
+    }
+
+    def 'test fromLiteral accepts a user line with only on or off'() {
+        expect:
+        U.fromLiteral(literal) != null
+
+        where:
+        literal << ['user a on', 'user a off', 'user a off ']
+    }
+
+    def 'test fromLiteral still rejects lines with too few tokens'() {
+        expect:
+        U.fromLiteral(literal) == null
+
+        where:
+        literal << ['user', 'user a', 'kerry on', 'on off']
     }
 }
