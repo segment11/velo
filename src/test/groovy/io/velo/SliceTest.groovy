@@ -3,6 +3,7 @@ package io.velo
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class SliceTest extends Specification {
 
@@ -154,12 +155,12 @@ class SliceTest extends Specification {
         slice4.readLong() == 0x123456789ABCDEF0L
         slice4.readLong() == -1L
 
-        when: 'write double'
+        when: 'write double LE'
         def slice5 = new Slice()
-        slice5.writeDouble(123.456d)
+        slice5.writeDoubleLE(123.456d)
         then:
         slice5.getWriteIndex() == 8
-        ByteBuffer.wrap(slice5.getArray(), 0, 8).getDouble() == 123.456d
+        ByteBuffer.wrap(slice5.getArray(), 0, 8).order(ByteOrder.LITTLE_ENDIAN).getDouble() == 123.456d
 
         when: 'write short LE'
         def slice6 = new Slice()

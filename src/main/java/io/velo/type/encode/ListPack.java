@@ -95,6 +95,9 @@ public class ListPack {
             } else if ((c & ListPack13BitIntMask) == ListPack13BitInt) {
                 nettyBuf.skipBytes(1);
                 intValue = ((c & 0x1F) << 8) | nettyBuf.readUnsignedByte();
+                if (intValue >= 4096) {
+                    intValue -= 8192;
+                }
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(1);
             } else if ((c & ListPack16BitIntMask) == ListPack16BitInt) {
@@ -104,12 +107,12 @@ public class ListPack {
                 nettyBuf.skipBytes(1);
             } else if ((c & ListPack24BitIntMask) == ListPack24BitInt) {
                 nettyBuf.skipBytes(1);
-                intValue = nettyBuf.readUnsignedMediumLE();
+                intValue = nettyBuf.readMediumLE();
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(1);
             } else if ((c & ListPack32BitIntMask) == ListPack32BitInt) {
                 nettyBuf.skipBytes(1);
-                intValue = nettyBuf.readUnsignedIntLE();
+                intValue = nettyBuf.readIntLE();
                 valueBytes = String.valueOf(intValue).getBytes();
                 nettyBuf.skipBytes(1);
             } else if ((c & ListPack64BitIntMask) == ListPack64BitInt) {

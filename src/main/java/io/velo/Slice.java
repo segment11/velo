@@ -144,12 +144,13 @@ public class Slice {
     }
 
     /**
-     * Writes a 64-bit double in big-endian byte order.
+     * Writes a 64-bit double in little-endian byte order, the byte order redis
+     * stores a rdb zset score with.
      *
      * @param value the double value to write
      */
-    public void writeDouble(double value) {
-        writeLong(Double.doubleToLongBits(value));
+    public void writeDoubleLE(double value) {
+        writeLongLE(Double.doubleToLongBits(value));
     }
 
     /**

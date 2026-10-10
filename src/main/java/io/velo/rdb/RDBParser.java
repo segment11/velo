@@ -66,14 +66,13 @@ public class RDBParser {
                 }
                 callback.onList(list);
                 break;
-            case RDB_TYPE_LIST_ZIP_LIST:
+            case RDB_TYPE_LIST_ZIP_LIST: {
                 var listZipList = new RedisList();
-                var listBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
-                var listZipListSize = listBuf.readShortLE();
-                for (int i = 0; i < listZipListSize; i++) {
-                    listZipList.addLast(decodeRdbString(listBuf));
-                }
+                var listZipListBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
+                ZipList.decode(listZipListBuf, (valueBytes, index) -> listZipList.addLast(valueBytes));
+                callback.onList(listZipList);
                 break;
+            }
             case RDB_TYPE_LIST_QUICK_LIST, RDB_TYPE_LIST_QUICK_LIST2:
                 var listQuickList = new RedisList();
                 decodeListQuickList(nettyBuf, type, listQuickList);
@@ -127,17 +126,20 @@ public class RDBParser {
                 decodeHashZipMap(nettyBuf, hashZipMap);
                 callback.onHash(hashZipMap);
                 break;
-            case RDB_TYPE_HASH_ZIP_LIST:
+            case RDB_TYPE_HASH_ZIP_LIST: {
                 var hashZipList = new RedisHH();
                 var hashBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
-                short hashZipListSize = hashBuf.readShortLE();
-                for (int i = 0; i < (int) hashZipListSize; i += 2) {
-                    var field = new String(decodeRdbString(hashBuf));
-                    var value = decodeRdbString(hashBuf);
-                    hashZipList.put(field, value);
-                }
+                final String[] fieldArray = new String[1];
+                ZipList.decode(hashBuf, (valueBytes, index) -> {
+                    if (index % 2 == 0) {
+                        fieldArray[0] = new String(valueBytes);
+                    } else {
+                        hashZipList.put(fieldArray[0], valueBytes);
+                    }
+                });
                 callback.onHash(hashZipList);
                 break;
+            }
             case RDB_TYPE_HASH_LIST_PACK:
                 var hashListPack = new RedisHH();
                 decodeHashListPack(nettyBuf, hashListPack);
@@ -289,8 +291,8 @@ public class RDBParser {
 
         for (int i = 0; i < len; i++) {
             switch (memberSize) {
-                case 2 -> set.add(String.valueOf(setBuf.readUnsignedShortLE()));
-                case 4 -> set.add(String.valueOf(setBuf.readUnsignedIntLE()));
+                case 2 -> set.add(String.valueOf(setBuf.readShortLE()));
+                case 4 -> set.add(String.valueOf(setBuf.readIntLE()));
                 case 8 -> set.add(String.valueOf(setBuf.readLongLE()));
                 default -> throw new IllegalArgumentException("Invalid intset encoding");
             }
@@ -310,7 +312,8 @@ public class RDBParser {
             var member = new String(decodeRdbString(nettyBuf));
             double score;
             if (type == RDB_TYPE_ZSET) {
-                var lenForDouble = nettyBuf.readChar();
+                // the legacy format stores a 1 byte length, then the ascii score
+                var lenForDouble = nettyBuf.readUnsignedByte();
                 if (lenForDouble == 255) {
                     score = Double.NEGATIVE_INFINITY;
                 } else if (lenForDouble == 254) {
@@ -323,7 +326,8 @@ public class RDBParser {
                     score = Double.parseDouble(new String(x));
                 }
             } else {
-                score = nettyBuf.readDouble();
+                // ZSET2 stores the raw 8 bytes of the double, in little-endian byte order
+                score = nettyBuf.readDoubleLE();
             }
             zset.add(score, member);
         }
@@ -332,13 +336,14 @@ public class RDBParser {
     private void decodeZSetZipList(ByteBuf nettyBuf, RedisZSet zset) {
         var zsetBuf = Unpooled.wrappedBuffer(decodeRdbString(nettyBuf));
 
-        int size = zsetBuf.readShortLE();
-        for (int i = 0; i < size; i += 2) {
-            var member = new String(decodeRdbString(zsetBuf));
-            var doubleStr = new String(decodeRdbString(zsetBuf));
-            double score = Double.parseDouble(doubleStr);
-            zset.add(score, member);
-        }
+        final String[] memberArray = new String[1];
+        ZipList.decode(zsetBuf, (valueBytes, index) -> {
+            if (index % 2 == 0) {
+                memberArray[0] = new String(valueBytes);
+            } else {
+                zset.add(parseScore(new String(valueBytes)), memberArray[0]);
+            }
+        });
     }
 
     private void decodeZSetListPack(ByteBuf nettyBuf, RedisZSet zset) {
@@ -349,16 +354,24 @@ public class RDBParser {
             if (index % 2 == 0) {
                 memberArray[0] = new String(valueBytes);
             } else {
-                var scoreStr = new String(valueBytes);
-                double score = switch (scoreStr) {
-                    case "inf" -> Double.POSITIVE_INFINITY;
-                    case "-inf" -> Double.NEGATIVE_INFINITY;
-                    case "nan" -> Double.NaN;
-                    default -> Double.parseDouble(scoreStr);
-                };
-                zset.add(score, memberArray[0]);
+                zset.add(parseScore(new String(valueBytes)), memberArray[0]);
             }
         });
+    }
+
+    /**
+     * A ziplist or listpack encoded zset stores the score as a string.
+     *
+     * @param scoreStr the score string
+     * @return the parsed score
+     */
+    private static double parseScore(String scoreStr) {
+        return switch (scoreStr) {
+            case "inf" -> Double.POSITIVE_INFINITY;
+            case "-inf" -> Double.NEGATIVE_INFINITY;
+            case "nan" -> Double.NaN;
+            default -> Double.parseDouble(scoreStr);
+        };
     }
 
     private void decodeHashZipMap(ByteBuf nettyBuf, RedisHH hash) {
@@ -498,7 +511,7 @@ public class RDBParser {
         writeRdbLength(slice, rz.size());
         for (var entry : rz.getSet()) {
             writeRdbString(slice, entry.member().getBytes());
-            slice.writeDouble(entry.score());
+            slice.writeDoubleLE(entry.score());
         }
 
         return writeVersionAndCrc(slice);
