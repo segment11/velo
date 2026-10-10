@@ -207,8 +207,8 @@ public abstract class BaseCommand {
     public static @Nullable U getAuthU(ITcpSocket socket0) {
         var authUser = SocketInspector.getAuthUser(socket0);
         if (authUser == null) {
-            var defaultU = aclUsers.get(U.DEFAULT_USER);
-            return defaultU != null ? defaultU : U.INIT_DEFAULT_U;
+            // never fall back to a privileged built in user, a missing default user must be denied
+            return aclUsers.get(U.DEFAULT_USER);
         }
         return aclUsers.get(authUser);
     }

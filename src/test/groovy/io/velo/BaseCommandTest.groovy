@@ -127,6 +127,25 @@ class BaseCommandTest extends Specification {
         u.checkPassword('configured-password')
     }
 
+    def 'test getAuthU returns null when the default user is missing instead of a fully privileged fallback'() {
+        given:
+        def aclUsers = AclUsers.instance
+        aclUsers.initForTest()
+        def socket = SocketInspectorTest.mockTcpSocket()
+
+        when:
+        // the default user is removed from the registry
+        aclUsers.delete(U.DEFAULT_USER)
+        aclUsers.get(U.DEFAULT_USER) == null
+        def u = BaseCommand.getAuthU(socket)
+
+        then: 'no silent fully privileged fallback'
+        u == null
+
+        cleanup:
+        aclUsers.initForTest()
+    }
+
     def 'test slot from raw key bytes keeps original bytes for hash'() {
         given:
         ConfForSlot.global = ConfForSlot.from(1_000_000)

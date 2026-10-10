@@ -800,4 +800,43 @@ class UTest extends Specification {
         where:
         literal << ['user', 'user a', 'kerry on', 'on off']
     }
+
+    def 'test INIT_DEFAULT_U is frozen and cannot be mutated'() {
+        when:
+        U.INIT_DEFAULT_U.setOn(false)
+
+        then:
+        thrown(IllegalStateException)
+
+        when:
+        U.INIT_DEFAULT_U.addPassword(U.Password.plain('x'))
+
+        then:
+        thrown(IllegalStateException)
+
+        when:
+        U.INIT_DEFAULT_U.resetCmd()
+
+        then:
+        thrown(IllegalStateException)
+
+        when:
+        U.INIT_DEFAULT_U.resetKey()
+
+        then:
+        thrown(IllegalStateException)
+
+        when:
+        U.INIT_DEFAULT_U.resetPubSub()
+
+        then:
+        thrown(IllegalStateException)
+
+        and: 'the built in default keeps its privileged rule set'
+        U.INIT_DEFAULT_U.isOn()
+        U.INIT_DEFAULT_U.getFirstPassword().isNoPass()
+        !U.INIT_DEFAULT_U.rCmdList.isEmpty()
+        !U.INIT_DEFAULT_U.rKeyList.isEmpty()
+        !U.INIT_DEFAULT_U.rPubSubList.isEmpty()
+    }
 }

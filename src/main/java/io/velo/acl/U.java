@@ -261,6 +261,8 @@ public class U {
         INIT_DEFAULT_U.addRCmd(true, RCmd.fromLiteral("+*"), RCmd.fromLiteral("+@all"));
         INIT_DEFAULT_U.addRKey(true, RKey.fromLiteral("~*"));
         INIT_DEFAULT_U.addRPubSub(true, RPubSub.fromLiteral("&*"));
+        // the built in default is only a template, freeze it so nothing can mutate it
+        INIT_DEFAULT_U.freeze();
     }
 
     /** @return string representation in literal format */
