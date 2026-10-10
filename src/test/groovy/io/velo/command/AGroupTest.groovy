@@ -436,6 +436,17 @@ class AGroupTest extends Specification {
         then:
         reply instanceof ErrorReply
 
+        // malformed subcommand rule must return a rule error, not throw
+        when:
+        reply = aGroup.execute('acl setuser a +config|')
+        then:
+        reply == ErrorReply.ACL_SETUSER_RULE_INVALID
+
+        when:
+        reply = aGroup.execute('acl setuser a +|')
+        then:
+        reply == ErrorReply.ACL_SETUSER_RULE_INVALID
+
         when:
         reply = aGroup.execute('acl setuser')
         then:

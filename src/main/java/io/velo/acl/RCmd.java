@@ -132,8 +132,11 @@ public class RCmd {
         String firstArg = null;
         Category category = null;
         if (str.contains("|")) {
+            var parts = str.split("\\|", -1);
+            if (parts.length != 2 || parts[0].length() <= 1 || parts[1].isEmpty()) {
+                throw new IllegalArgumentException("Invalid literal: " + str);
+            }
             type = Type.cmd_with_first_arg;
-            var parts = str.split("\\|");
             cmd = parts[0].substring(1);
             firstArg = parts[1];
         } else if (str.contains("@")) {

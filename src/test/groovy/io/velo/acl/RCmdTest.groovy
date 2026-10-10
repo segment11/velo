@@ -189,4 +189,15 @@ class RCmdTest extends Specification {
         allCategory.type == RCmd.Type.category
         allCategory.category == Category.all
     }
+
+    def 'test from literal - malformed subcommand rule must throw IllegalArgumentException'() {
+        when:
+        RCmd.fromLiteral(literal)
+
+        then:
+        thrown(IllegalArgumentException)
+
+        where:
+        literal << ['+config|', '-config|', '+|', '+|get', '+config|get|extra']
+    }
 }
