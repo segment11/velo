@@ -127,6 +127,29 @@ sunionstore
         then:
         sListList22.size() == 6
         sListList22.every { it.size() == 0 }
+
+        when:
+        // bug 70.3: scan cursor slot should be used for slot worker dispatch
+        def dataScanCursor = new byte[2][]
+        dataScanCursor[1] = new ScanCursor((short) 3, 0, (short) 0, (short) 0, (byte) 0, (byte) 0).toLong().toString().bytes
+        def sScanCursorList = _SGroup.parseSlots('scan', dataScanCursor, slotNumber)
+        def dataScanCursorZero = new byte[2][]
+        dataScanCursorZero[1] = '0'.bytes
+        def sScanCursorZeroList = _SGroup.parseSlots('scan', dataScanCursorZero, slotNumber)
+        def dataScanCursorSlotTooBig = new byte[2][]
+        dataScanCursorSlotTooBig[1] = new ScanCursor((short) slotNumber, 0, (short) 0, (short) 0, (byte) 0, (byte) 0).toLong().toString().bytes
+        def sScanCursorSlotTooBigList = _SGroup.parseSlots('scan', dataScanCursorSlotTooBig, slotNumber)
+        def dataScanCursorNegative = new byte[2][]
+        dataScanCursorNegative[1] = '-1'.bytes
+        def sScanCursorNegativeList = _SGroup.parseSlots('scan', dataScanCursorNegative, slotNumber)
+        then:
+        sScanCursorList.size() == 1
+        sScanCursorList[0].slot() == 3
+        sScanCursorList[0].rawKey() == null
+        sScanCursorZeroList.size() == 1
+        sScanCursorZeroList[0].slot() == 0
+        sScanCursorSlotTooBigList.size() == 0
+        sScanCursorNegativeList.size() == 0
     }
 
     def 'test handle - format errors'() {

@@ -301,6 +301,26 @@ public class SGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
+        if ("scan".equals(cmd)) {
+            // dispatch to the cursor slot's owning worker, the cursor long contains the slot index,
+            // so the scan reads wal / key buckets of that slot on the slot worker thread only
+            if (data.length < 2) {
+                return slotWithKeyHashList;
+            }
+
+            try {
+                var cursorLong = Long.parseLong(new String(data[1]));
+                short slot = ScanCursor.fromLong(cursorLong).slot();
+                if (slot >= 0 && slot < slotNumber) {
+                    // slot only, no raw key, only used to pin the event loop
+                    slotWithKeyHashList.add(new SlotWithKeyHash(slot, 0, 0L));
+                }
+            } catch (NumberFormatException e) {
+                // invalid cursor, keep the empty list, scan() will reply not integer
+            }
+            return slotWithKeyHashList;
+        }
+
         if ("sadd".equals(cmd) || "scard".equals(cmd) ||
                 "set".equals(cmd) || "setbit".equals(cmd) || "setex".equals(cmd) || "setnx".equals(cmd) ||
                 "setrange".equals(cmd) ||

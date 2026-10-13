@@ -397,6 +397,33 @@ class UTest extends Specification {
         !u.checkChannels('my_channel1')
 
         when:
+        // bug 70.3: slot-only entries without a raw key are used to pin the event loop,
+        // they must be skipped by the key pattern check instead of matching against a null key
+        def rCmd3 = new RCmd()
+        rCmd3.allow = true
+        rCmd3.type = RCmd.Type.cmd
+        rCmd3.cmd = 'scan'
+        u.rCmdList << rCmd3
+        def dataScan = new byte[2][]
+        dataScan[0] = 'scan'.bytes
+        dataScan[1] = '0'.bytes
+        def slotWithKeyHashNoKey = [new BaseCommand.SlotWithKeyHash((short) 3, 0, 0L)]
+        then:
+        u.checkCmdAndKey('scan', dataScan, slotWithKeyHashNoKey)
+
+        when:
+        // slot-only entries also pass when the user has no key rules
+        def u2 = new U('nokey')
+        def rCmd4 = new RCmd()
+        rCmd4.allow = true
+        rCmd4.type = RCmd.Type.cmd
+        rCmd4.cmd = 'scan'
+        u2.rCmdList << rCmd4
+        then:
+        u2.checkCmdAndKey('scan', dataScan, slotWithKeyHashNoKey)
+        !u2.checkCmdAndKey('get', dataGet, [BaseCommand.slot('other_key'.bytes, (short) 1)])
+
+        when:
         u.rKeyList.clear()
         then:
         !u.checkCmdAndKey('get', dataGet, slotWithKeyHashList)

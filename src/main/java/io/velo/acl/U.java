@@ -608,7 +608,9 @@ public class U {
         if (slotWithKeyHashList != null && !slotWithKeyHashList.isEmpty()) {
             if (rKeyList.isEmpty()) {
                 // skip check, just use to fix event loop
-                if (slotWithKeyHashList.size() == 1 && slotWithKeyHashList.getFirst() == BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT) {
+                var onlyEventLoopEntries = slotWithKeyHashList.stream().allMatch(slotWithKeyHash ->
+                        slotWithKeyHash == BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT || slotWithKeyHash.rawKey() == null);
+                if (onlyEventLoopEntries) {
                     return CheckCmdAndKeyResult.TRUE;
                 }
                 return FALSE_WHEN_CHECK_KEY;
@@ -616,6 +618,11 @@ public class U {
 
             for (var slotWithKeyHash : slotWithKeyHashList) {
                 if (slotWithKeyHash == BaseCommand.SlotWithKeyHash.TO_FIX_FIRST_SLOT) {
+                    continue;
+                }
+
+                // slot-only entries without a raw key are used to pin the event loop, no key to check
+                if (slotWithKeyHash.rawKey() == null) {
                     continue;
                 }
 
