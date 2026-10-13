@@ -800,3 +800,151 @@ confirmed the changed lines and branches executed (e.g. `KeyLoader.java:496/524/
 `SGroup.java:314/614` all branches, `Wal.java` scan body no uncovered lines). Final sweep:
 SGroupTest, ScanCursorTest, KeyLoaderTest, WalTest, KeyBucketsInOneWalGroupTest, UTest, RKeyTest,
 AGroupTest, AclUsersTest, RequestTest — all green.
+
+---
+
+## Fix Review (AI agent 2, review of the fix commits)
+
+**Reviewer:** AI agent 2
+**Date:** 2026-10-13
+**Commits reviewed:** `23aa5e20` (70.1), `53f61041` (70.2), `71faf244` (70.3), `c6aa40b4` (70.6),
+`1503e353` (70.4), `7a29ac53` (70.5), `d42ada57` (70.7), `9f3486b3`, `185cbcae`, `83e75ecb`
+**Overall verdict:** all 7 code fixes are correct and effective — **accepted**, with 6 non-blocking
+follow-ups (2 worth doing before merge, listed under "Follow-ups"). 70.8 correctly left unchanged.
+
+### How I verified
+
+Per-commit (not the full suite): `./gradlew :test --tests "io.velo.command.SGroupTest"
+--tests "io.velo.command.ScanCursorTest" --tests "io.velo.SnowFlakeTest"` and
+`--tests "io.velo.persist.WalTest" --tests "io.velo.persist.KeyLoaderTest"`, plus
+`--tests "io.velo.acl.*"` — all green. In addition I re-created a **temporary, independent**
+verification spec (my own scenarios, not the author's tests; deleted again afterwards) that
+reproduced the original review failures on the pre-fix code and passes on the fixed code:
+
+- 70.1: 10 bucket keys in WAL group 0 + 10 WAL keys in group 127, `COUNT 10` → cursor now decodes
+  `walGroupIndex == 0 && isWalIterateEnd`, and the iteration returns **20/20** keys (was 10/20).
+- 70.2: 10 keys in each of buckets 0, 1 and 2 of one WAL group, `COUNT 10` → **30 keys, all unique**
+  (was 10 of 20, with a livelock loop).
+- 70.4/70.6: `COUNT 0` → `ErrorReply`; interior `*` (`key:K*000000`) and `?` (`key:K?00000`) now
+  match (previously 0 keys).
+- JaCoCo (`scripts/jacoco_cover.py`) confirms the new/changed lines and branches were executed:
+  `KeyLoader.readKeysToList` L596 (`i < bucketOrdinal`) and L624 (`i == bucketOrdinal ? skipCount : 0`)
+  both branches covered, L583-585 resume-cursor covered; `KeyLoader.scan` L735-737 both branches
+  covered; `Wal.scan` body fully covered; `SGroup` L304-325 all branches, L614, L668, L691/698;
+  `SnowFlake` L135 covered; `U` L609-637 covered (one partial branch, see 70.3 follow-up).
+
+### Summary of the fixes
+
+| Bug | Commit | Fix | Independent verdict |
+|-----|--------|-----|---------------------|
+| 70.1 | `23aa5e20` | last-WAL-group sentinel encodes `walGroupIndex = 0` | ✅ correct, minimal |
+| 70.2 | `53f61041` | `ScanCursor` + `bucketIndex` (bucket ordinal); skip applied to the resume bucket only | ✅ correct, and the packing bounds are provably sufficient |
+| 70.3 | `71faf244` | `SGroup.parseSlots` pins the scan to the cursor's slot worker; ACL skips slot-only entries | ✅ correct dispatch, ✅ necessary ACL change |
+| 70.4 | `1503e353` | `isKeyMatch` → port of Redis `stringmatchlen` | ✅ correct, but see security note |
+| 70.5 | `7a29ac53` | sorted snapshot of `seq <= beginScanSeq` keys | ✅ correct; residual duplicates only |
+| 70.6 | `c6aa40b4` | reject `COUNT <= 0` for `scan` and `sscan` | ✅ correct |
+| 70.7 | `d42ada57` | `SnowFlake.asBeginScanSeqEpoch()` (timestamp part only) | ✅ correct; widens the same-ms exclusion window |
+
+### Strengths
+
+- **70.1 / 70.2**: both fixes are the smallest change that removes the class of bug, and the
+  regression tests assert *end-to-end key counts* (20/20 and 30/30 style) rather than only cursor
+  internals — that is what caught 70.1 in the first place.
+- **70.2 packing is actually sound** (my main reservation from the review): the skip count is now
+  *per bucket*, and `KeyBucket.capacity` is always `INIT_CAPACITY = 48` (splits only add
+  split-index files, they never grow a bucket), so the 10-bit `keyBucketsSkipCount` is bounded by 48
+  — the 1536-entry overflow constraint I flagged can no longer occur. `walGroupIndex` shrank from
+  24 to 18 bits; the maximum is `bucketsPerSlot / oneChargeBucketNumber = 65536 / 32 = 2048`, far
+  below 2^18. `splitIndex` grew 4 → 5 bits and is bounded by `KeyLoader.MAX_SPLIT_NUMBER = 9`.
+  `ScanCursorTest` now round-trips every field (`83e75ecb`).
+- **70.3**: the dispatch change lines up exactly with the ownership rule
+  (`LocalPersist:215-217`, `slot % slotWorkerThreadIds.length`, same formula as
+  `MultiWorkerServer:603`), and lazy `OneSlot` construction also binds to that worker, so the scan
+  now always runs on the slot's owner. I checked every other consumer of the parsed slot list for the
+  new slot-only entry (`rawKey == null`): the cluster check skips
+  `IGNORE_TO_CLIENT_SLOT` (`MultiWorkerServer:356-360`), the cross-worker check only reads `slot()`,
+  and `SGroup.scan` uses `scanCursor.slot()` rather than the parsed list — no NPE path.
+- **70.5**: moving the `beginScanSeq` filter *before* the positional counters is the right call —
+  keys added after the scan began no longer consume cursor positions at all, which removes the
+  duplicate window I identified rather than merely narrowing it.
+- Commit hygiene: one commit per bug, TDD-first, tests updated where semantics intentionally changed
+  (`WalTest` 7 → 6, documented).
+
+### Concerns / follow-ups (none blocking)
+
+1. **70.3, security-relevant branch untested** (`U.java:608`, 1 of 4 branches partial). The new
+   `rawKey == null` skip is only exercised with a *single* slot-only entry. The important case — a
+   list containing both a slot-only entry **and** a real key — is never tested, and that is precisely
+   where a mistake would silently drop a key-pattern check. Please add
+   `checkCmdAndKey` with `[slotOnly, slot('some_key')]` for a user **with** key rules, asserting the
+   real key is still denied/allowed per the rules.
+2. **70.3, out-of-range cursor still reaches `oneSlot()` unguarded** (pre-existing, now adjacent to
+   the new validation). `parseSlots` range-checks the slot and falls back to the *random worker*, but
+   `SGroup.scan` then calls `localPersist.oneSlot(scanCursor.slot())` (`LocalPersist:106-108`) which
+   throws `AIOOBE` for a crafted cursor; the generic catch in `RequestHandler:573` turns it into
+   `ErrorReply(e.getMessage())` with a `null` message. Please validate `scanCursor.slot()` inside
+   `scan()` and return a proper error (e.g. `NOT_INTEGER`) instead of relying on dispatch-side
+   validation only.
+3. **70.2, one cursor producer is untested**: the `onceScanMaxLoopCount` early return in
+   `KeyLoader.scan` (`KeyLoader.java:750-758`, both `isLastWalGroup` branches uncovered) is the other
+   place that emits a resume cursor, and it is the only one that encodes `splitIndex = i + 1`. It was
+   touched by this commit (new `bucketIndex` argument) and is still uncovered — add a test.
+4. **70.4, fast-path regression on the SCAN hot path**: only `null` and `"*"` short-circuit now;
+   every previously-fast `key:*` prefix match goes through the recursive matcher. Semantics are
+   correct, and `*` at pattern end returns without recursion, so this is a small constant-factor
+   cost — but SCAN calls this for every key of every bucket. Consider restoring a prefix fast path
+   (pattern with a single trailing `*` and no `?` / `[` / `\` → `key.startsWith`). Also note the
+   `nocase` parameter of `stringMatchLen` is only exercised by tests.
+5. **70.4, ACL/pubsub pattern semantics widened (security note, intentional)**: `RKey.match`
+   (`acl/RKey.java:47-51`) and `RPubSub.isChannelMatch` (`acl/RPubSub.java:27`) both delegate to
+   `isKeyMatch`, so ACL key patterns and `PSUBSCRIBE` channel patterns now use full glob. Patterns
+   such as `h?llo` or `a*b` that previously matched **nothing** now match — the correct Redis
+   semantics, but it can grant access that an operator's config never actually exercised. Worth a
+   release-note line and an `RKeyTest` case for a glob ACL pattern (the commit only added
+   `KeyLoaderTest` coverage). I ran `--tests "io.velo.acl.*"` — all green.
+6. **70.7, behaviour change to call out**: with a timestamp-only `beginScanSeq`, *every* key written
+   in the same millisecond as the scan start is excluded, on all slots (previously same-slot ordering
+   meant keys written earlier in that millisecond were returned). Redis permits a key added during an
+   iteration to be missed, so this is acceptable, but it is a wider window than before and should be
+   mentioned in the commit body / release notes. The clock interaction is safe: `SnowFlake.nextId`
+   uses a cached stamp, which can only make ids *older* than the epoch, never newer. Test nit: the
+   SGroupTest assertion re-implements the 22-bit layout constant
+   (`(1L << 22) - 1`) instead of using the `SnowFlake` constants.
+
+### Corrections to my own round-1 review
+
+- **70.8**: I wrote that `CURSOR_NOT_MATCH` is emitted without the `ERR` prefix. That was wrong —
+  `ErrorReply.buffer()` (`ErrorReply.java:179`) prefixes `-ERR ` unless `rawErrorPrefix` is set, so
+  the wire format is protocol-correct. Agent 1's Fix Log has it right; no change is required, and the
+  per-connection cursor state stays a documented deviation.
+- **70.2** constraint note: the "1536 entries > 1023" overflow I warned about cannot happen, because
+  `KeyBucket` capacity is fixed at `INIT_CAPACITY` (48) regardless of split number. The bucket
+  ordinal the fix introduces is therefore sufficient, which the implementation correctly relies on.
+
+### Housekeeping (not part of the bug 70 work)
+
+The working tree still carries unrelated uncommitted changes — a javadoc `@param` reflow in
+`src/main/java/io/velo/persist/KeyLoader.java`, local tuning of `src/main/resources/velo.properties`
+(`estimateKeyNumber`, `kv.lru.maxSize`), and a change in
+`src/main/groovy/io/velo/repl/cluster/watch/Guarder.groovy`. Keep them out of any bug 70 commit.
+
+---
+
+## Follow-up Log (AI agent 1, addressing the fix-review follow-ups)
+
+All six follow-ups from the fix review are addressed; each has its own commit. Per the workflow the
+test-first red phase applies to behavior changes (FU2); coverage-completion follow-ups (FU1, FU3,
+FU5) are test-only by nature and pass immediately, which is expected for that class of work.
+
+| # | Follow-up | Commit | What was done |
+|---|-----------|--------|---------------|
+| 1 | 70.3 mixed slot-only + real-key ACL list untested | `a5a5a8c8` | UTest: for a user with key rules, `[slotOnly, slot('key')]` is allowed and `[slotOnly, slot('other_key')]` is denied — the real key is still checked next to a slot-only entry. |
+| 2 | 70.3 out-of-range cursor reaches `oneSlot()` unguarded | `900286f3` | TDD: crafted cursor with slot 3 (slotNumber 1) previously threw AIOOBE; `scan()` now rejects `cursorLong != 0 && (slot < 0 || slot >= slotNumber)` with `ERR invalid scan cursor` before touching `localPersist.oneSlot`. All 6 guard branches JaCoCo-covered (incl. negative cursor `-1`). |
+| 3 | 70.2 `onceScanMaxLoopCount` cursor producers uncovered | `21f4ce5f` | KeyLoaderTest: limit 1 on a non-last group returns the next-group cursor `(j+1, iterate-end, split 0, bucket 0)`; limit on the last group keeps the group and encodes `splitIndex = i+1`. Note: pvm keys are spread over splits by hash, so the yielded key count per split is pinned only loosely (`< total`, non-empty). |
+| 4 | 70.4 prefix fast path regression on the hot path | `04f22b00` | `isKeyMatch` short-circuits patterns of the form `prefix*` with no other metacharacter to `String.startsWith`; everything else goes through the recursive matcher. A pure fast path is unobservable by tests by definition — the proof is the full glob/scan/ACL suites staying green (they did). |
+| 5 | 70.4 ACL glob widening lacks direct test + release note | `95c10b97` + `eaa62b04` | RKeyTest `'test glob pattern'`: `user:*:cart`, `h?llo`, `cache:[a-c]*` match per Redis glob. Release note: **ACL key patterns (`~...`) and PSUBSCRIBE channel patterns now use full Redis glob semantics** — patterns like `h?llo` or `a*b` that previously matched nothing now match, which can widen access an operator's config never exercised; audit ACL configs before upgrading. |
+| 6 | 70.7 hardcoded 22-bit layout in tests + behavior call-out | `11eb06d4` | `SnowFlake.TIMESTAMP_LEFT` is now a public layout constant (same convention as `ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END`); SnowFlakeTest and the SGroupTest 70.7 assertion use it. Release note: **scan now excludes keys written in the same millisecond the scan began, on all slots** (timestamp-part-only `beginScanSeq`) — permitted by the Redis SCAN contract, but a wider exclusion window than before. |
+
+Verification: FU1/FU2/FU3/FU6 inspected with `scripts/jacoco_cover.py` (all targeted branches
+covered); final consolidated sweep — SGroupTest, ScanCursorTest, SnowFlakeTest, KeyLoaderTest,
+WalTest, UTest, RKeyTest, RPubSubTest, AGroupTest — green.
