@@ -625,6 +625,24 @@ class KeyLoaderTest extends Specification {
         KeyLoader.isKeyMatch('abc', 'ab*')
         !KeyLoader.isKeyMatch('aaa', 'bbb')
 
+        // bug 70.4: redis glob semantics, interior *, ?, [...], ^ and \ escapes
+        KeyLoader.isKeyMatch('user:1:cart', 'user:*:cart')
+        KeyLoader.isKeyMatch('hallo', 'h?llo')
+        !KeyLoader.isKeyMatch('hallo', 'h?lla')
+        KeyLoader.isKeyMatch('hello', 'h[a-e]llo')
+        !KeyLoader.isKeyMatch('hello', 'h[^a-e]llo')
+        KeyLoader.isKeyMatch('axxbxx c', 'a*b*c')
+        KeyLoader.isKeyMatch('a*b', 'a\\*b')
+        !KeyLoader.isKeyMatch('axb', 'a\\*b')
+        !KeyLoader.isKeyMatch('aaa', 'aaaa*')
+        KeyLoader.isKeyMatch('aaa', '*a*a*')
+        !KeyLoader.isKeyMatch('axx', 'a*b*c')
+        KeyLoader.isKeyMatch('hello', 'h[e-a]llo')
+        KeyLoader.isKeyMatch('hello', 'h[ae]llo')
+        KeyLoader.stringMatchLen('h[A-E]llo', 'hello', true)
+        !KeyLoader.stringMatchLen('h[A-E]llo', 'hxllo', true)
+        KeyLoader.isKeyMatch('a', 'a*')
+
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())

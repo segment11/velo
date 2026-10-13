@@ -438,17 +438,117 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return true;
         }
 
-        if (matchPattern.endsWith("*")) {
-            if (matchPattern.startsWith("*")) {
-                return key.contains(matchPattern.substring(1, matchPattern.length() - 1));
-            }
+        return stringMatchLen(matchPattern, key, false);
+    }
 
-            return key.startsWith(matchPattern.substring(0, matchPattern.length() - 1));
-        } else if (matchPattern.startsWith("*")) {
-            return key.endsWith(matchPattern.substring(1));
-        } else {
-            return key.equals(matchPattern);
+    /**
+     * Port of redis stringmatchlen, supports {@code *} {@code ?} {@code [...]} {@code ^} and backslash escapes.
+     *
+     * @param pattern the glob pattern
+     * @param string the string to match
+     * @param nocase whether to compare case-insensitively
+     * @return true if the whole string matches the pattern
+     */
+    @VisibleForTesting
+    static boolean stringMatchLen(@NotNull String pattern, @NotNull String string, boolean nocase) {
+        return stringMatchImpl(pattern, 0, string, 0, nocase);
+    }
+
+    private static boolean stringMatchImpl(@NotNull String pattern, int patternPos,
+                                           @NotNull String string, int stringPos, boolean nocase) {
+        var patternLen = pattern.length();
+        var stringLen = string.length();
+        while (patternPos < patternLen && stringPos < stringLen) {
+            switch (pattern.charAt(patternPos)) {
+                case '*' -> {
+                    while (patternPos < patternLen && pattern.charAt(patternPos) == '*') {
+                        patternPos++;
+                    }
+                    if (patternPos == patternLen) {
+                        return true;
+                    }
+                    for (int i = stringPos; i <= stringLen; i++) {
+                        if (stringMatchImpl(pattern, patternPos, string, i, nocase)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                case '?' -> {
+                    patternPos++;
+                    stringPos++;
+                }
+                case '[' -> {
+                    patternPos++;
+                    var not = false;
+                    if (patternPos < patternLen && pattern.charAt(patternPos) == '^') {
+                        not = true;
+                        patternPos++;
+                    }
+                    var match = false;
+                    while (patternPos < patternLen && pattern.charAt(patternPos) != ']') {
+                        if (patternPos + 2 < patternLen && pattern.charAt(patternPos + 1) == '-') {
+                            var start = pattern.charAt(patternPos);
+                            var end = pattern.charAt(patternPos + 2);
+                            var c = string.charAt(stringPos);
+                            if (start > end) {
+                                char t = start;
+                                start = end;
+                                end = t;
+                            }
+                            if (nocase) {
+                                start = Character.toLowerCase(start);
+                                end = Character.toLowerCase(end);
+                                c = Character.toLowerCase(c);
+                            }
+                            match |= c >= start && c <= end;
+                            patternPos += 3;
+                        } else {
+                            match |= singleCharMatch(pattern.charAt(patternPos), string.charAt(stringPos), nocase);
+                            patternPos++;
+                        }
+                    }
+                    if (patternPos < patternLen && pattern.charAt(patternPos) == ']') {
+                        patternPos++;
+                    }
+                    if (not) {
+                        match = !match;
+                    }
+                    if (!match) {
+                        return false;
+                    }
+                    stringPos++;
+                }
+                case '\\' -> {
+                    if (patternPos + 1 < patternLen) {
+                        patternPos++;
+                    }
+                    if (!singleCharMatch(pattern.charAt(patternPos), string.charAt(stringPos), nocase)) {
+                        return false;
+                    }
+                    patternPos++;
+                    stringPos++;
+                }
+                default -> {
+                    if (!singleCharMatch(pattern.charAt(patternPos), string.charAt(stringPos), nocase)) {
+                        return false;
+                    }
+                    patternPos++;
+                    stringPos++;
+                }
+            }
         }
+        while (patternPos < patternLen && pattern.charAt(patternPos) == '*') {
+            patternPos++;
+        }
+        return patternPos == patternLen && stringPos == stringLen;
+    }
+
+    private static boolean singleCharMatch(char a, char b, boolean nocase) {
+        if (nocase) {
+            return Character.toLowerCase(a) == Character.toLowerCase(b);
+        }
+        return a == b;
     }
 
     /**
