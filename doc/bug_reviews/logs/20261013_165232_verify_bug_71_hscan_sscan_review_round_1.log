@@ -1,0 +1,669 @@
+[0m
+> build · MiniMax-M3.1-Flash-Preview
+[0m
+I'll start by reading the prompt and skill files.
+[0m→ [0mRead doc/bug_reviews/AI_agent_prompt.txt
+[0m→ [0mRead .opencode/skills/velo-bug-review/SKILL.md
+[0m→ [0mRead doc/bug_reviews/bug_71_hscan_sscan_review_round_1.md
+[0m→ [0mRead .opencode/skills/velo-bug-review/templates/report.md
+[0m
+[0m# [0mTodos
+[✓] Read report + skill (MUST-READ)
+[•] Verify 71.1: HH-path HSCAN expired fields (RedisHH.decode/iterate, hscan2)
+[ ] Verify 71.2: split HSCAN without NOVALUES NOT_SUPPORT + isUseHH default + docs
+[ ] Verify 71.3: WRONGTYPE consistency by path
+[ ] Verify 71.4: WITHVALUES / COUNT 0 option parsing vs Redis 7.2 ground truth
+[ ] Verify 71.5: offset-cursor skip under concurrent mutation
+[ ] Build Spock temp specs / JDK repro for evidence where possible
+[ ] Update Status fields in place + append Review Feedback with fix order
+[0m
+[0m→ [0mRead src/main/java/io/velo/command/HGroup.java[90m [offset=2040, limit=185][0m
+[0m→ [0mRead src/main/java/io/velo/command/SGroup.java[90m [offset=2150, limit=105][0m
+[0m→ [0mRead src/main/java/io/velo/type/RedisHH.java
+[0m→ [0mRead src/main/java/io/velo/type/RedisHashKeys.java[90m [limit=130][0m
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "putExpireAt|getExpireAt|getMap\(\)|putAll\(|mapExpireAt" src/main/java/io/velo/ src/main/groovy/ dyn/src/ 2>/dev/null
+src/main/java/io/velo/rdb/RDBParser.java:473:        for (var entry : rhh.getMap().entrySet()) {
+src/main/java/io/velo/CompressedValue.java:162:    public long getExpireAt() {
+src/main/java/io/velo/type/RedisHH.java:29:    private final HashMap<String, Long> mapExpireAt = new HashMap<>();
+src/main/java/io/velo/type/RedisHH.java:32:    public HashMap<String, byte[]> getMap() {
+src/main/java/io/velo/type/RedisHH.java:67:            mapExpireAt.put(key, expireAt);
+src/main/java/io/velo/type/RedisHH.java:76:        mapExpireAt.remove(key);
+src/main/java/io/velo/type/RedisHH.java:83:    public void putAll(HashMap<String, byte[]> map) {
+src/main/java/io/velo/type/RedisHH.java:84:        this.map.putAll(map);
+src/main/java/io/velo/type/RedisHH.java:99:    public long getExpireAt(String key) {
+src/main/java/io/velo/type/RedisHH.java:100:        var l = mapExpireAt.get(key);
+src/main/java/io/velo/type/RedisHH.java:108:    public void putExpireAt(String key, long expireAt) {
+src/main/java/io/velo/type/RedisHH.java:109:        mapExpireAt.put(key, expireAt);
+src/main/java/io/velo/type/RedisHH.java:151:            var expireAt = mapExpireAt.get(key);
+src/main/java/io/velo/type/RedisHH.java:236:                r.mapExpireAt.put(field, expireAt);
+src/main/java/io/velo/type/RedisHH.java:263:            var expireAt = mapExpireAt.get(field);
+src/main/java/io/velo/type/RedisGeo.java:82:    public HashMap<String, P> getMap() {
+src/main/java/io/velo/persist/Chunk.java:560:            map.putAll(segmentBatch.collect());
+src/main/java/io/velo/persist/Chunk.java:562:            map.putAll(segmentBatch2.collect());
+src/main/java/io/velo/persist/Chunk.java:570:                    map.putAll(fdReadWrite.collect());
+src/main/java/io/velo/BaseCommand.java:713:    public Long getExpireAt(SlotWithKeyHash slotWithKeyHash) {
+src/main/java/io/velo/BaseCommand.java:719:            return cv.getExpireAt();
+src/main/java/io/velo/BaseCommand.java:723:            return oneSlot.getExpireAt(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
+src/main/java/io/velo/BaseCommand.java:952:            setNumber(cv.numberValue(), slotWithKeyHash, cv.getExpireAt());
+src/main/java/io/velo/BaseCommand.java:974:                set(cv.getCompressedData(), slotWithKeyHash, 0, cv.getExpireAt());
+src/main/java/io/velo/persist/KeyBucket.java:694:    public ExpireAtAndSeq getExpireAtAndSeqByKey(String key, long keyHash) {
+src/main/java/io/velo/persist/KeyBucket.java:700:            var r = getExpireAtAndSeqByKeyWithCellIndex(key, keyHash, i);
+src/main/java/io/velo/persist/KeyBucket.java:709:    private ExpireAtAndSeq getExpireAtAndSeqByKeyWithCellIndex(String key, long keyHash, int cellIndex) {
+src/main/java/io/velo/persist/Wal.java:408:        allValues.putAll(delayToKeyBucketShortValues);
+src/main/java/io/velo/persist/Wal.java:409:        allValues.putAll(delayToKeyBucketValues);
+src/main/java/io/velo/persist/KeyBucketsInOneWalGroup.java:163:    KeyBucket.ExpireAtAndSeq getExpireAtAndSeq(int bucketIndex, String key, long keyHash) {
+src/main/java/io/velo/persist/KeyBucketsInOneWalGroup.java:178:        return keyBucket.getExpireAtAndSeqByKey(key, keyHash);
+src/main/java/io/velo/persist/KeyBucketsInOneWalGroup.java:458:    void putAll(@NotNull Collection<Wal.V> shortValueList) {
+src/main/java/io/velo/persist/ChunkWalGroupRebuilder.java:131:                    pvm.expireAt = cv.getExpireAt();
+src/main/java/io/velo/persist/KeyLoader.java:832:    Long getExpireAt(int bucketIndex, String key, long keyHash) {
+src/main/java/io/velo/persist/KeyLoader.java:833:        var r = getExpireAtAndSeqByKey(bucketIndex, key, keyHash);
+src/main/java/io/velo/persist/KeyLoader.java:843:    KeyBucket.ExpireAtAndSeq getExpireAtAndSeqByKey(int bucketIndex, String key, long keyHash) {
+src/main/java/io/velo/persist/KeyLoader.java:852:        return keyBucket.getExpireAtAndSeqByKey(key, keyHash);
+src/main/java/io/velo/persist/KeyLoader.java:1035:        inner.putAll(shortValueList);
+src/main/java/io/velo/persist/KeyLoader.java:1278:                    map.putAll(fdReadWrite.collect());
+src/main/java/io/velo/command/PGroup.java:305:        if (cv.getExpireAt() == CompressedValue.NO_EXPIRE) {
+src/main/java/io/velo/command/PGroup.java:369:        return cv.isHll() ? cv.getExpireAt() : CompressedValue.NO_EXPIRE;
+src/main/java/io/velo/command/MGroup.java:495:                long expireAt = cv.getExpireAt();
+src/main/java/io/velo/command/MGroup.java:537:                        dumpBytesList.add(new DumpBytesAndTtlAndIndex(dumpBytes, cv.getExpireAt(), one.index));
+src/main/java/io/velo/command/TGroup.java:176:        var expireAt = getExpireAt(slotWithKeyHash);
+src/main/java/io/velo/command/RGroup.java:476:                        var map = rhh.getMap();
+src/main/java/io/velo/persist/OneSlot.java:1615:    public Long getExpireAt(String key, int bucketIndex, long keyHash) {
+src/main/java/io/velo/persist/OneSlot.java:1649:        return keyLoader.getExpireAt(bucketIndex, key, keyHash);
+src/main/java/io/velo/persist/OneSlot.java:1864:        var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, keyHash);
+src/main/java/io/velo/persist/OneSlot.java:2004:        var expireAtAndSeq = keyLoader.getExpireAtAndSeqByKey(bucketIndex, key, cv.getKeyHash());
+src/main/java/io/velo/persist/OneSlot.java:2032:            ttlTotalInSecond += (cv.getExpireAt() - System.currentTimeMillis()) / 1000;
+src/main/java/io/velo/persist/OneSlot.java:2054:            v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
+src/main/java/io/velo/persist/OneSlot.java:2080:                cvAsBigString.setExpireAt(cv.getExpireAt());
+src/main/java/io/velo/persist/OneSlot.java:2087:                v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), CompressedValue.SP_TYPE_BIG_STRING,
+src/main/java/io/velo/persist/OneSlot.java:2099:                v = new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
+src/main/java/io/velo/persist/OneSlot.java:2524:                    var expireAtAndSeq = keyBucketsInOneWalGroup.getExpireAtAndSeq(bucketIndex, one.key(), cv.getKeyHash());
+src/main/java/io/velo/persist/OneSlot.java:2535:                    list.add(new Wal.V(cv.getSeq(), bucketIndex, cv.getKeyHash(), cv.getExpireAt(), cv.getDictSeqOrSpType(),
+src/main/java/io/velo/persist/OneSlot.java:2976:            map.putAll(keyLoader.collect());
+src/main/java/io/velo/persist/OneSlot.java:2980:            map.putAll(chunk.collect());
+src/main/java/io/velo/persist/OneSlot.java:2989:            map.putAll(bigStringFiles.collect());
+src/main/java/io/velo/command/EGroup.java:273:        var expireAtExist = cv.getExpireAt();
+src/main/java/io/velo/command/EGroup.java:305:        var expireAt = cv.getExpireAt();
+src/main/java/io/velo/command/GGroup.java:343:        long expireAt = cv.getExpireAt();
+src/main/java/io/velo/command/GGroup.java:867:        var map = rg.getMap();
+src/main/java/io/velo/command/SGroup.java:950:                expireAt = cv.getExpireAt();
+src/main/java/io/velo/command/HGroup.java:762:            var fieldExpireAt = fieldCv.getExpireAt();
+src/main/java/io/velo/command/HGroup.java:805:        var map = rhh.getMap();
+src/main/java/io/velo/command/HGroup.java:816:            var fieldExpireAt = rhh.getExpireAt(field);
+src/main/java/io/velo/command/HGroup.java:824:                rhh.putExpireAt(field, CompressedValue.NO_EXPIRE);
+src/main/java/io/velo/command/HGroup.java:959:            var fieldExpireAt = fieldCv.getExpireAt();
+src/main/java/io/velo/command/HGroup.java:1014:        var map = rhh.getMap();
+src/main/java/io/velo/command/HGroup.java:1025:            var fieldExpireAt = rhh.getExpireAt(field);
+src/main/java/io/velo/command/HGroup.java:1032:            rhh.putExpireAt(field, expireAt);
+src/main/java/io/velo/command/HGroup.java:1143:        var map = rhh.getMap();
+src/main/java/io/velo/command/HGroup.java:1413:                rhh.putExpireAt(field, expireAt);
+src/main/java/io/velo/command/HGroup.java:2002:        var map = rhh.getMap();
+src/main/java/io/velo/command/HGroup.java:2177:        for (var entry : rhh.getMap().entrySet()) {
+src/main/java/io/velo/command/HGroup.java:2327:        var map = rhh.getMap();
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "hpexpire|hexpire|HPEXPIRE|HEXPIRE|persist" src/main/java/io/velo/command/HGroup.java | head -60
+7:import io.velo.persist.KeyLoader;
+8:import io.velo.persist.Wal;
+54:                "hexpire", -6,
+62:                "hexpireat", -6,
+70:                "hexpiretime", -4,
+158:                "hpersist", -4,
+166:                "hpexpire", -6,
+174:                "hpexpireat", -6,
+182:                "hpexpiretime", -4,
+284:        if ("hdel".equals(cmd) || "hexists".equals(cmd) || "hexpire".equals(cmd) || "hexpireat".equals(cmd) ||
+285:                "hexpiretime".equals(cmd) || "hget".equals(cmd) || "hgetall".equals(cmd) ||
+288:                "hpersist".equals(cmd) || "hpexpire".equals(cmd) || "hpexpireat".equals(cmd) || "hpexpiretime".equals(cmd) ||
+321:        if ("hexpire".equals(cmd)) {
+322:            return hexpire(false, false);
+325:        if ("hexpireat".equals(cmd)) {
+326:            return hexpire(true, false);
+329:        if ("hexpiretime".equals(cmd)) {
+373:        if ("hpersist".equals(cmd)) {
+377:        if ("hpexpire".equals(cmd)) {
+378:            return hexpire(false, true);
+381:        if ("hpexpireat".equals(cmd)) {
+382:            return hexpire(true, true);
+385:        if ("hpexpiretime".equals(cmd)) {
+690:        // HEXPIRETIME key FIELDS numfields field [field ...]
+691:        // HPEXPIRETIME key FIELDS numfields field [field ...]
+841:    private Reply hexpire(boolean isAt, boolean isMilliseconds) {
+842:        // HEXPIRE key seconds [NX | XX | GT | LT] FIELDS numfields field [field ...]
+843:        // HPEXPIRE key milliseconds [NX | XX | GT | LT] FIELDS numfields field [field ...]
+844:        // HEXPIREAT key timestamp [NX | XX | GT | LT] FIELDS numfields field [field ...]
+845:        // HPEXPIREAT key timestamp [NX | XX | GT | LT] FIELDS numfields field [field ...]
+926:            return hexpire2(expireAt, isNx, isXx, isGt, isLt, fields);
+1002:    private Reply hexpire2(long expireAt, boolean isNx, boolean isXx, boolean isGt, boolean isLt, ArrayList<String> fields) {
+1308:            } else if ("persist".equalsIgnoreCase(new String(data[fieldsIndex]))) {
+[0m
+[0m→ [0mRead src/main/java/io/velo/command/HGroup.java[90m [offset=930, limit=140][0m
+[0m→ [0mRead src/main/java/io/velo/command/HGroup.java[90m [offset=790, limit=120][0m
+[0m→ [0mRead src/main/java/io/velo/command/HGroup.java[90m [limit=110, offset=400][0m
+[0m→ [0mRead src/main/java/io/velo/command/HGroup.java[90m [limit=70, offset=1370][0m
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -ln "hscan|HSCAN|sscan|SSCAN" src/test/groovy/ dyn/test/ 2>/dev/null; echo "---"; rg -ln "RedisHH" src/test/groovy/ | head -20
+src/test/groovy/io/velo/command/SGroupTest.groovy
+src/test/groovy/io/velo/command/HGroupTest.groovy
+---
+src/test/groovy/io/velo/type/RedisListTest.groovy
+src/test/groovy/io/velo/type/RedisHHTest.groovy
+src/test/groovy/io/velo/type/RedisZSetTest.groovy
+src/test/groovy/io/velo/type/RedisHashKeysTest.groovy
+src/test/groovy/io/velo/command/DGroupTest.groovy
+src/test/groovy/io/velo/rdb/RDBParserTest.groovy
+src/test/groovy/io/velo/command/RGroupTest.groovy
+src/test/groovy/io/velo/command/VeloRDBImporterTest.groovy
+src/test/groovy/io/velo/command/HGroupTest.groovy
+src/test/groovy/io/velo/e2e/RDBParseE2ETest.groovy
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && git log --oneline -15 && echo "---STATE---" && sed -n '1,80p' doc/bug_reviews/STATE.md
+d9b34efe docs: bug 70 follow-up log for fix review items
+11eb06d4 refactor: expose snow flake timestamp left constant for tests
+eaa62b04 fix: move glob pattern test to end of rkey test class
+95c10b97 test: acl key pattern glob semantics cases
+04f22b00 fix: key match prefix fast path to avoid recursive matcher
+21f4ce5f test: key loader scan loop limit resume cursor both branches
+900286f3 fix: scan reject crafted cursor with out of range slot
+a5a5a8c8 test: acl mixed slot-only and real key entries still key checked
+913293a6 docs: run only relevant tests, limit test scope rule
+83e75ecb test: scan cursor field contract test for bucket index layout
+185cbcae docs: new public method needs direct unit test rule
+9f3486b3 test: snow flake begin scan seq epoch unit test
+d42ada57 fix: scan begin seq use timestamp epoch, comparable across slots
+7a29ac53 fix: wal scan use sorted snapshot order, late keys not consume cursor
+1503e353 fix: key match support redis glob semantics for scan match
+---STATE---
+# Bug Review State
+
+Single source of truth for report id allocation and module coverage.
+**Agents MUST read and update this file when creating any new report.**
+
+## next_bug_id
+
+72
+
+## Allocated
+
+| Id | Module | Rounds | Status |
+|---|---|---|---|
+| 1–70 | see doc/bug_reviews/ | various | closed |
+| 70 | scan command (SGroup) | 1 | review complete, fix phase pending |
+| 71 | hscan/sscan (HGroup/SGroup) | 1 | discovery complete, awaiting agent 2 verification |
+
+## Module coverage (latest round per module)
+
+| Module | Latest report | Open items |
+|---|---|---|
+| replication | bug_68 round 1 | check report |
+| persist layer | bug_50/51 round 2 | check report |
+| acl | bug_69 round 1 | check report |
+| scan | bug_70 round 1 | fix phase pending |
+| hscan/sscan | bug_71 round 1 | verification pending |
+| types / config / metrics / cluster / net / compression / commands (string/hash/list/set/zset/geo/hll) | see doc/bug_reviews/ | check reports |
+
+## Known id collisions (historical, do not propagate)
+
+- bug_59: task scheduler AND cluster
+- bug_60: info command AND cluster
+- bug_32: multithreading AND persist data flow
+
+When citing colliding ids, always qualify with the full file name.
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "hscan" src/test/groovy/io/velo/command/HGroupTest.groovy | head -40; echo "=== sscan ==="; rg -n "sscan" src/test/groovy/io/velo/command/SGroupTest.groovy | head -40
+34:hscan
+1219:    def 'test hscan'() {
+1230:        def reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
+1237:        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
+1248:        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
+1259:        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
+1274:        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
+1282:        reply = hGroup.execute('hscan a 0 match zzz count 5 novalues')
+1287:        reply = hGroup.execute('hscan a 0 match zzz count 5 withvalues')
+1302:        reply = hGroup.execute('hscan a 0 match field* count 5 novalues')
+1310:        reply = hGroup.execute('hscan a 0 match field* count 5 withvalues')
+1318:        reply = hGroup.execute('hscan a 0 match zzz count 5 withvalues')
+1324:        reply = hGroup.execute('hscan a 0 match zzz count a withvalues')
+1329:        reply = hGroup.execute('hscan a 0 match zzz count -1 withvalues')
+1334:        reply = hGroup.execute('hscan a 0 match zzz xxx 10 withvalues')
+1339:        reply = hGroup.execute('hscan >key 0 match zzz count 10 withvalues')
+1344:        reply = hGroup.execute('hscan a 0 match field count')
+1349:        reply = hGroup.execute('hscan a 0 match field match')
+1354:        reply = hGroup.execute('hscan a badcursor match field count 10')
+=== sscan ===
+2246:    def 'test sscan'() {
+2256:        def reply = sGroup.execute('sscan a 0')
+2267:        reply = sGroup.execute('sscan a 0')
+2277:        reply = sGroup.execute('sscan a 0')
+2286:        reply = sGroup.execute('sscan a 0 count 2')
+2301:            reply = sGroup.execute("sscan a $nextCursor count 2")
+2309:            if (pageCount > 20) assert false: 'infinite loop in sscan pagination'
+2321:        reply = sGroup.execute('sscan a 0 match x*')
+2330:        reply = sGroup.execute('sscan a 0 match nomatch*')
+2335:        reply = sGroup.execute('sscan a notanumber')
+2340:        reply = sGroup.execute('sscan >key 0')
+2345:        reply = sGroup.execute('sscan a')
+2350:        reply = sGroup.execute('sscan a 0 match')
+2355:        reply = sGroup.execute('sscan a 0 count')
+2360:        reply = sGroup.execute('sscan a 0 count notanumber')
+2365:        reply = sGroup.execute('sscan a 0 count -1')
+2370:        reply = sGroup.execute('sscan a 0 unknownoption')
+2375:        reply = sGroup.execute('sscan a 0 count 0')
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "expire" src/test/groovy/io/velo/type/RedisHHTest.groovy | head -30
+15:        def expireAt = System.currentTimeMillis() + 1000 * 10
+17:        rh.put('name', 'zhangsan'.bytes, expireAt)
+22:        rh.getExpireAt('name') == expireAt
+29:        rh.putExpireAt('name', expireAt + 1000 * 10)
+31:        rh.getExpireAt('name') == expireAt + 1000 * 10
+60:        RedisHH.iterate(encoded, true) { key, value, expireAt ->
+68:        // wait field name expire
+78:        rh2.iterate { key, value, expireAt ->
+90:        rh2.iterate { key, value, expireAt ->
+[0m
+[0m→ [0mRead src/test/groovy/io/velo/type/RedisHHTest.groovy[90m [limit=110][0m
+[0m→ [0mRead src/test/groovy/io/velo/command/HGroupTest.groovy[90m [limit=150, offset=1215][0m
+[0m→ [0mRead src/test/groovy/io/velo/command/HGroupTest.groovy[90m [limit=70][0m
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "def mockAGroup|mockAGroup\(" src/main/java/io/velo/BaseCommand.java src/test/groovy/io/velo/Mock.groovy 2>/dev/null | head; echo "---"; ls src/test/groovy/io/velo/
+src/main/java/io/velo/BaseCommand.java:297:    public static AGroup mockAGroup() {
+src/main/java/io/velo/BaseCommand.java:298:        return BaseCommand.mockAGroup((byte) 0, (byte) 1, (short) 1);
+src/main/java/io/velo/BaseCommand.java:310:    public static AGroup mockAGroup(byte workerId, byte slotWorkers, short slotNumber) {
+src/main/java/io/velo/BaseCommand.java:311:        return mockAGroup(workerId, slotWorkers, slotNumber, new CompressStats("mock", "worker_"),
+src/main/java/io/velo/BaseCommand.java:334:    public static AGroup mockAGroup(byte workerId, byte slotWorkers, short slotNumber, CompressStats compressStats,
+---
+acl
+BaseCommandTest.groovy
+command
+CompressedValueTest.groovy
+CompressStatsTest.groovy
+ConfForGlobalTest.groovy
+ConfForSlotTest.groovy
+ConfVolumeDirsForSlotTest.groovy
+DebugTest.groovy
+decode
+DictMapTest.groovy
+DictTest.groovy
+dyn
+e2e
+ExceptionTest.groovy
+extend
+HostAndPortTest.groovy
+ingest
+KeyHashTest.groovy
+metric
+mock
+monitor
+MultiWorkerServerTest.groovy
+persist
+rdb
+repl
+reply
+RequestHandlerTest.groovy
+SliceTest.groovy
+SnowFlakeTest.groovy
+SocketInspectorTest.groovy
+StaticMemoryPrepareBytesStatsTest.groovy
+task
+tools
+TrainSampleJobTest.groovy
+type
+UtilsTest.groovy
+ValkeyRawConfSupportTest.groovy
+VeloUserDataInSocketTest.groovy
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "slot = |def slot" src/test/groovy/io/velo/command/HGroupTest.groovy | head -5; echo "=== SGroupTest ==="; rg -n "slot = |def slot" src/test/groovy/io/velo/command/SGroupTest.groovy | head -5
+101:    final short slot = 0
+=== SGroupTest ===
+20:    final short slot = 0
+584:        def slotWithKeyHash = sGroup.slotWithKeyHashListParsed[0]
+740:        def slotWithKeyHash = sGroup.slotWithKeyHashListParsed[0]
+915:        def slotWithKeyHash = sGroup.slotWithKeyHashListParsed[0]
+[0m
+[0m→ [0mRead src/main/java/io/velo/BaseCommand.java[90m [limit=80, offset=830][0m
+[0m→ [0mRead src/main/java/io/velo/RequestHandler.java[90m [limit=90, offset=495][0m
+[0m→ [0mRead src/main/java/io/velo/command/SGroup.java[90m [limit=20, offset=1105][0m
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -rn -i "hscan|sscan" doc/redis_command_support.md | head -20; echo "=== file exists? ==="; ls -la doc/redis_command_support.md 2>/dev/null || echo "NOT FOUND"
+=== file exists? ===
+-rw-rw-r-- 1 kerry kerry 5159  6月 22 21:32 doc/redis_command_support.md
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "hashSaveMemberTogether|isHashSaveMemberTogether" src/main/java/io/velo/persist/LocalPersist.java | head -20; echo "=== properties ==="; rg -n -i "hash_save_member_together|hashSaveMemberTogether" velo.properties conf/*.properties 2>/dev/null | head
+406:        isHashSaveMemberTogether = persistConfig.get(ofBoolean(), "isHashSaveMemberTogether", true);
+590:    private boolean isHashSaveMemberTogether;
+596:        return isHashSaveMemberTogether;
+600:     * @param hashSaveMemberTogether the flag value to set
+603:    public void setHashSaveMemberTogether(boolean hashSaveMemberTogether) {
+604:        isHashSaveMemberTogether = hashSaveMemberTogether;
+=== properties ===
+[0m
+[0m→ [0mRead doc/redis_command_support.md
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX" src/main/ dyn/src/ | head -20
+src/main/java/io/velo/type/RedisHH.java:21:    public static final byte[] PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX = "h_not_hh_".getBytes();
+src/main/java/io/velo/command/HGroup.java:480:        int checkPrefixLength = RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX.length;
+src/main/java/io/velo/command/HGroup.java:484:                    RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX, 0, checkPrefixLength)) {
+src/main/java/io/velo/command/DGroup.java:406:        int checkPrefixLength = RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX.length;
+src/main/java/io/velo/command/DGroup.java:410:                    RedisHH.PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX, 0, checkPrefixLength)) {
+[0m
+[0m→ [0mRead src/main/java/io/velo/command/DGroup.java[90m [limit=40, offset=395][0m
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && ls doc/bug_reviews/ | head -80
+AI_agent_prompt.txt
+bug_10_types_module_review_round_1.md
+bug_10_types_module_review_round_2.md
+bug_10_types_module_review_round_3.md
+bug_11_persist_layer_review_round_1.md
+bug_11_persist_layer_review_round_2.md
+bug_12_persist_merge_data_flow_review.md
+bug_13_persist_read_data_flow_review_round_1.md
+bug_14_persist_read_data_flow_review_round_2.md
+bug_15_persist_truncate_chunk_fd_review_round_1.md
+bug_16_persist_data_flow_review_round_3.md
+bug_17_persist_read_data_flow_review_round_4.md
+bug_18_persist_layer_data_flow_review_round_1.md
+bug_19_persist_layer_review_round_1.md
+bug_1_xgroup_subcommand.md
+bug_20_persist_layer_data_flow_review_round_2.md
+bug_21_persist_layer_data_flow_review_round_3.md
+bug_22_persist_layer_data_write_flow_review_round_4.md
+bug_23_persist_layer_data_write_flow_review_round_5.md
+bug_24_configuration_module_review_round_1.md
+bug_25_configuration_module_review_round_2.md
+bug_26_configuration_module_review_round_3.md
+bug_27_acl_security_module_review_round_1.md
+bug_27_acl_security_module_review_round_2.md
+bug_27_acl_security_module_review_round_3.md
+bug_27_acl_security_module_review_round_4.md
+bug_27_acl_security_module_review_round_5.md
+bug_28_persist_read_data_flow_review_round_1.md
+bug_29_persist_read_data_flow_review_round_2.md
+bug_2_setAllCaughtUp_stale_master_position.md
+bug_30_persist_read_data_flow_review_round_3.md
+bug_31_find2_fix_direction.md
+bug_31_persist_layer_data_write_flow_review_round_1.md
+bug_32_multithreading_review_round_1.md
+bug_32_persist_layer_data_flow_review_round_1.md
+bug_33_multithreading_review_round_2.md
+bug_34_multithreading_review_round_3.md
+bug_35_metrics_monitoring_module_review_round_1.md
+bug_35_metrics_monitoring_module_review_round_2.md
+bug_35_metrics_monitoring_module_review_round_3.md
+bug_35_metrics_monitoring_module_review_round_4.md
+bug_36_multithreading_review_round_4.md
+bug_37_server_bootstrap_review_round_1.md
+bug_37_server_bootstrap_review_round_2.md
+bug_38_compression_module_review_round_1.md
+bug_38_compression_module_review_round_2.md
+bug_39_string_commands_review_round_1.md
+bug_39_string_commands_review_round_2.md
+bug_40_hash_module_review_round_1.md
+bug_41_list_module_review_round_1.md
+bug_42_set_module_review_round_1.md
+bug_43_sorted_set_module_review_round_1.md
+bug_44_geo_commands_review_round_1.md
+bug_45_hyperloglog_commands_review_round_1.md
+bug_46_persist_layer_review_round_1.md
+bug_47_persist_key_bucket_review_round_1.md
+bug_48_keybuckets_keyloader_review_round_1.md
+bug_49_persist_one_slot_chunk_review_round_1.md
+bug_49_persist_one_slot_chunk_review_round_2.md
+bug_50_persist_big_string_files_review_round_1.md
+bug_51_compressed_value_dict_review_round_1.md
+bug_51_compressed_value_dict_review_round_2.md
+bug_52_activej_usage_review_round_1.md
+bug_53_client_sub_commands_review_round_1.md
+bug_54_replication_module_review_round_1.md
+bug_55_replication_module_review_round_1.md
+bug_56_replication_module_review_round_1.md
+bug_57_replication_module_review_round_1.md
+bug_58_replication_module_review_round_1.md
+bug_59_cluster_module_review_round_1.md
+bug_59_task_scheduler_module_review_round_1.md
+bug_60_cluster_module_review_round_1.md
+bug_60_info_command_review_round_1.md
+bug_61_cluster_module_review_round_1.md
+bug_62_cluster_module_review_round_1.md
+bug_63_cluster_module_review_round_1.md
+bug_64_cluster_module_review_round_1.md
+bug_65_cluster_module_review_round_1.md
+bug_66_net_module_review_round_1.md
+bug_68_replication_module_review_round_1.md
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n -i "hscan|NOT_SUPPORT|novalues" doc/bug_reviews/bug_40_hash_module_review_round_1.md | head -30
+14:- Hash commands observed in Redis latest docs: HDEL, HEXISTS, HEXPIRE, HEXPIREAT, HEXPIRETIME, HGET, HGETALL, HGETDEL, HGETEX, HINCRBY, HINCRBYFLOAT, HKEYS, HLEN, HMGET, HMSET, HPERSIST, HPEXPIRE, HPEXPIREAT, HPEXPIRETIME, HPTTL, HRANDFIELD, HSCAN, HSET, HSETEX, HSETNX, HSTRLEN, HTTL, HVALS.
+131:- `HSCAN ... NOVALUES` returns expired field names.
+135:## Finding 3: HSCAN with a non-integer cursor throws instead of returning a Redis error
+167:HSCAN declares its cursor argument as an integer. Velo validates `COUNT` with a try/catch, but parses the required cursor with bare `Long.parseLong`. A request such as `HSCAN h bad` throws `NumberFormatException`. At the RequestHandler layer this becomes a generic error reply based on the Java exception message, rather than a stable Redis protocol error. This makes malformed client input observable as implementation details and can pollute logs with stack traces for ordinary protocol errors.
+185:        "hmget".equals(cmd) || "hmset".equals(cmd) || "hrandfield".equals(cmd) || "hscan".equals(cmd) ||
+207:2. Fix split-storage aggregate reads to filter expired/missing field values and optionally clean stale index entries. Add tests using `HEXPIRE`/`HPEXPIRE` or direct expired `CompressedValue`s for HLEN, HKEYS, HGETALL, HVALS, HRANDFIELD, and HSCAN.
+208:3. Fix HSCAN cursor validation to return the same style of Redis integer error used by COUNT parsing.
+238:| `HSCAN` | `hscan()` → `HGroup.java:1422-1457` | Iterates `rhk.getSet()` without any expiration check (NOVALUES only supported in split path) |
+240:**Contrast with HH storage path:** The HH path is NOT affected because `RedisHH.decode()` and `RedisHH.iterate()` (`RedisHH.java:296-308`) skip expired entries during deserialization. So `hkeys2()`, `hgetall2()`, `hvals2()`, `hrandfield2()`, and `hscan2()` all correctly exclude expired fields.
+244:### Finding 3: HSCAN with a non-integer cursor throws instead of returning a Redis error — **Confirmed**
+250:- Sending `HSCAN h notanumber` will throw `NumberFormatException`, which propagates up to the request handler as a generic error instead of a clean Redis protocol error like `-ERR value is not an integer or out of range`.
+263:1. Return an unsupported-command error (e.g., `ErrorReply.NOT_SUPPORT` or `-ERR unknown command`) so clients get a clear signal, or
+274:| 3. HSCAN cursor parse throws | Confirmed | Medium | Fix — wrap in try/catch, return integer error |
+350:   - `HSCAN` (split path)
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n -i "sscan|NOT_SUPPORT" doc/bug_reviews/bug_42_set_module_review_round_1.md | head -20; echo "=== bug_70 ==="; rg -n -i "hscan|sscan|offset" doc/bug_reviews/bug_70_scan_command_review_round_1.md 2>/dev/null | head -20
+18:- Redis set commands observed in Redis latest docs: SADD, SCARD, SDIFF, SDIFFSTORE, SINTER, SINTERCARD, SINTERSTORE, SISMEMBER, SMEMBERS, SMISMEMBER, SMOVE, SPOP, SRANDMEMBER, SREM, SSCAN, SUNION, SUNIONSTORE.
+209:## Finding 5: SSCAN is listed by Redis as a set command but falls through to nil
+246:Redis latest set docs include `SSCAN` in the set command family. Velo's support matrix lists 16 set commands and omits `SSCAN`. `SGroup.parseSlots` does not parse an `sscan` key, and `SGroup.handle()` has no `sscan` branch, so `SSCAN` falls through to `NilReply.INSTANCE` rather than returning either a cursor/array scan response or a clear unsupported/unknown-command error. Returning nil for a cursor command is especially misleading because nil is not one of `SSCAN`'s normal reply shapes.
+254:5. Decide whether to implement `SSCAN` or return a protocol-appropriate unsupported/unknown-command error instead of nil.
+343:### Finding 5: SSCAN is listed by Redis as a set command but falls through to nil
+348:- `SGroup.parseSlots()` (lines 50-92): No branch handles `"sscan"`. The method returns an empty list for unrecognized commands.
+349:- `SGroup.handle()` (lines 101-244): No branch handles `"sscan"`. Falls through to `return NilReply.INSTANCE` at line 244.
+350:- `sscan` is listed in ACL categories (`Category.java:470,535,681`) but has no implementation.
+351:- `SGroupTest.groovy` has no SSCAN test.
+353:SSCAN's normal reply is a two-element array `[cursor, [members...]]`. Returning `NilReply.INSTANCE` is misleading. Other scan commands (HSCAN, ZSCAN) may exist elsewhere; checking for those patterns could inform the implementation approach. At minimum, returning an error reply would be more appropriate than nil.
+367:| 5: SSCAN missing | **Confirmed** | Medium | No parse/handle branch; falls through to NilReply. ACL references exist. |
+563:Reviewed commit: `1b8d1ed2` (`feat: implement SSCAN command with cursor, MATCH, and COUNT support`)
+567:Finding 5 was that `SSCAN` had no parse/handle branch and fell through to `NilReply.INSTANCE`. The commit:
+569:- Adds `"sscan"` to the key-parsing branch in `parseSlots()` (`SGroup.java:58-59`), so the set key at `data[1]` is parsed for slot routing.
+570:- Adds an `if ("sscan".equals(cmd)) return sscan();` dispatch branch in `handle()` (`SGroup.java:240-242`).
+571:- Adds a new `sscan()` method (`SGroup.java:1839-1927`) modeled directly on `HGroup.hscan2()`: arg/cursor validation, optional `MATCH`/`COUNT` (case-insensitive), `getRedisSet()` lookup, offset-based skip over the backing `TreeSet`, and a `[nextCursor, [members...]]` reply.
+572:- Adds `test sscan` to `SGroupTest` covering missing key, empty set, full scan, `COUNT`, `MATCH` hit, `MATCH` miss, non-integer cursor, and key-too-long.
+591:- Set `{a,b,c,d,e}`, `SSCAN key 0 COUNT 2`:
+594:  - Client sees a non-zero cursor `2`, re-issues `SSCAN key 2`, gets `[c,d]` again — **forever**. `e` is never returned and the scan never terminates.
+596:This breaks the core contract of a cursor command for any set whose size exceeds `COUNT` (default 10), which is precisely when SSCAN matters. Single-page scans (set size ≤ COUNT) accidentally work because `isEnd` is true and the cursor is forced to `0`, which is why every test in `test sscan` passes.
+=== bug_70 ===
+3:**Module:** `scan` command path — `io.velo.command.SGroup` (`scan`, `sscan`) plus its persist-layer
+18:  `scanResultToReply()` (519-543), `sscan()` (2134-2222)
+104:`isScanWalFirst == false` branch at `SGroup.java:692-695` and calls
+131:`isWalIterateEnd() && !isScanWalFirst` from a WAL-phase hand-off" and start key buckets at
+248:  `RandomAccessFile` with non-atomic `raf.seek(offset); raf.getChannel().read(buffer)` (625-626).
+270:  shared `forOneWalGroupBatchBuffer` (cleared concurrently) can read the wrong offset window,
+322:  (`SGroup.java:301-357`): the method has branches for `sadd`/`scard`/`set`/... /`sscan` (single-key
+365:- Consumers: `Wal.java:428`, `KeyLoader.java:533`, `SGroup.java:2195` (sscan), and the same helper
+366:  is used by `hscan`/`zscan`.
+458:Reject `count < 1` with Redis's "COUNT should be greater than 0" style error (align `sscan`'s
+544:- `sscan` cursor math (`SGroup.java:2188-2221`) is self-consistent (cursor counts matched members
+590:(`isWalIterateEnd()` true → `isScanWalFirst` stays false) and calls
+673:Confirmed for every consumer (`Wal.java:428`, `KeyLoader.java:533`, `SGroup.sscan`,
+674:`hscan`/`zscan`). Severity Medium agreed; this is a silent-wrong-answer bug for common client
+714:author describes. Redis rejects `COUNT 0`; `sscan` already rejects `count <= 0`
+789:| 70.4 | fixed | `1503e353` fix: key match support redis glob semantics for scan match | `KeyLoader.isKeyMatch` delegates to a port of Redis `stringmatchlen` (`stringMatchLen`): `*`, `?`, `[a-e]`, `[^...]`, `\` escapes; fast paths for `null`/`"*"` kept. Applies to SCAN/SSCAN/HSCAN/ZSCAN MATCH and ACL key patterns. |
+791:| 70.6 | fixed | `c6aa40b4` fix: scan and sscan reject count 0 as invalid integer | `scan` rejects `count <= 0` with `INVALID_INTEGER` (was: only `< 0`, so COUNT 0 made `Wal.scan` add one key per WAL group with a negative left budget); `sscan`'s COUNT check aligned from `SYNTAX` to `INVALID_INTEGER`. |
+845:| 70.6 | `c6aa40b4` | reject `COUNT <= 0` for `scan` and `sscan` | ✅ correct |
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && sed -n '700,730p' doc/bug_reviews/bug_70_scan_command_review_round_1.md
+`count < 0` is rejected (`SGroup.java:594-596`) while `count == 0` is accepted, and `Wal.scan`
+adds a key before testing `keys.size() >= count` (`Wal.java:448-451`). Reproduction:
+
+```
+COUNT 0, WAL group 0 holds 4 keys            -> keys=4 [key:X000000..X000003] cursor=0
+COUNT 0, two non-empty WAL groups            -> keys=8 cursor=0
+COUNT 0, first WAL group empty               -> keys=0 cursor=<advanced to next group>
+```
+
+So: one key per non-empty WAL group is returned despite `COUNT 0`, `leftCount` goes negative
+(`SGroup.java:673`), and when the first group is empty the `keys.size() == count` equality at
+`SGroup.java:670` short-circuits and advances exactly one group per call. The key-bucket phase
+adds nothing (`KeyLoader.java:565-567`), so the two phases disagree — exactly the inconsistency the
+author describes. Redis rejects `COUNT 0`; `sscan` already rejects `count <= 0`
+(`SGroup.java:2172-2174`, though with generic `SYNTAX` instead of a COUNT-specific message).
+Confirmed, Low, cheap fix.
+
+### Finding 7 (70.7) — CONFIRMED
+
+Verified: `MultiWorkerServer.snowFlakes()` creates one `SnowFlake` per slot, all with identical
+`datacenterId`/`machineId` bits (`MultiWorkerServer.java:932-941`); the scan mints
+`beginScanSeq` from the cursor's slot only (`SGroup.java:643-651`, slot 0 for cursor 0), and the
+value is then compared against seqs produced by every other slot at `Wal.java:375`, `Wal.java:443`
+and `KeyLoader.java:560`. Since `SnowFlake` seq bits are private per instance
+(`SnowFlake.java:19-59`), cross-slot ids minted in the same millisecond are not ordered, so a key
+written *before* the scan started can carry `seq > beginScanSeq` and be filtered out. Confirmed,
+Low (1 ms window, single-slot deployments unaffected). The author's fix direction (derive the
+compare value from the shared timestamp part of the id, or use a safety margin) is acceptable.
+
+### Finding 8 (70.8) — CONFIRMED (design trade-off, document rather than "fix")
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && sed -n '330,360p' doc/bug_reviews/bug_40_hash_module_review_round_1.md; echo "=== bug40 fix log / round sections ==="; rg -n "^#|^## " doc/bug_reviews/bug_40_hash_module_review_round_1.md | head -40
+- Added `HashMap<String, Long> expireAtByField` and `boolean ttlMetaEncoded`
+   - Implemented `hasTtlMetaEncoded()`, `getCachedExpireAt()`, `putCachedExpireAt()`, `clearCachedExpireAt()`, `isLiveByCache()`, `liveFieldsByCache()`
+   - `remove(field)` clears both field and its cached TTL
+   - `add(field)` does NOT create a TTL entry
+
+2. **TTL encoding/decoding**:
+   - Optional TTL metadata section appended after field list: marker(4) + count(2) + entries
+   - Only non-`NO_EXPIRE` entries are written
+   - Old-format (no TTL section) decodes with `ttlMetaEncoded=false`
+
+3. **`ensureHashKeysTtlCacheCurrent`**:
+   - Returns early if `hasTtlMetaEncoded() == true`
+   - If false, migrates by reading each field CV and building TTL cache
+   - Saves upgraded `RedisHashKeys` after migration
+
+4. **Aggregate commands updated** to use cache-backed `liveFieldsByCache(now)`:
+   - `HLEN`, `HKEYS` (split path)
+   - `HGETALL` (split path)
+   - `HVALS` (split path)
+   - `HRANDFIELD` (split path)
+   - `HSCAN` (split path)
+
+5. **Write-path sync**:
+   - `HEXPIRE`/`HPEXPIRE`/`HEXPIREAT`/`HPEXPIREAT`: updates CV TTL + cached TTL + saves
+   - `HPERSIST`: clears CV TTL + cached TTL + saves
+   - `HDEL`: calls `rhk.remove(field)` (clears cached TTL)
+   - `HSET`/`HMSET`: clears cached TTL for overwritten fields
+
+6. **Tests added** (4 new TTL sync tests in `HGroupTest`):
+   - `test hexpire writes cache and persists to cv storage`
+   - `test hpersist clears cache and cv storage`
+=== bug40 fix log / round sections ===
+1:# Bug 40: Hash Module Review Round 1
+9:## Scope
+18:## Finding 1: HSET returns updated field count instead of newly added field count
+71:## Finding 2: Expired split-storage hash fields remain visible in aggregate commands
+135:## Finding 3: HSCAN with a non-integer cursor throws instead of returning a Redis error
+169:## Finding 4: Latest Redis hash commands HGETDEL, HGETEX, and HSETEX are absent and fall through to nil
+204:## Suggested Fix Order
+213:## Review Round 1 — Reviewer Notes (AI agent 2, 2026-05-27)
+215:### Finding 1: HSET returns updated field count instead of newly added field count — **Confirmed**
+225:### Finding 2: Expired split-storage hash fields remain visible in aggregate commands — **Confirmed**
+244:### Finding 3: HSCAN with a non-integer cursor throws instead of returning a Redis error — **Confirmed**
+254:### Finding 4: Latest Redis hash commands HGETDEL, HGETEX, and HSETEX are absent and fall through to nil — **Confirmed**
+268:### Summary
+280:## Fix Review Feedback — Finding 1 HSET Reply Count (AI agent 1, 2026-05-27)
+282:### Summary of Reviewed Fix
+294:### Findings
+298:### Strengths
+305:### Verification
+314:### Concerns and Follow-ups
+321:## TTL Cache Refactor Progress (AI agent 1, 2026-05-27)
+325:### Status: Mostly Complete (Step 3 migration test blocked)
+327:### Completed
+364:### Blocked
+368:### JaCoCo Coverage Notes
+376:### Remaining Work
+384:## Refactor TTL Plan Review Feedback — RedisHashKeys TTL Cache (AI agent 1, 2026-05-27)
+393:### Findings
+395:#### 1. High — `HINCRBY` / `HINCRBYFLOAT` can leave the split-storage TTL cache stale
+415:#### 2. Medium — old-format hashes with only live non-expiring fields never get upgraded to the new empty TTL section
+433:### Verification
+445:### Summary
+451:## Feedback Fixes — AI agent 1 (2026-05-27)
+453:### Finding 1 Fix — HINCRBY/HINCRBYFLOAT stale cache
+461:### Finding 2 Fix — Old-format hashes never upgraded
+469:### Status
+477:## Refactor TTL Plan Addressed-Commits Review Feedback (AI agent 1, 2026-05-27)
+485:### Findings
+487:#### 1. High — `HINCRBY` / `HINCRBYFLOAT` cache clearing happens before the numeric update succeeds
+506:#### 2. Medium — old-format migration save logic is addressed in code but still untested
+525:### Verification
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && git log --oneline -3 -- src/main/java/io/velo/type/RedisHH.java; echo "=== blame 300-312 ==="; git blame -L 300,312 --date=short -- src/main/java/io/velo/type/RedisHH.java | cat
+71a19051 refactor: standardize JavaDoc in type package
+67d2d38c fix: RedisHH.encode() guard hash size against Short.MAX_VALUE overflow
+b0fe3eda fix: key length encode.
+=== blame 300-312 ===
+^daf475e2 (kerry 2024-08-30 300)             if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
+48eba141b (kerry 2024-09-11 301)                 throw new IllegalStateException("Key length error, key length=" + keyLength);
+^daf475e2 (kerry 2024-08-30 302)             }
+^daf475e2 (kerry 2024-08-30 303) 
+79d6e0c39 (kerry 2025-11-14 304)             if (expireAt != CompressedValue.NO_EXPIRE && expireAt < currentTimeMillis) {
+79d6e0c39 (kerry 2025-11-14 305)                 buffer.position(buffer.position() + keyLength);
+79d6e0c39 (kerry 2025-11-14 306)                 var valueLength = buffer.getInt();
+79d6e0c39 (kerry 2025-11-14 307)                 buffer.position(buffer.position() + valueLength);
+79d6e0c39 (kerry 2025-11-14 308)                 continue;
+79d6e0c39 (kerry 2025-11-14 309)             }
+79d6e0c39 (kerry 2025-11-14 310) 
+^daf475e2 (kerry 2024-08-30 311)             var keyBytes = new byte[keyLength];
+^daf475e2 (kerry 2024-08-30 312)             buffer.get(keyBytes);
+[0m
+[0m→ [0mRead src/main/java/io/velo/mock/InMemoryGetSet.java
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && (command -v redis-server redis-cli || echo "no redis binaries") 2>&1; echo "=== port check ==="; (timeout 3 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/31999' 2>/dev/null && echo "31999 OPEN") || echo "31999 CLOSED"
+/home/kerry/bin/redis-server
+/home/kerry/bin/redis-cli
+=== port check ===
+31999 OPEN
+[0m
+[0m$ [0mcd /home/kerry/ws/velo && rg -n "isHashSaveMemberTogether|SP_TYPE_SET|SP_TYPE_HASH\b" src/main/java/io/velo/CompressedValue.java | head -20
+76:    public static final int SP_TYPE_HASH = -1024;      // Full hash storage
+80:    public static final int SP_TYPE_SET = -4096;       // Set structure
+382:     * @return {@code true} if the type is {@link #SP_TYPE_HH} or {@link #SP_TYPE_HASH}.
+386:                dictSeqOrSpType == SP_TYPE_HASH;
+393:     * @return {@code true} if the type is {@link #SP_TYPE_HH} or {@link #SP_TYPE_HASH}
+397:                spType == SP_TYPE_HASH;
+422:     * @return {@code true} if the type is {@link #SP_TYPE_SET}.
+425:        return dictSeqOrSpType == SP_TYPE_SET;
+432:     * @return {@code true} if the type is {@link #SP_TYPE_SET}
+435:        return spType == SP_TYPE_SET;
+[0m
+[0m$ [0mcd /tmp/opencode && R="redis-cli -p 31999"; $R PING; $R INFO server | grep -E "redis_version|redis_mode"; echo "=== setup ==="; $R DEL h1 >/dev/null; $R HSET h1 f1 v1 f2 v2 f3 v3 f4 v4 f5 v5; echo "h1 built: type=$($R TYPE h1) len=$($R HLEN h1)"; echo "=== 71.4 ground truth ==="; echo "-- HSCAN h1 0 COUNT 0"; $R HSCAN h1 0 COUNT 0; echo "-- HSCAN h1 0 COUNT -1"; $R HSCAN h1 0 COUNT -1; echo "-- HSCAN h1 0 WITHVALUES"; $R HSCAN h1 0 WITHVALUES; echo "-- HSCAN h1 0 NOVALUES"; $R HSCAN h1 0 NOVALUES; echo "-- SSCAN h1 0 (wrongtype)"; $R SADD s1 m1 m2 m3 >/dev/null; $R SSCAN s1 0; echo "-- HSCAN s1 0 (wrongtype)"; $R HSCAN s1 0; echo "-- HSCAN s1 0 NOVALUES"; $R HSCAN s1 0 NOVALUES
+PONG
+redis_version:7.2.11
+redis_mode:standalone
+=== setup ===
+5
+h1 built: type=hash len=5
+=== 71.4 ground truth ===
+-- HSCAN h1 0 COUNT 0
+ERR syntax error
+
+-- HSCAN h1 0 COUNT -1
+ERR syntax error
+
+-- HSCAN h1 0 WITHVALUES
+ERR syntax error
+
+-- HSCAN h1 0 NOVALUES
+ERR syntax error
+
+-- SSCAN h1 0 (wrongtype)
+0
+a
+b
+c
+d
+e
+m1
+m2
+m3
+-- HSCAN s1 0 (wrongtype)
+WRONGTYPE Operation against a key holding the wrong kind of value
+
+-- HSCAN s1 0 NOVALUES
+WRONGTYPE Operation against a key holding the wrong kind of value
+[0m

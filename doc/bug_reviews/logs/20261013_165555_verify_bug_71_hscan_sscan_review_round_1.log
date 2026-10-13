@@ -1,0 +1,93 @@
+> Task :segment_common:compileJava NO-SOURCE
+> Task :segment_common:compileGroovy UP-TO-DATE
+> Task :segment_common:processResources UP-TO-DATE
+> Task :segment_common:classes UP-TO-DATE
+> Task :segment_common:jar UP-TO-DATE
+> Task :segmentweb:compileJava NO-SOURCE
+> Task :segmentweb:compileGroovy UP-TO-DATE
+> Task :segmentweb:processResources NO-SOURCE
+> Task :segmentweb:classes UP-TO-DATE
+> Task :segmentweb:jar UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :compileGroovy UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :compileTestGroovy
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+
+> Task :test
+
+Bug71ReviewTempSpec > 71.1 HH hscan does not return expired fields STANDARD_OUT
+    SnowFlake config:
+    START_STAMP=1701354128058
+    SEQUENCE_BIT=12
+    MACHINE_BIT=5
+    DATACENTER_BIT=5
+    MAX_DATACENTER_NUM=31
+    MAX_MACHINE_NUM=31
+    MAX_SEQUENCE=4095
+    MACHINE_LEFT=12
+    DATACENTER_LEFT=17
+    TIMESTAMP_LEFT=22
+    71.1 encoded size=4 live=4
+    71.1 hscan default  -> ['0', ['live2', 'v', 'live1', 'v', 'live0', 'v']]
+    71.1 hscan novalues -> ['0', ['live2', 'live1', 'live0']]
+    71.1 hscan withvals -> ['0', ['live2', 'v', 'live1', 'v', 'live0', 'v']]
+
+Bug71ReviewTempSpec > 71.1b expired field hidden when TTL passes while stored STANDARD_OUT
+    71.1b before=[0, soon, v]
+    71.1b after =[0, io.velo.reply.MultiBulkReply$2@51f009ef]
+
+Bug71ReviewTempSpec > 71.2 split hscan without NOVALUES returns NOT_SUPPORT STANDARD_OUT
+    71.2 hscan a 0                -> ErrorReply('not support')
+    71.2 hscan a 0 withvalues     -> ErrorReply('not support')
+    71.2 hscan a 0 count 100 noval-> ['0', ['f1', 'f2']]
+
+Bug71ReviewTempSpec > 71.3a HH hscan on a set key throws TypeMismatch STANDARD_OUT
+    71.3a HH-mode hscan on set key -> TypeMismatchException: Expect sp type array=[-512], but got sp type=-4096
+
+Bug71ReviewTempSpec > 71.3b split hscan on a set key returns empty scan STANDARD_OUT
+    71.3b split-mode hscan on set key -> ['0', io.velo.reply.MultiBulkReply$2@51f009ef]
+
+Bug71ReviewTempSpec > 71.3c sscan on a hash key throws TypeMismatch STANDARD_OUT
+    71.3c sscan on HH hash key -> TypeMismatchException: Expect sp type array=[-4096], but got sp type=-512
+
+Bug71ReviewTempSpec > 71.3d sscan on split hash main key (no cv) returns empty scan STANDARD_OUT
+    71.3d sscan on split-hash main key (no cv) -> ['0', io.velo.reply.MultiBulkReply$2@51f009ef]
+
+Bug71ReviewTempSpec > 71.4 hscan accepts COUNT 0 and WITHVALUES STANDARD_OUT
+    71.4 hscan a 0 count 0         -> ['1', ['f1', 'v1']]
+    71.4 hscan a 0 count -1        -> ErrorReply('invalid integer')
+    71.4 hscan a 0 withvalues      -> ['0', ['f1', 'v1', 'f2', 'v2', 'f3', 'v3']]
+    71.4 hscan a 0 count 0 novalues-> ['1', ['f1']]
+
+Bug71ReviewTempSpec > 71.4b sscan rejects COUNT 0 while hscan does not STANDARD_OUT
+    71.4b sscan b 0 count 0 -> ErrorReply('invalid integer')
+    71.4b hscan a 0 count 0 -> ['0', ['f1', 'v1']]
+
+Bug71ReviewTempSpec > 71.5 split hscan skips a live field when an earlier field is deleted between pages STANDARD_OUT
+    71.5 page1 -> ['3', ['a', 'b', 'c']]
+    71.5 page2 -> ['0', ['e']]
+    71.5 all fields returned across pages = [3, a, b, c, e]
+
+Bug71ReviewTempSpec > 71.5b HH hscan same interleaving STANDARD_OUT
+    71.5b page1 -> ['3', ['f0', 'f1', 'f2']]
+    71.5b concurrent HDEL of already-returned field 'f0'
+    71.5b page2 -> ['0', ['f4', 'f5']]
+    71.5b all fields returned = [3, f0, f1, f2, f4, f5]
+    71.5b never returned = [f3]
+
+> Task :jacocoTestReport
+
+[Incubating] Problems report is available at: file:///home/kerry/ws/velo/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 10s
+13 actionable tasks: 3 executed, 10 up-to-date

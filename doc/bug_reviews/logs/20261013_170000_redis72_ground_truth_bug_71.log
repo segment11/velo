@@ -1,0 +1,64 @@
+# Live Redis 7.2.11 ground truth for bug 71 (HSCAN/SSCAN) — AI agent 2 verification
+redis_version:7.2.11
+$ redis-cli -p 31999 HSCAN bug71rvh 0
+0
+f1
+v1
+f2
+v2
+f3
+v3
+f4
+v4
+f5
+v5
+$ redis-cli -p 31999 HSCAN bug71rvh 0 NOVALUES
+ERR syntax error
+
+$ redis-cli -p 31999 HSCAN bug71rvh 0 WITHVALUES
+ERR syntax error
+
+$ redis-cli -p 31999 HSCAN bug71rvh 0 COUNT 0
+ERR syntax error
+
+$ redis-cli -p 31999 HSCAN bug71rvh 0 COUNT -1
+ERR syntax error
+
+$ redis-cli -p 31999 HSCAN bug71rvh 0 COUNT abc
+ERR value is not an integer or out of range
+
+$ redis-cli -p 31999 HSCAN bug71rvh 999999
+0
+f1
+v1
+f2
+v2
+f3
+v3
+f4
+v4
+f5
+v5
+$ redis-cli -p 31999 HSCAN bug71rvh badcursor
+ERR invalid cursor
+
+$ redis-cli -p 31999 HSCAN bug71rvs 0
+WRONGTYPE Operation against a key holding the wrong kind of value
+
+$ redis-cli -p 31999 HSCAN bug71rvs 0 NOVALUES
+WRONGTYPE Operation against a key holding the wrong kind of value
+
+$ redis-cli -p 31999 SSCAN bug71rvh 0
+WRONGTYPE Operation against a key holding the wrong kind of value
+
+$ redis-cli -p 31999 SSCAN bug71rvs 0
+0
+m1
+m2
+m3
+$ redis-cli -p 31999 SSCAN bug71rvs 0 COUNT 0
+ERR syntax error
+
+$ redis-cli -p 31999 SSCAN bug71rvs 0 NOVALUES
+ERR syntax error
+
