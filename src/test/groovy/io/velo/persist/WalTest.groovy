@@ -624,7 +624,8 @@ class WalTest extends Specification {
         then:
         // 1 removed and 5 expired
         r.keys().size() == 1
-        r.scanCursor().walSkipCount() == 7
+        // sorted order: skip 5 keys, the 6th key seq 5 is the first eligible one
+        r.scanCursor().walSkipCount() == 6
 
         when:
         def lastWalGroup = Wal.calcWalGroupNumber() - 1
@@ -632,6 +633,68 @@ class WalTest extends Specification {
         r = lastWal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 10, 100L)
         then:
         r.keys().isEmpty()
+
+        when:
+        // bug 70.5: wal scan cursor must use a stable order, and keys added after the scan
+        // began must not consume cursor positions
+        wal.clear()
+        def sortedKeys = ['k3', 'k1', 'k5', 'k2', 'k4']
+        def shortValueList3 = sortedKeys.indices.collect { i ->
+            def key = sortedKeys[i]
+            def cv = new CompressedValue()
+            cv.compressedData = ('value' + i).bytes
+            new Wal.V(i + 1L, 0, KeyHash.hash(key.bytes), CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                    key, cv.encodeAsShortString(), false)
+        }
+        for (shortV in shortValueList3) {
+            wal.put(true, shortV.key(), shortV)
+        }
+        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 2, 100L)
+        then:
+        r.keys() == ['k1', 'k2']
+
+        when:
+        // a key added after the scan began sorts before the remaining keys
+        def cvNew = new CompressedValue()
+        cvNew.compressedData = 'value new'.bytes
+        def vNew = new Wal.V(200L, 0, KeyHash.hash('k0'.bytes), CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                'k0', cvNew.encodeAsShortString(), false)
+        wal.put(true, vNew.key(), vNew)
+        r = wal.scan((short) 2, KeyLoader.typeAsByteIgnore, null, 2, 100L)
+        then:
+        r.keys() == ['k3', 'k4']
+
+        when:
+        // an expired key in the examined range consumes a cursor position
+        wal.clear()
+        def cvPlain = new CompressedValue()
+        cvPlain.compressedData = 'value'.bytes
+        def cvExpired = new CompressedValue()
+        cvExpired.compressedData = 'value expired'.bytes
+        def shortValueList4 = [
+                new Wal.V(1L, 0, KeyHash.hash('m1'.bytes), CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                        'm1', cvPlain.encodeAsShortString(), false),
+                new Wal.V(2L, 0, KeyHash.hash('m2'.bytes), System.currentTimeMillis() - 1000, CompressedValue.NULL_DICT_SEQ,
+                        'm2', cvExpired.encodeAsShortString(), false),
+                new Wal.V(3L, 0, KeyHash.hash('m3'.bytes), CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                        'm3', cvPlain.encodeAsShortString(), false),
+                new Wal.V(4L, 0, KeyHash.hash('m4'.bytes), 0L, 0,
+                        'm4', [CompressedValue.SP_FLAG_DELETE_TMP] as byte[], false)
+        ]
+        for (shortV in shortValueList4) {
+            wal.put(true, shortV.key(), shortV)
+        }
+        r = wal.scan((short) 0, KeyLoader.typeAsByteIgnore, null, 2, 100L)
+        then:
+        r.keys() == ['m1', 'm3']
+        r.scanCursor().walSkipCount() == 3
+
+        when:
+        // the removed key consumes a cursor position too
+        r = wal.scan((short) 3, KeyLoader.typeAsByteIgnore, null, 2, 100L)
+        then:
+        r.keys().isEmpty()
+        r.scanCursor().walGroupIndex() == 1
 
         when:
         def valueList = Mock.prepareValueList(10, 0)

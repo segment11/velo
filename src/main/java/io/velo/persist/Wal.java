@@ -15,6 +15,7 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -403,22 +404,31 @@ public class Wal implements InMemoryEstimate {
             return scanCursorForNextWalGroup(keys);
         }
 
-        short tmpSkipCount = skipCount;
-        short removedOrExpiredOrNotMatchedCount = 0;
-        short otherSkippedCount = 0;
-
         var allValues = new HashMap<String, V>();
         allValues.putAll(delayToKeyBucketShortValues);
         allValues.putAll(delayToKeyBucketValues);
 
+        // stable order and snapshot filter: only keys existed when the scan began participate in
+        // the positional cursor. keys added after the scan began are excluded before counting
+        // positions, so concurrent inserts can not shift the resume position and cause duplicates
+        var snapshotKeys = new ArrayList<String>(allValues.size());
         for (var entry : allValues.entrySet()) {
+            if (entry.getValue().seq <= beginScanSeq) {
+                snapshotKeys.add(entry.getKey());
+            }
+        }
+        Collections.sort(snapshotKeys);
+
+        short tmpSkipCount = skipCount;
+        short removedOrExpiredOrNotMatchedCount = 0;
+
+        for (var key : snapshotKeys) {
             if (tmpSkipCount > 0) {
                 tmpSkipCount--;
                 continue;
             }
 
-            var key = entry.getKey();
-            var v = entry.getValue();
+            var v = allValues.get(key);
 
             if (v.isRemove() || v.isExpired()) {
                 removedOrExpiredOrNotMatchedCount++;
@@ -439,20 +449,14 @@ public class Wal implements InMemoryEstimate {
                 }
             }
 
-            // skip data that is new added after time do scan
-            if (v.seq > beginScanSeq) {
-                otherSkippedCount++;
-                continue;
-            }
-
             keys.add(key);
             if (keys.size() >= count) {
                 break;
             }
         }
 
-        var nextTimeSkipCount = skipCount + removedOrExpiredOrNotMatchedCount + otherSkippedCount + keys.size();
-        var isIteratedAll = nextTimeSkipCount >= allValues.size();
+        var nextTimeSkipCount = skipCount + removedOrExpiredOrNotMatchedCount + keys.size();
+        var isIteratedAll = nextTimeSkipCount >= snapshotKeys.size();
         if (!isIteratedAll) {
             var scanCursor = new ScanCursor(slot, groupIndex, (short) nextTimeSkipCount, (short) 0, (byte) 0, (byte) 0);
             return new KeyLoader.ScanCursorWithReturnKeys(scanCursor, keys);
