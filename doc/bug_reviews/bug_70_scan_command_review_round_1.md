@@ -773,3 +773,30 @@ Confirmed. Two notes:
 
 Each fix: add the regression test first, see it fail, implement minimally, confirm with
 `./gradlew :test --tests ...` and check the touched lines in `build/reports/jacocoHtml/`.
+
+---
+
+## Fix Log (AI agent 1, round 1 fix phase)
+
+All fixes follow the bug fix workflow (failing test first, minimal change, JaCoCo line/branch
+verification, one commit per bug). Branch: `review/scan`.
+
+| Bug | Verdict | Fix commit | Notes |
+|-----|---------|------------|-------|
+| 70.1 | fixed | `23aa5e20` fix: scan wal end cursor resume key buckets from group 0 | `Wal.scanCursorForNextWalGroup` now encodes `walGroupIndex = 0` in the last-group sentinel. Regression: 10 bucket keys in group 0 + exactly-COUNT WAL keys in group 127 → full iteration returns all 20. |
+| 70.2 | fixed | `53f61041` fix: scan key bucket cursor add bucket index, skip only resume bucket | `ScanCursor` gained a `bucketIndex` component (bit layout re-packed: wgi 24→18 bits, new 5-bit bucket ordinal); `readKeysToList` skips buckets below the resume ordinal and applies the in-bucket skip to the resume bucket only. In-bucket position semantics preserved, so all pre-existing single-bucket test assertions still hold. Regression: keys in buckets 0 and 1 of one group, COUNT 10 → all 20 keys returned. |
+| 70.3 | fixed | `71faf244` fix: scan dispatch to cursor slot worker, acl skip slot-only entries | `SGroup.parseSlots` parses `data[1]`, decodes `ScanCursor.fromLong(cursor).slot()` (range-checked against `slotNumber`, invalid cursors keep the empty list) and emits a slot-only `SlotWithKeyHash`; `U.checkCmdAndKey` skips `rawKey == null` entries (both the empty-rKeyList path and the per-entry loop). Scan now runs on the slot's owning worker; the WAL `HashMap` / `FdReadWrite` races are gone for the scan path. |
+| 70.4 | fixed | `1503e353` fix: key match support redis glob semantics for scan match | `KeyLoader.isKeyMatch` delegates to a port of Redis `stringmatchlen` (`stringMatchLen`): `*`, `?`, `[a-e]`, `[^...]`, `\` escapes; fast paths for `null`/`"*"` kept. Applies to SCAN/SSCAN/HSCAN/ZSCAN MATCH and ACL key patterns. |
+| 70.5 | fixed | `7a29ac53` fix: wal scan use sorted snapshot order, late keys not consume cursor | `Wal.scan` iterates a **sorted** snapshot of keys with `seq <= beginScanSeq` only — keys added after the scan began can no longer shift the resume position (duplicates eliminated; the residual exposure is limited to keys flushed out of the WAL between calls, which Redis tolerates). One WalTest cursor assertion updated from 7 to 6 (hash-order → deterministic sorted order). |
+| 70.6 | fixed | `c6aa40b4` fix: scan and sscan reject count 0 as invalid integer | `scan` rejects `count <= 0` with `INVALID_INTEGER` (was: only `< 0`, so COUNT 0 made `Wal.scan` add one key per WAL group with a negative left budget); `sscan`'s COUNT check aligned from `SYNTAX` to `INVALID_INTEGER`. |
+| 70.7 | fixed | `d42ada57` fix: scan begin seq use timestamp epoch, comparable across slots | New `SnowFlake.asBeginScanSeqEpoch()` returns `(now - START_STAMP) << TIMESTAMP_LEFT` — instance-independent, comparable against every slot's key seq; `SGroup.scan` uses it instead of slot 0's `nextId()`. Same-millisecond keys are now deterministically excluded (post-scan-start semantics). Follow-up: direct unit test in `SnowFlakeTest.groovy` ('test as begin scan seq epoch') asserts the zero low bits and cross-instance ordering. |
+| 70.8 | no change needed | — | Re-verified during the fix phase: `ErrorReply.buffer()` already emits the `-ERR ` wire prefix (`ErrorReply.java:179`), so `CURSOR_NOT_MATCH` is protocol-correct on the wire; the per-connection cursor state remains the documented design deviation (Finding 8). |
+
+Verification summary: for every fix the regression test was first observed failing for the
+expected reason (cursor carrying `walGroupIndex=127`; only 10 of 20 keys returned; empty
+`parseSlots` list and ACL NPE on null rawKey; `user:*:cart` matching nothing; COUNT 0 returning a
+MultiBulkReply; `beginScanSeq` low bits nonzero), then re-run green, and `scripts/jacoco_cover.py`
+confirmed the changed lines and branches executed (e.g. `KeyLoader.java:496/524/583` all branches,
+`SGroup.java:314/614` all branches, `Wal.java` scan body no uncovered lines). Final sweep:
+SGroupTest, ScanCursorTest, KeyLoaderTest, WalTest, KeyBucketsInOneWalGroupTest, UTest, RKeyTest,
+AGroupTest, AclUsersTest, RequestTest — all green.

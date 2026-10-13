@@ -100,4 +100,30 @@ class SnowFlakeTest extends Specification {
         then:
         SnowFlake.isExpired(seq, 1)
     }
+
+    def 'test as begin scan seq epoch'() {
+        given:
+        def snowFlakeA = new SnowFlake(1, 1)
+        def snowFlakeB = new SnowFlake(2, 2)
+
+        when:
+        def idBefore = snowFlakeA.nextId()
+        Thread.sleep(2)
+        def epoch = SnowFlake.asBeginScanSeqEpoch()
+        Thread.sleep(2)
+        def idAfter = snowFlakeB.nextId()
+        then:
+        // timestamp part only, no datacenter / machine / sequence bits, timestamp left shift is 22
+        (epoch & ((1L << 22) - 1)) == 0L
+        epoch > 0L
+        // ids minted in an earlier millisecond are older than the epoch
+        idBefore < epoch
+        // an id from an independent instance minted later is newer, instance bits do not affect the order
+        idAfter > epoch
+
+        when:
+        Thread.sleep(2)
+        then:
+        SnowFlake.asBeginScanSeqEpoch() > epoch
+    }
 }
