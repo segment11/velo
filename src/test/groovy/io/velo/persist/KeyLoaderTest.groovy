@@ -719,7 +719,37 @@ class KeyLoaderTest extends Specification {
         then:
         r.keys().isEmpty()
 
+        when:
+        // follow-up review: once scan max loop count reached before count satisfied,
+        // the resume cursor points to the next wal group (keys yielded so far come
+        // from the first real split only, the pvm keys are spread over the splits)
+        ConfForSlot.global.confBucket.onceScanMaxLoopCount = 1
+        r = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 0, KeyLoader.typeAsByteString, 'key:*', 10, 0L)
+        then:
+        !r.keys().isEmpty()
+        r.keys().size() < 7
+        r.scanCursor().isWalIterateEnd()
+        r.scanCursor().walGroupIndex() == 1
+        r.scanCursor().splitIndex() == 0
+        r.scanCursor().bucketIndex() == 0
+
+        when:
+        // loop limit on the last wal group keeps the group and encodes the next split index,
+        // keys yielded so far come from the first real split only
+        def lastGroupIndex = Wal.calcWalGroupNumber() - 1
+        keyLoader.persistShortValueListBatchInOneWalGroup(lastGroupIndex,
+                Mock.prepareShortValueList(5, lastGroupIndex * ConfForSlot.global.confWal.oneChargeBucketNumber))
+        r = keyLoader.scan(lastGroupIndex, (byte) 0, (byte) 0, (short) 0, (byte) 0, null, 10, 100L)
+        then:
+        !r.keys().isEmpty()
+        r.keys().size() < 5
+        r.scanCursor().isWalIterateEnd()
+        r.scanCursor().walGroupIndex() == lastGroupIndex
+        r.scanCursor().splitIndex() >= 1
+        r.scanCursor().bucketIndex() == 0
+
         cleanup:
+        ConfForSlot.global.confBucket.onceScanMaxLoopCount = 1024
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
