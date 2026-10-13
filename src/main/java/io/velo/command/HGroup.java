@@ -2091,14 +2091,12 @@ public class HGroup extends BaseCommand {
                     } catch (NumberFormatException e) {
                         return ErrorReply.NOT_INTEGER;
                     }
-                    if (count < 0) {
+                    if (count <= 0) {
                         return ErrorReply.INVALID_INTEGER;
                     }
                     i++;
                 } else if ("novalues".equals(tmp)) {
                     noValues = true;
-                } else if ("withvalues".equals(tmp)) {
-                    noValues = false;
                 } else {
                     return ErrorReply.SYNTAX;
                 }

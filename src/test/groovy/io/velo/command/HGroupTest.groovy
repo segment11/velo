@@ -1284,7 +1284,7 @@ httl
         reply == MultiBulkReply.SCAN_EMPTY
 
         when:
-        reply = hGroup.execute('hscan a 0 match zzz count 5 withvalues')
+        reply = hGroup.execute('hscan a 0 match zzz count 5')
         then:
         reply == ErrorReply.NOT_SUPPORT
 
@@ -1307,7 +1307,7 @@ httl
         ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 5
 
         when:
-        reply = hGroup.execute('hscan a 0 match field* count 5 withvalues')
+        reply = hGroup.execute('hscan a 0 match field* count 5')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
@@ -1315,28 +1315,45 @@ httl
         ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 10
 
         when:
-        reply = hGroup.execute('hscan a 0 match zzz count 5 withvalues')
+        reply = hGroup.execute('hscan a 0 match zzz count 5')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
 
         when:
         // invalid integer
-        reply = hGroup.execute('hscan a 0 match zzz count a withvalues')
+        reply = hGroup.execute('hscan a 0 match zzz count a')
         then:
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        reply = hGroup.execute('hscan a 0 match zzz count -1 withvalues')
+        reply = hGroup.execute('hscan a 0 match zzz count -1')
         then:
         reply == ErrorReply.INVALID_INTEGER
 
         when:
-        reply = hGroup.execute('hscan a 0 match zzz xxx 10 withvalues')
+        // Redis rejects COUNT 0, accepting it silently acted as COUNT 1 and corrupted the client cursor
+        reply = hGroup.execute('hscan a 0 count 0')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        reply = hGroup.execute('hscan a 0 count 0 novalues')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        // WITHVALUES is not a Redis HSCAN option, the default form already returns field/value pairs
+        reply = hGroup.execute('hscan a 0 withvalues')
         then:
         reply == ErrorReply.SYNTAX
 
         when:
-        reply = hGroup.execute('hscan >key 0 match zzz count 10 withvalues')
+        reply = hGroup.execute('hscan a 0 match zzz xxx 10')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('hscan >key 0 match zzz count 10')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
