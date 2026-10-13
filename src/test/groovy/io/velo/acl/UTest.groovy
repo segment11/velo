@@ -412,6 +412,16 @@ class UTest extends Specification {
         u.checkCmdAndKey('scan', dataScan, slotWithKeyHashNoKey)
 
         when:
+        // follow-up review: mixed list, slot-only entry plus a real key, user has key rules,
+        // the real key must still be checked per the rules
+        def dataGetKey = new byte[2][]
+        dataGetKey[0] = 'get'.bytes
+        dataGetKey[1] = 'key'.bytes
+        then:
+        u.checkCmdAndKey('get', dataGetKey, [slotWithKeyHashNoKey.getFirst(), BaseCommand.slot('key'.bytes, (short) 1)])
+        !u.checkCmdAndKey('get', dataGet, [slotWithKeyHashNoKey.getFirst(), BaseCommand.slot('other_key'.bytes, (short) 1)])
+
+        when:
         // slot-only entries also pass when the user has no key rules
         def u2 = new U('nokey')
         def rCmd4 = new RCmd()
