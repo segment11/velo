@@ -37,33 +37,6 @@ class RKeyTest extends Specification {
         one.match('a1', false, true)
     }
 
-    def 'test glob pattern'() {
-        given:
-        // acl key patterns use full glob semantics, see bug 70.4
-        def one = new RKey()
-        one.type = RKey.Type.read_write
-
-        when:
-        one.pattern = 'user:*:cart'
-        then:
-        one.match('user:1:cart', true, false)
-        !one.match('user:1:wishlist', true, false)
-
-        when:
-        one.pattern = 'h?llo'
-        then:
-        one.match('hello', true, false)
-        one.match('hallo', true, false)
-        !one.match('hxello', true, false)
-
-        when:
-        one.pattern = 'cache:[a-c]*'
-        then:
-        one.match('cache:b1', true, false)
-        !one.match('cache:d1', true, false)
-    }
-}
-
     def 'test from literal'() {
         expect:
         RKey.isRKeyLiteral('~*')
@@ -100,5 +73,31 @@ class RKeyTest extends Specification {
         }
         then:
         exception
+    }
+
+    def 'test glob pattern'() {
+        given:
+        // acl key patterns use full glob semantics, see bug 70.4
+        def one = new RKey()
+        one.type = RKey.Type.read_write
+
+        when:
+        one.pattern = 'user:*:cart'
+        then:
+        one.match('user:1:cart', true, false)
+        !one.match('user:1:wishlist', true, false)
+
+        when:
+        one.pattern = 'h?llo'
+        then:
+        one.match('hello', true, false)
+        one.match('hallo', true, false)
+        !one.match('hxello', true, false)
+
+        when:
+        one.pattern = 'cache:[a-c]*'
+        then:
+        one.match('cache:b1', true, false)
+        !one.match('cache:d1', true, false)
     }
 }
