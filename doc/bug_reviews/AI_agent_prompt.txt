@@ -1,17 +1,12 @@
-Two AI agents co-work steps:
+Two AI agents co-work, workflow is defined in skill `velo-bug-review` (.opencode/skills/velo-bug-review/SKILL.md).
+Read that skill first and follow its MUST-READ lists and compliance gates strictly.
+Report ids come from doc/bug_reviews/STATE.md — update it when creating a report.
 
-AI agent 1:
-Read docs and understand the bug review/fix workflow, you as AI agent 1, read design docs, then focus on replication module, then try to find bugs, round 1
-Or
-Read docs and understand the bug review/fix workflow, you as AI agent 1, read design docs, then focus on classes in package io.velo.task, then try to find bugs, round 1
-Or
-Read docs and understand the bug review/fix workflow, you as AI agent 1, read design docs, then focus on class InfoCommand.groovy, then try to find bugs
-Or
-There are review feedback for these bugs from AI agent 2, updated in the doc, you check it, agree or not, if not, check the codebase again and give your reason
-Or
-Read docs and understand the bug review/fix workflow, you as AI agent 1, read bug_46_persist_layer_review_round_1.md, then begin to fix bug 1
-Or
-Read docs and understand the bug review/fix workflow, you as AI agent 1, web fetch 'https://redis.io/docs/latest/commands//?group=hyperloglog' and get all redis hyperloglog category commands, then read the velo codebase, try to find bugs
+AI agent 1 (Author/Fixer) entry points:
+- Discover: "Follow skill velo-bug-review, you are agent 1, target: <module | package io.velo.xxx | class Xxx.groovy>, round N"
+- Ground truth sweep: "... web fetch https://redis.io/docs/latest/commands/?group=<category>, then review the velo codebase against it"
+- Respond to review: "Review feedback for these bugs from AI agent 2 is updated in the doc, check it, agree or not; if not, re-check the codebase and give your reason"
+- Fix: "Follow skill velo-bug-review Stage 4, read bug_N_xxx_review_round_M.md, fix bug N.M"
 
-AI agent 2:
-Read docs and understand the bug review/fix workflow, you as AI agent 2, read doc/bug_reviews/bug_68_replication_module_review_round_1.md, then analysis the codebase, then do confirm bugs, need change bugs' status in that doc
+AI agent 2 (Reviewer) entry point:
+- Verify: "Follow skill velo-bug-review, you are agent 2, read doc/bug_reviews/bug_N_xxx_review_round_M.md, analyze the codebase, confirm bugs, change bugs' status in that doc"
