@@ -393,6 +393,15 @@ sunionstore
         reply == ErrorReply.INVALID_INTEGER
 
         when:
+        // bug 70.6: count 0 is not a positive integer, redis rejects it
+        veloUserData.lastScanAssignCursor = 0L
+        reply = sGroup.execute('scan . count 0') { data ->
+            data[1] = scanCursor.toLong().toString().bytes
+        }
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when:
         reply = sGroup.execute('scan . match key:* xxx 10 type string') { data ->
             data[1] = scanCursor.toLong().toString().bytes
         }
@@ -2333,7 +2342,7 @@ sunionstore
         when:
         reply = sGroup.execute('sscan a 0 count -1')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('sscan a 0 unknownoption')
@@ -2343,7 +2352,7 @@ sunionstore
         when:
         reply = sGroup.execute('sscan a 0 count 0')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == ErrorReply.INVALID_INTEGER
     }
 
     def 'test srem'() {

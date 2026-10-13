@@ -611,7 +611,7 @@ public class SGroup extends BaseCommand {
                         } catch (NumberFormatException e) {
                             return ErrorReply.NOT_INTEGER;
                         }
-                        if (count < 0) {
+                        if (count <= 0) {
                             return ErrorReply.INVALID_INTEGER;
                         }
                         i++;
@@ -2190,7 +2190,7 @@ public class SGroup extends BaseCommand {
                         return ErrorReply.NOT_INTEGER;
                     }
                     if (count <= 0) {
-                        return ErrorReply.SYNTAX;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     i++;
                 } else {
