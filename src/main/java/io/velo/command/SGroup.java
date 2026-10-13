@@ -562,7 +562,8 @@ public class SGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    private final ErrorReply CURSOR_NOT_MATCH = new ErrorReply("cursor is not match");
+    private static final ErrorReply CURSOR_NOT_MATCH = new ErrorReply("cursor is not match");
+    private static final ErrorReply INVALID_SCAN_CURSOR = new ErrorReply("invalid scan cursor");
 
     private Reply scan() {
         if (data.length < 2) {
@@ -578,6 +579,10 @@ public class SGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
         var scanCursor = ScanCursor.fromLong(cursorLong);
+        if (cursorLong != 0 && (scanCursor.slot() < 0 || scanCursor.slot() >= slotNumber)) {
+            // crafted cursor, do not touch one slot
+            return INVALID_SCAN_CURSOR;
+        }
 
         var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
         if (cursorLong == 0) {

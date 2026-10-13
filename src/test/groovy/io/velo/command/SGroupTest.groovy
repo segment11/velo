@@ -405,6 +405,25 @@ sunionstore
         reply == ErrorReply.INVALID_INTEGER
 
         when:
+        // follow-up review: cursor with out of range slot must reply an error, not throw
+        def badSlotCursor = new ScanCursor((short) 3, 0, (short) 0, (short) 0, (byte) 0, (byte) 0)
+        veloUserData.lastScanAssignCursor = badSlotCursor.toLong()
+        reply = sGroup.execute('scan . count 10') { data ->
+            data[1] = badSlotCursor.toLong().toString().bytes
+        }
+        then:
+        reply instanceof ErrorReply
+
+        when:
+        // negative slot from a crafted negative cursor
+        veloUserData.lastScanAssignCursor = -1L
+        reply = sGroup.execute('scan . count 10') { data ->
+            data[1] = '-1'.bytes
+        }
+        then:
+        reply instanceof ErrorReply
+
+        when:
         reply = sGroup.execute('scan . match key:* xxx 10 type string') { data ->
             data[1] = scanCursor.toLong().toString().bytes
         }
