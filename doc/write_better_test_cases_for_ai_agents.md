@@ -68,6 +68,26 @@ Examples:
 
 This gives stronger evidence and reduces tests that depend on implementation detail.
 
+## New Public Methods Need A Direct Unit Test
+
+Entry-path coverage proves the bug fix; the class's own test file proves the API contract.
+
+When a change adds a new public method to a production class:
+
+- add or extend that class's own test spec (`Foo.java` -> the existing `FooTest.groovy`, or create it in the mirrored package under `src/test/groovy`)
+- test the method contract directly: inputs, boundaries, and the properties callers rely on
+- a regression test that only reaches the new method indirectly through a caller is not enough, even when JaCoCo shows the new lines covered
+
+The two tests prove different things:
+
+- the entry-path regression test proves the original bug is fixed
+- the direct unit test documents the new method's contract and fails when someone changes that contract later
+
+Example: adding `SnowFlake.asBeginScanSeqEpoch()` for a scan bug fix was first verified through the
+real entry path in `SGroupTest`, but the method also got `'test as begin scan seq epoch'` in
+`SnowFlakeTest.groovy`, asserting the timestamp-part-only layout and the cross-instance ordering
+directly.
+
 ## How To Test Hard Branches Cheaply
 
 Some branches are hard to reach through normal object growth. That does not mean skip TDD. It means choose a better trigger.
@@ -277,6 +297,7 @@ Before claiming a test change is complete, verify:
 - Did I choose the least-distorting test strategy?
 - Did I run only the relevant tests?
 - Did I inspect JaCoCo and confirm the touched lines or branches executed?
+- If I added a new public method, did I add a direct unit test in its class's own test spec?
 - If I used reflection, can I justify why it is better than adding production-only test hooks?
 
 ## Final Rule
