@@ -590,7 +590,7 @@ class KeyLoaderTest extends Specification {
         when:
         ConfForSlot.global.confBucket.onceScanMaxLoopCount = 10000
         def beginScanSeq = 500L
-        def r1 = keyLoader.scan(0, (byte) 0, (short) 0, KeyLoader.typeAsByteString, 'key:*', 3, beginScanSeq)
+        def r1 = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 0, KeyLoader.typeAsByteString, 'key:*', 3, beginScanSeq)
 
         then:
         r1.keys().size() == 3
@@ -633,7 +633,7 @@ class KeyLoaderTest extends Specification {
 
         when:
         // no keys put yet
-        def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
+        def r = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
         then:
         // only one slot
         r.scanCursor() == ScanCursor.END
@@ -641,13 +641,13 @@ class KeyLoaderTest extends Specification {
         when:
         // scan all key buckets until to the end
         ConfForSlot.global.confBucket.onceScanMaxLoopCount = ConfForSlot.global.confBucket.initialSplitNumber * Wal.calcWalGroupNumber()
-        r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
+        r = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
         then:
         r.scanCursor() == ScanCursor.END
 
         when:
         ConfForSlot.global.confBucket.onceScanMaxLoopCount = 1024
-        r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
+        r = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 0, (byte) 0, null, 10, 0L)
         then:
         r.scanCursor() == ScanCursor.END
 
@@ -681,7 +681,7 @@ class KeyLoaderTest extends Specification {
             pvmList << pvm
         }
         keyLoader.updatePvmListBatchAfterWriteSegments(0, pvmList, null)
-        r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, 0L)
+        r = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, 0L)
         then:
         r.keys().size() == 6
         r.keys().every { key ->
@@ -690,14 +690,14 @@ class KeyLoaderTest extends Specification {
 
         when:
         // skip first split index
-        r = keyLoader.scan(0, (byte) 1, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, 0L)
+        r = keyLoader.scan(0, (byte) 1, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, 0L)
         then:
         !r.keys().isEmpty()
         r.keys().size() < 6
 
         when:
         // scan seq -1 means skip all keys as there seq is > -1
-        r = keyLoader.scan(0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, -1L)
+        r = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 1, KeyLoader.typeAsByteString, 'key:*', 6, -1L)
         then:
         r.keys().isEmpty()
 
@@ -827,7 +827,7 @@ class KeyLoaderTest extends Specification {
         // that can short-circuit the scan is scanLoopCount >= onceScanMaxLoopCount.
         // beginScanSeq = 100 (greater than all test Wal.V seq values 0..24) so the
         // `seq > beginScanSeq` filter at KeyLoader.java:504 does not drop any key.
-        def r = keyLoader.scan(0, (byte) 0, (short) 0, (byte) 0, null, 100, 100L)
+        def r = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 0, (byte) 0, null, 100, 100L)
 
         then:
         // With the bug: countArray[1] is never reset, so the first real scan (in split 3)

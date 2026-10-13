@@ -193,7 +193,7 @@ sunionstore
         def oneSlot = localPersist.oneSlot(slot)
 
         when:
-        def scanCursor = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0)
+        def scanCursor = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0, (byte) 0)
         def reply = sGroup.execute('scan . match key:* count 10 type string') { data ->
             data[1] = scanCursor.toLong().toString().bytes
         }
@@ -345,7 +345,7 @@ sunionstore
 
         when:
         // scan from key buckets
-        def scanCursorFromKeyBuckets = new ScanCursor((short) 0, 0, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0)
+        def scanCursorFromKeyBuckets = new ScanCursor((short) 0, 0, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0, (byte) 0)
         veloUserData.lastScanAssignCursor = scanCursorFromKeyBuckets.toLong()
         reply = sGroup.execute('scan . match key:* count 10 type string') { data ->
             data[1] = scanCursorFromKeyBuckets.toLong().toString().bytes
@@ -388,7 +388,7 @@ sunionstore
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        def scanCursor1 = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0)
+        def scanCursor1 = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0, (byte) 0)
         reply = sGroup.execute('scan . match key:* xxx 10 type') { data ->
             data[1] = scanCursor1.toLong().toString().bytes
         }
@@ -462,6 +462,44 @@ sunionstore
         then:
         loops < 100
         allKeys.size() == 20
+
+        when:
+        // bug 70.2 regression: keys spread across physical buckets of one wal group,
+        // the resumed cursor must not skip never-examined buckets
+        keyLoader.flush()
+        lastGroupWal.clear()
+        def keysForBucket0 = Mock.prepareShortValueList(10, 0) { v ->
+            def targetKey = 'xh!0_' + v.key()
+            new Wal.V(v.seq(), 0, KeyHash.hash(targetKey.bytes), v.expireAt(), v.spType(), targetKey, v.cvEncoded(), v.isFromMerge())
+        }
+        def keysForBucket1 = Mock.prepareShortValueList(10, 1) { v ->
+            def targetKey = 'xh!1_' + v.key()
+            new Wal.V(v.seq(), 1, KeyHash.hash(targetKey.bytes), v.expireAt(), v.spType(), targetKey, v.cvEncoded(), v.isFromMerge())
+        }
+        keyLoader.persistShortValueListBatchInOneWalGroup(0, keysForBucket0 + keysForBucket1)
+        veloUserData.lastScanAssignCursor = 0L
+        def allKeys2 = [] as Set
+        def nextCursor2 = '0'
+        int loops2 = 0
+        while (loops2 < 100) {
+            def r = sGroup.execute('scan . count 10') { data ->
+                data[1] = nextCursor2.bytes
+            }
+            def keyListReply = (r as MultiBulkReply).replies[1]
+            if (keyListReply instanceof MultiBulkReply) {
+                for (keyReply in ((MultiBulkReply) keyListReply).replies) {
+                    allKeys2 << ((BulkReply) keyReply).asString()
+                }
+            }
+            nextCursor2 = ((BulkReply) (r as MultiBulkReply).replies[0]).asString()
+            loops2++
+            if (nextCursor2 == '0') {
+                break
+            }
+        }
+        then:
+        loops2 < 100
+        allKeys2.size() == 20
 
         cleanup:
         localPersist.cleanUp()

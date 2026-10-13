@@ -455,7 +455,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * @param keys the list to populate with keys
      * @param walGroupIndex the WAL group index
      * @param splitIndex the split index
-     * @param skipCount the number of entries to skip
+     * @param skipCount the number of entries to skip inside the resume bucket
+     * @param bucketOrdinal the resume physical bucket ordinal inside the WAL group
      * @param typeAsByte the type filter as a byte
      * @param matchPattern the key match pattern
      * @param countArray the remaining count / real scan count array
@@ -467,6 +468,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                                       final int walGroupIndex,
                                       final byte splitIndex,
                                       final short skipCount,
+                                      final byte bucketOrdinal,
                                       final byte typeAsByte,
                                       final @Nullable String matchPattern,
                                       final int[] countArray,
@@ -490,6 +492,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
         }
 
         for (int i = 0; i < ConfForSlot.global.confWal.oneChargeBucketNumber; i++) {
+            // buckets before the resume bucket ordinal are already scanned in a previous call
+            if (i < bucketOrdinal) {
+                continue;
+            }
+
             var bucketIndex = beginBucketIndex + i;
             var position = getPositionInSharedBytes(bucketIndex);
             if (position >= sharedBytes.length) {
@@ -513,8 +520,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                 countArray[1]++;
             }
 
+            // the skip position belongs to the resume bucket only, do not re-apply it to every bucket
+            final short[] tmpSkipCount = {i == bucketOrdinal ? skipCount : 0};
             final short[] addedKeyCount = {0};
-            final short[] tmpSkipCount = {skipCount};
             final short[] expiredOrNotMatchedCount = {0};
             final short[] postScanStartSkippedCount = {0};
             final long currentTimeMillis = System.currentTimeMillis();
@@ -572,8 +580,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             });
 
             if (countArray[0] <= 0) {
-                var nextTimeSkipCount = skipCount + expiredOrNotMatchedCount[0] + postScanStartSkippedCount[0] + addedKeyCount[0];
-                return new ScanCursor(slot, walGroupIndex, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) nextTimeSkipCount, splitIndex);
+                var nextTimeSkipCount = (i == bucketOrdinal ? skipCount : 0)
+                        + expiredOrNotMatchedCount[0] + postScanStartSkippedCount[0] + addedKeyCount[0];
+                return new ScanCursor(slot, walGroupIndex, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END,
+                        (short) nextTimeSkipCount, splitIndex, (byte) i);
             }
         }
         return null;
@@ -588,7 +598,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     /**
      * @param walGroupIndex the WAL group index to start scanning from
      * @param splitIndex the split index to start scanning from
-     * @param skipCount the number of entries to skip at the beginning
+     * @param bucketOrdinal the resume physical bucket ordinal inside the WAL group
+     * @param skipCount the number of entries to skip inside the resume bucket
      * @param typeAsByte the type filter as a byte
      * @param matchPattern the key match pattern
      * @param count the maximum number of keys to return
@@ -597,6 +608,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      */
     public @NotNull ScanCursorWithReturnKeys scan(final int walGroupIndex,
                                                   final byte splitIndex,
+                                                  final byte bucketOrdinal,
                                                   final short skipCount,
                                                   final byte typeAsByte,
                                                   final @Nullable String matchPattern,
@@ -620,8 +632,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     continue;
                 }
 
-                final var skipCountInThisWalGroupThisSplitIndex = i == splitIndex && j == walGroupIndex ? skipCount : 0;
+                final var isResumePosition = i == splitIndex && j == walGroupIndex;
+                final var skipCountInThisWalGroupThisSplitIndex = isResumePosition ? skipCount : 0;
+                final var bucketOrdinalInThisWalGroupThisSplitIndex = isResumePosition ? bucketOrdinal : 0;
                 var scanCursor = readKeysToList(keys, j, (byte) i, skipCountInThisWalGroupThisSplitIndex,
+                        bucketOrdinalInThisWalGroupThisSplitIndex,
                         typeAsByte, matchPattern, countArray, beginScanSeq, inWalKeys);
                 if (countArray[1] > 0) {
                     scanLoopCount++;
@@ -636,9 +651,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
                     ScanCursor scanCursorResult;
                     var isLastWalGroup = j == walGroupNumber - 1;
                     if (isLastWalGroup) {
-                        scanCursorResult = new ScanCursor(slot, j, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) (i + 1));
+                        scanCursorResult = new ScanCursor(slot, j, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) (i + 1), (byte) 0);
                     } else {
-                        scanCursorResult = new ScanCursor(slot, j + 1, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0);
+                        scanCursorResult = new ScanCursor(slot, j + 1, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0, (byte) 0);
                     }
                     return new ScanCursorWithReturnKeys(scanCursorResult, keys);
                 }
@@ -658,7 +673,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             if (nextOneSlot == null) {
                 return new ScanCursorWithReturnKeys(ScanCursor.END, keys);
             } else {
-                var scanCursorResult = new ScanCursor(nextOneSlot.slot(), 0, (short) 0, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (byte) 0);
+                var scanCursorResult = new ScanCursor(nextOneSlot.slot(), 0, (short) 0, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (byte) 0, (byte) 0);
                 return new ScanCursorWithReturnKeys(scanCursorResult, keys);
             }
         }

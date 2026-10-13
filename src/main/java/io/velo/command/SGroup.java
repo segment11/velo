@@ -687,11 +687,11 @@ public class SGroup extends BaseCommand {
         var keyLoader = oneSlot.getKeyLoader();
         KeyLoader.ScanCursorWithReturnKeys rKeyBuckets;
         if (isScanWalFirst) {
-            rKeyBuckets = keyLoader.scan(0, (byte) 0, (short) 0,
+            rKeyBuckets = keyLoader.scan(0, (byte) 0, (byte) 0, (short) 0,
                     typeAsByte, matchPattern, leftCount, beginScanSeq);
         } else {
-            rKeyBuckets = keyLoader.scan(lastScanCursor.walGroupIndex(), lastScanCursor.splitIndex(), lastScanCursor.keyBucketsSkipCount(),
-                    typeAsByte, matchPattern, leftCount, beginScanSeq);
+            rKeyBuckets = keyLoader.scan(lastScanCursor.walGroupIndex(), lastScanCursor.splitIndex(), lastScanCursor.bucketIndex(),
+                    lastScanCursor.keyBucketsSkipCount(), typeAsByte, matchPattern, leftCount, beginScanSeq);
         }
         keys.addAll(rKeyBuckets.keys());
 

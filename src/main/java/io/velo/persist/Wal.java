@@ -454,7 +454,7 @@ public class Wal implements InMemoryEstimate {
         var nextTimeSkipCount = skipCount + removedOrExpiredOrNotMatchedCount + otherSkippedCount + keys.size();
         var isIteratedAll = nextTimeSkipCount >= allValues.size();
         if (!isIteratedAll) {
-            var scanCursor = new ScanCursor(slot, groupIndex, (short) nextTimeSkipCount, (short) 0, (byte) 0);
+            var scanCursor = new ScanCursor(slot, groupIndex, (short) nextTimeSkipCount, (short) 0, (byte) 0, (byte) 0);
             return new KeyLoader.ScanCursorWithReturnKeys(scanCursor, keys);
         } else {
             return scanCursorForNextWalGroup(keys);
@@ -468,9 +468,9 @@ public class Wal implements InMemoryEstimate {
             // wal iterate end, next phase is key buckets scan from wal group 0
             // keep walGroupIndex 0, do not leak the last wal group index, otherwise the resumed
             // scan would start key buckets at the last wal group and skip all earlier groups
-            scanCursor = new ScanCursor(slot, 0, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0);
+            scanCursor = new ScanCursor(slot, 0, ScanCursor.ONE_WAL_SKIP_COUNT_ITERATE_END, (short) 0, (byte) 0, (byte) 0);
         } else {
-            scanCursor = new ScanCursor(slot, groupIndex + 1, (short) 0, (short) 0, (byte) 0);
+            scanCursor = new ScanCursor(slot, groupIndex + 1, (short) 0, (short) 0, (byte) 0, (byte) 0);
         }
         return new KeyLoader.ScanCursorWithReturnKeys(scanCursor, keys);
     }
