@@ -8,6 +8,7 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.*
 import io.velo.repl.LeaderSelector
 import io.velo.reply.*
+import io.velo.type.RedisHH
 import io.velo.type.RedisHashKeys
 import io.velo.type.RedisList
 import io.velo.type.RedisZSet
@@ -2375,6 +2376,47 @@ sunionstore
         reply = sGroup.execute('sscan a 0 count 0')
         then:
         reply == ErrorReply.INVALID_INTEGER
+
+        when:
+        // A key holding another type must answer WRONGTYPE, not an empty scan
+        def cvHash = Mock.prepareCompressedValueList(1)[0]
+        def rhhA = new RedisHH()
+        rhhA.put('f1', 'v1'.bytes)
+        cvHash.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        cvHash.compressedData = rhhA.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvHash)
+        reply = sGroup.execute('sscan a 0 count 10')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when:
+        def cvString = Mock.prepareCompressedValueList(1)[0]
+        cvString.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvString.compressedData = 'v'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, cvString)
+        reply = sGroup.execute('sscan a 0 count 10')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when:
+        // A split stored hash has no main key value, only the h_k_ index, which is still a hash
+        inMemoryGetSet.remove(slot, 'a')
+        def cvKeys = Mock.prepareCompressedValueList(1)[0]
+        def rhkHash = new RedisHashKeys()
+        rhkHash.add('f1')
+        cvKeys.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvKeys.compressedData = rhkHash.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
+        reply = sGroup.execute('sscan a 0 count 10')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when:
+        // A missing key still answers an empty scan, like Redis
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
+        reply = sGroup.execute('sscan a 0 count 10')
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
     }
 
     def 'test srem'() {

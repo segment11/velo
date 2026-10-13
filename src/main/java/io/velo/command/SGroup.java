@@ -2206,6 +2206,16 @@ public class SGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var mainKeyCv = getCv(slotWithKeyHash);
+        if (mainKeyCv != null) {
+            if (mainKeyCv.getDictSeqOrSpType() != CompressedValue.SP_TYPE_SET) {
+                return ErrorReply.WRONG_TYPE;
+            }
+        } else if (getCv(slot(RedisHashKeys.keysKey(slotWithKeyHash.rawKey()))) != null) {
+            // a split stored hash keeps no value under the main key, only the h_k_ index
+            return ErrorReply.WRONG_TYPE;
+        }
+
         var rhk = getRedisSet(slotWithKeyHash);
         if (rhk == null || rhk.size() == 0) {
             return MultiBulkReply.SCAN_EMPTY;

@@ -1371,6 +1371,51 @@ httl
         reply = hGroup.execute('hscan a badcursor match field count 10')
         then:
         reply == ErrorReply.NOT_INTEGER
+
+        when:
+        // A key holding another type must answer WRONGTYPE, not an empty scan.
+        // Split mode never reads the main key, so it needs an explicit type check.
+        def cvWrongType = Mock.prepareCompressedValueList(1)[0]
+        cvWrongType.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        cvWrongType.compressedData = new RedisHashKeys().encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvWrongType)
+        LocalPersist.instance.hashSaveMemberTogether = false
+        reply = hGroup.execute('hscan a 0 count 10 novalues')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        reply = hGroup.execute('hscan a 0 count 10 novalues')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when:
+        // A string key is a wrong type for HSCAN in both storage modes
+        def cvString = Mock.prepareCompressedValueList(1)[0]
+        cvString.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvString.compressedData = 'v'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, cvString)
+        LocalPersist.instance.hashSaveMemberTogether = false
+        reply = hGroup.execute('hscan a 0 count 10 novalues')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = true
+        reply = hGroup.execute('hscan a 0 count 10 novalues')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when:
+        // A missing key still answers an empty scan, like Redis
+        inMemoryGetSet.remove(slot, 'a')
+        reply = hGroup.execute('hscan a 0 count 10 novalues')
+        then:
+        reply == MultiBulkReply.SCAN_EMPTY
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
     }
 
     def 'test hgetdel'() {

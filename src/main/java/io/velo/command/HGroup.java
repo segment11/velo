@@ -2103,6 +2103,14 @@ public class HGroup extends BaseCommand {
             }
         }
 
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        // Split mode only reads the h_k_ index, so the main key type is never checked and any other
+        // type would look like an empty hash. Check it up front, Redis answers WRONGTYPE for those.
+        var mainKeyCv = getCv(slotWithKeyHash);
+        if (mainKeyCv != null && !CompressedValue.isHash(mainKeyCv.getDictSeqOrSpType())) {
+            return ErrorReply.WRONG_TYPE;
+        }
+
         if (isUseHH(keyBytes)) {
             return hscan2(cursorLong, matchPattern, count, noValues);
         }
@@ -2112,7 +2120,6 @@ public class HGroup extends BaseCommand {
             return ErrorReply.NOT_SUPPORT;
         }
 
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null || rhk.size() == 0) {
