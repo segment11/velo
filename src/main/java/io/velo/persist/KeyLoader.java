@@ -32,10 +32,10 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     public static final int KEY_BUCKET_ONE_COST_SIZE = PAGE_NUMBER_PER_BUCKET * LocalPersist.PAGE_SIZE;
 
     /**
-     * @param slot slot index
+     * @param slot           slot index
      * @param bucketsPerSlot the number of buckets in the slot
-     * @param slotDir directory of the slot
-     * @param snowFlake Snowflake instance used for generating unique identifiers
+     * @param slotDir        directory of the slot
+     * @param snowFlake      Snowflake instance used for generating unique identifiers
      */
     @TestOnly
     KeyLoader(short slot, int bucketsPerSlot, @NotNull File slotDir, @NotNull SnowFlake snowFlake) {
@@ -43,11 +43,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param slot slot index
+     * @param slot           slot index
      * @param bucketsPerSlot the number of buckets in the slot
-     * @param slotDir directory of the slot
-     * @param snowFlake Snowflake instance used for generating unique identifiers
-     * @param oneSlot OneSlot instance representing this slot
+     * @param slotDir        directory of the slot
+     * @param snowFlake      Snowflake instance used for generating unique identifiers
+     * @param oneSlot        OneSlot instance representing this slot
      */
     public KeyLoader(short slot, int bucketsPerSlot, @NotNull File slotDir, @NotNull SnowFlake snowFlake, @Nullable OneSlot oneSlot) {
         this.slot = slot;
@@ -146,7 +146,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param beginBucketIndex the starting bucket index
-     * @param bucketCount the number of buckets in the batch
+     * @param bucketCount      the number of buckets in the batch
      * @return the batch of meta key bucket split numbers
      */
     byte[] getMetaKeyBucketSplitNumberBatch(int beginBucketIndex, int bucketCount) {
@@ -271,9 +271,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param walGroupIndex the WAL group index
+     * @param walGroupIndex    the WAL group index
      * @param beginBucketIndex the starting bucket index
-     * @param keyCountArray the new key counts
+     * @param keyCountArray    the new key counts
      */
     public void updateKeyCountBatch(int walGroupIndex, int beginBucketIndex, short[] keyCountArray) {
         if (beginBucketIndex < 0 || beginBucketIndex + keyCountArray.length > bucketsPerSlot) {
@@ -342,7 +342,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param bytes the byte array containing the key bucket data
+     * @param bytes    the byte array containing the key bucket data
      * @param position the starting position within the byte array
      * @return true if the data is valid, false otherwise
      */
@@ -425,7 +425,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param key the key to check
+     * @param key          the key to check
      * @param matchPattern the pattern to match against
      * @return true if the key matches the pattern, false otherwise
      */
@@ -438,6 +438,23 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
             return true;
         }
 
+        // fast path for the scan hot path: prefix pattern like 'user:*' with no other
+        // glob metacharacter is a plain startsWith, avoid the recursive matcher
+        if (matchPattern.length() > 1 && matchPattern.charAt(matchPattern.length() - 1) == '*') {
+            var prefix = matchPattern.substring(0, matchPattern.length() - 1);
+            var isSimplePrefix = true;
+            for (int i = 0; i < prefix.length(); i++) {
+                char c = prefix.charAt(i);
+                if (c == '*' || c == '?' || c == '[' || c == '\\') {
+                    isSimplePrefix = false;
+                    break;
+                }
+            }
+            if (isSimplePrefix) {
+                return key.startsWith(prefix);
+            }
+        }
+
         return stringMatchLen(matchPattern, key, false);
     }
 
@@ -445,8 +462,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
      * Port of redis stringmatchlen, supports {@code *} {@code ?} {@code [...]} {@code ^} and backslash escapes.
      *
      * @param pattern the glob pattern
-     * @param string the string to match
-     * @param nocase whether to compare case-insensitively
+     * @param string  the string to match
+     * @param nocase  whether to compare case-insensitively
      * @return true if the whole string matches the pattern
      */
     @VisibleForTesting
@@ -552,16 +569,16 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param keys the list to populate with keys
+     * @param keys          the list to populate with keys
      * @param walGroupIndex the WAL group index
-     * @param splitIndex the split index
-     * @param skipCount the number of entries to skip inside the resume bucket
+     * @param splitIndex    the split index
+     * @param skipCount     the number of entries to skip inside the resume bucket
      * @param bucketOrdinal the resume physical bucket ordinal inside the WAL group
-     * @param typeAsByte the type filter as a byte
-     * @param matchPattern the key match pattern
-     * @param countArray the remaining count / real scan count array
-     * @param beginScanSeq the sequence number to start scanning from
-     * @param inWalKeys the set of keys already in the WAL
+     * @param typeAsByte    the type filter as a byte
+     * @param matchPattern  the key match pattern
+     * @param countArray    the remaining count / real scan count array
+     * @param beginScanSeq  the sequence number to start scanning from
+     * @param inWalKeys     the set of keys already in the WAL
      * @return the ScanCursor indicating the next scan position, or null if no more keys are found
      */
     private ScanCursor readKeysToList(final @NotNull ArrayList<String> keys,
@@ -697,13 +714,13 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param walGroupIndex the WAL group index to start scanning from
-     * @param splitIndex the split index to start scanning from
+     * @param splitIndex    the split index to start scanning from
      * @param bucketOrdinal the resume physical bucket ordinal inside the WAL group
-     * @param skipCount the number of entries to skip inside the resume bucket
-     * @param typeAsByte the type filter as a byte
-     * @param matchPattern the key match pattern
-     * @param count the maximum number of keys to return
-     * @param beginScanSeq the sequence number to start scanning from
+     * @param skipCount     the number of entries to skip inside the resume bucket
+     * @param typeAsByte    the type filter as a byte
+     * @param matchPattern  the key match pattern
+     * @param count         the maximum number of keys to return
+     * @param beginScanSeq  the sequence number to start scanning from
      * @return the ScanCursorWithReturnKeys object containing the scan cursor and the list of keys found
      */
     public @NotNull ScanCursorWithReturnKeys scan(final int walGroupIndex,
@@ -780,9 +797,9 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param bucketIndex the bucket index
-     * @param splitIndex the split index
-     * @param splitNumber the split number
+     * @param bucketIndex       the bucket index
+     * @param splitIndex        the split index
+     * @param splitNumber       the split number
      * @param isRefreshLRUCache whether to refresh the LRU cache
      * @return the KeyBucket object, or null if not found
      */
@@ -808,8 +825,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param bucketIndex the bucket index
-     * @param key the key
-     * @param keyHash the hash of the key
+     * @param key         the key
+     * @param keyHash     the hash of the key
      * @return the expiration time, or null if not found
      */
     Long getExpireAt(int bucketIndex, String key, long keyHash) {
@@ -819,8 +836,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param bucketIndex the bucket index
-     * @param key the key
-     * @param keyHash the hash of the key
+     * @param key         the key
+     * @param keyHash     the hash of the key
      * @return the ExpireAtAndSeq object containing the expiration time and sequence number, or null if not found
      */
     KeyBucket.ExpireAtAndSeq getExpireAtAndSeqByKey(int bucketIndex, String key, long keyHash) {
@@ -837,8 +854,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param bucketIndex the bucket index
-     * @param key the key
-     * @param keyHash the hash of the key
+     * @param key         the key
+     * @param keyHash     the hash of the key
      * @return the ValueBytesWithExpireAtAndSeq object, or null if not found
      */
     KeyBucket.ValueBytesWithExpireAtAndSeq getValueXByKey(int bucketIndex, String key, long keyHash) {
@@ -869,11 +886,11 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param bucketIndex the bucket index
-     * @param key the key
-     * @param keyHash the hash of the key
-     * @param expireAt the expiration time
-     * @param seq the sequence number
-     * @param valueBytes the value bytes
+     * @param key         the key
+     * @param keyHash     the hash of the key
+     * @param expireAt    the expiration time
+     * @param seq         the sequence number
+     * @param valueBytes  the value bytes
      */
     @TestOnly
     void putValueByKey(int bucketIndex, String key, long keyHash, long expireAt, long seq, byte[] valueBytes) {
@@ -932,8 +949,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param bucketIndex the bucket index
-     * @param keyBucket the KeyBucket object to update
+     * @param bucketIndex       the bucket index
+     * @param keyBucket         the KeyBucket object to update
      * @param isRefreshLRUCache whether to refresh the LRU cache
      */
     @TestOnly
@@ -951,7 +968,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param splitIndex the split index
+     * @param splitIndex       the split index
      * @param beginBucketIndex the starting bucket index
      * @return the shared bytes representing the batch of key buckets
      */
@@ -965,7 +982,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param walGroupIndex the WAL group index
-     * @param inner the KeyBucketsInOneWalGroup object containing the key buckets
+     * @param inner         the KeyBucketsInOneWalGroup object containing the key buckets
      */
     private void doAfterPutAll(int walGroupIndex, @NotNull KeyBucketsInOneWalGroup inner) {
         updateKeyCountBatch(walGroupIndex, inner.beginBucketIndex, inner.keyCountForStatsTmp);
@@ -981,8 +998,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param walGroupIndex the WAL group index
-     * @param pvmList the list of PersistValueMeta objects
+     * @param walGroupIndex                the WAL group index
+     * @param pvmList                      the list of PersistValueMeta objects
      * @param keyBucketsInOneWalGroupGiven the KeyBucketsInOneWalGroup object containing the key buckets, or null
      */
     public void updatePvmListBatchAfterWriteSegments(int walGroupIndex,
@@ -997,7 +1014,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param walGroupIndex the WAL group index
-     * @param pvmList the live PVM list rebuilt from chunk records
+     * @param pvmList       the live PVM list rebuilt from chunk records
      */
     public void replacePvmListBatchInOneWalGroupForRebuild(int walGroupIndex,
                                                            @NotNull ArrayList<PersistValueMeta> pvmList) {
@@ -1008,7 +1025,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param walGroupIndex the WAL group index
+     * @param walGroupIndex  the WAL group index
      * @param shortValueList the collection of short values
      */
     public void persistShortValueListBatchInOneWalGroup(int walGroupIndex,
@@ -1021,7 +1038,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param sharedBytesListBySplitIndex the shared bytes list indexed by split index
-     * @param beginBucketIndex the starting bucket index
+     * @param beginBucketIndex            the starting bucket index
      */
     public void writeSharedBytesList(byte[][] sharedBytesListBySplitIndex, int beginBucketIndex) {
         for (int splitIndex = 0; splitIndex < sharedBytesListBySplitIndex.length; splitIndex++) {
@@ -1048,8 +1065,8 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param bucketIndex the bucket index
-     * @param key the key
-     * @param keyHash the hash of the key
+     * @param key         the key
+     * @param keyHash     the hash of the key
      * @return true if the key was successfully removed, false otherwise
      */
     @TestOnly
@@ -1072,7 +1089,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
 
     /**
      * @param bucketIndex the bucket index
-     * @param slice the Slice to which the encoded short strings will be written
+     * @param slice       the Slice to which the encoded short strings will be written
      */
     @SlaveNeedReplay
     public void encodeShortStringListToBuf(int bucketIndex, Slice slice) {
@@ -1106,7 +1123,7 @@ public class KeyLoader implements InMemoryEstimate, InSlotMetricCollector, NeedC
     }
 
     /**
-     * @param slice the Slice containing the encoded short strings
+     * @param slice    the Slice containing the encoded short strings
      * @param callBack the callback to handle each decoded short string
      */
     @SlaveReplay
