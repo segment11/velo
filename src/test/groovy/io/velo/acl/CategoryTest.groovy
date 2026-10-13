@@ -115,6 +115,10 @@ class CategoryTest extends Specification {
         'role'       | ['admin', 'dangerous', 'fast']
         // top level PUBSUB is not in the pubsub category, only its subcommands are
         'pubsub'     | ['slow']
+        // sort_ro is readonly, redis 7.2 ACL CAT read/set/sortedset/list/dangerous/slow
+        'sort_ro'    | ['read', 'set', 'sortedset', 'list', 'dangerous', 'slow']
+        // sentinel container is admin, redis 7.2 ACL CAT admin/dangerous/slow
+        'sentinel'   | ['admin', 'dangerous', 'slow']
     }
 
     def 'test fast and slow categories are mutually exclusive'() {

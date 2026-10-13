@@ -207,6 +207,14 @@ public class SGroup extends BaseCommand {
                 "Sort the elements in a list, set or sorted set.",
                 "1.0.0", "O(N+M*log(M))"));
         CommandRegistry.register(new CommandEntry(
+                "sort_ro", -2,
+                Set.of("readonly"),
+                1, 1, 1,
+                Set.of("@read", "@set", "@sortedset", "@list", "@slow", "@dangerous"),
+                "generic",
+                "Returns the sorted elements of a list, a set, or a sorted set.",
+                "7.0.0", "O(N+M*log(M))"));
+        CommandRegistry.register(new CommandEntry(
                 "spop", -2,
                 Set.of("write", "fast"),
                 1, 1, 1,

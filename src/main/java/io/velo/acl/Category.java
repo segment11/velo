@@ -81,6 +81,7 @@ public enum Category {
                 "replicaof",
                 "role",
                 "save",
+                "sentinel",
                 "shutdown",
                 "slaveof",
                 "slowlog",
@@ -172,10 +173,12 @@ public enum Category {
                 "restore-asking",
                 "role",
                 "save",
+                "sentinel",
                 "shutdown",
                 "slaveof",
                 "slowlog",
                 "sort",
+                "sort_ro",
                 "swapdb",
                 "sync"
         );
@@ -436,7 +439,8 @@ public enum Category {
                 "rpoplpush",
                 "rpush",
                 "rpushx",
-                "sort"
+                "sort",
+                "sort_ro"
         );
         CMD_LIST_BY_CATEGORY.put(list, listCmdList);
         for (var cmd : listCmdList) {
@@ -512,6 +516,7 @@ public enum Category {
                 "sismember",
                 "smembers",
                 "smismember",
+                "sort_ro",
                 "srandmember",
                 "sscan",
                 "stralgo",
@@ -577,6 +582,7 @@ public enum Category {
                 "smismember",
                 "smove",
                 "sort",
+                "sort_ro",
                 "spop",
                 "srandmember",
                 "srem",
@@ -594,6 +600,7 @@ public enum Category {
                 "bzpopmax",
                 "bzpopmin",
                 "sort",
+                "sort_ro",
                 "zadd",
                 "zcard",
                 "zcount",
@@ -746,6 +753,7 @@ public enum Category {
                 "slowlog",
                 "smembers",
                 "sort",
+                "sort_ro",
                 "srandmember",
                 "sscan",
                 "stralgo",
