@@ -124,6 +124,18 @@ public class SnowFlake {
     }
 
     /**
+     * Returns a scan-begin sequence value built from the timestamp part only, so it is comparable
+     * across all snowflake instances of this process: every slot's snowflake shares the same start
+     * stamp and bit layout, while the sequence bits are private per instance and therefore not
+     * ordered across instances.
+     *
+     * @return the timestamp-part-only epoch value
+     */
+    public static long asBeginScanSeqEpoch() {
+        return (System.currentTimeMillis() - START_STAMP) << TIMESTAMP_LEFT;
+    }
+
+    /**
      * Generates the next unique ID.
      *
      * @return the next unique ID

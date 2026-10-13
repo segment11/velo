@@ -664,7 +664,8 @@ public class SGroup extends BaseCommand {
 
         long beginScanSeq;
         if (cursorLong == 0) {
-            beginScanSeq = oneSlot.getSnowFlake().nextId();
+            // timestamp part only, comparable against every slot's key seq, see bug 70.7
+            beginScanSeq = SnowFlake.asBeginScanSeqEpoch();
             veloUserData.setBeginScanSeq(beginScanSeq);
         } else {
             beginScanSeq = veloUserData.getBeginScanSeq();
