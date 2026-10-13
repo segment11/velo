@@ -409,6 +409,60 @@ sunionstore
         then:
         reply == ErrorReply.SYNTAX
 
+        when:
+        // bug 70.1 regression: WAL phase ends exactly at COUNT on the last wal group,
+        // the handed-back cursor must resume key buckets from wal group 0
+        keyLoader.flush()
+        wal.clear()
+        def lastGroupIndex = Wal.calcWalGroupNumber() - 1
+        // 10 keys persisted in key buckets of wal group 0
+        keyLoader.persistShortValueListBatchInOneWalGroup(0, Mock.prepareShortValueList(10, 0))
+        // 10 keys sitting in the WAL delay maps of the last wal group, distinct key names
+        def lastGroupWal = oneSlot.getWalByGroupIndex(lastGroupIndex)
+        def shortValueListForLastGroupWal = Mock.prepareShortValueList(10,
+                lastGroupIndex * ConfForSlot.global.confWal.oneChargeBucketNumber) { v ->
+            new Wal.V(v.seq(), v.bucketIndex(), v.keyHash(), v.expireAt(), v.spType(),
+                    'key:w' + v.key().substring(4), v.cvEncoded(), v.isFromMerge())
+        }
+        for (shortV in shortValueListForLastGroupWal) {
+            lastGroupWal.put(true, shortV.key(), shortV)
+        }
+        veloUserData.lastScanAssignCursor = 0L
+        def allKeys = [] as Set
+        reply = sGroup.execute('scan . count 10') { data ->
+            data[1] = '0'.bytes
+        }
+        for (keyReply in ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies) {
+            allKeys << ((BulkReply) keyReply).asString()
+        }
+        then:
+        reply instanceof MultiBulkReply
+        ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies.length == 10
+        // wal iterate end cursor must not leak the last wal group index
+        ScanCursor.fromLong(veloUserData.lastScanAssignCursor).walIterateEnd
+        ScanCursor.fromLong(veloUserData.lastScanAssignCursor).walGroupIndex() == 0
+
+        when:
+        // continue the iteration until end, key buckets of wal group 0 must be scanned too
+        def nextCursor = veloUserData.lastScanAssignCursor.toString()
+        int loops = 0
+        while (nextCursor != '0' && loops < 100) {
+            def r = sGroup.execute('scan . count 10') { data ->
+                data[1] = nextCursor.bytes
+            }
+            def keyListReply = (r as MultiBulkReply).replies[1]
+            if (keyListReply instanceof MultiBulkReply) {
+                for (keyReply in ((MultiBulkReply) keyListReply).replies) {
+                    allKeys << ((BulkReply) keyReply).asString()
+                }
+            }
+            nextCursor = ((BulkReply) (r as MultiBulkReply).replies[0]).asString()
+            loops++
+        }
+        then:
+        loops < 100
+        allKeys.size() == 20
+
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
