@@ -281,7 +281,7 @@ sunionstore
         ScanCursor.fromLong(veloUserData.lastScanAssignCursor).keyBucketsSkipCount() == 10
 
         // bug 70.7: begin scan seq is the timestamp part only, comparable across slots
-        (veloUserData.beginScanSeq & ((1L << 22) - 1)) == 0L
+        (veloUserData.beginScanSeq & ((1L << SnowFlake.TIMESTAMP_LEFT) - 1)) == 0L
 
         when:
         // reset

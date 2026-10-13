@@ -56,7 +56,10 @@ public class SnowFlake {
     /**
      * Left shift bits for timestamp.
      */
-    private final static long TIMESTAMP_LEFT = DATACENTER_LEFT + DATACENTER_BIT;
+    /**
+     * Left shift bits for the timestamp, also the count of the low sequence / datacenter / machine bits.
+     */
+    public final static long TIMESTAMP_LEFT = DATACENTER_LEFT + DATACENTER_BIT;
 
     static {
         // println static variables

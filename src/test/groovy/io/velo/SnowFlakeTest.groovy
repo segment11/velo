@@ -113,8 +113,8 @@ class SnowFlakeTest extends Specification {
         Thread.sleep(2)
         def idAfter = snowFlakeB.nextId()
         then:
-        // timestamp part only, no datacenter / machine / sequence bits, timestamp left shift is 22
-        (epoch & ((1L << 22) - 1)) == 0L
+        // timestamp part only, no datacenter / machine / sequence bits
+        (epoch & ((1L << SnowFlake.TIMESTAMP_LEFT) - 1)) == 0L
         epoch > 0L
         // ids minted in an earlier millisecond are older than the epoch
         idBefore < epoch
