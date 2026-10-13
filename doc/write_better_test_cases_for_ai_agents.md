@@ -43,6 +43,39 @@ For every feature, bug fix, refactor, or behavior change:
 
 If the test passes immediately, it did not prove the new behavior. Fix the test first.
 
+## Run Only The Relevant Tests
+
+"Relevant" means the tests that exercise the code you changed — not the whole package and not the whole suite.
+
+Derive the relevant set from the change itself:
+
+- the changed class's own test spec
+- the entry-path specs that reach the changed code (for example the command test that drives the fixed bug)
+- specs of direct callers found by grepping for the touched method or type
+
+Select them explicitly by class or method:
+
+```bash
+# good: method-level for the red phase
+./gradlew :test --tests "io.velo.command.SGroupTest.test scan"
+
+# good: class-level for the green phase, enumerated
+./gradlew :test --tests "io.velo.command.SGroupTest" --tests "io.velo.persist.WalTest"
+
+# bad: whole package or whole suite
+./gradlew :test --tests "io.velo.persist.*"
+./gradlew test
+```
+
+Why the scope limit matters:
+
+- package- or suite-wide runs couple your red/green signal to unrelated failures and flakes
+- they cost minutes per cycle and get skipped, so they stop being run at all
+- the JaCoCo report should show evidence for the touched lines from the tests that target them, not from a mass run you cannot reason about
+- `AGENTS.md` states it directly: do not run all tests, run only relevant tests
+
+For a change with wide blast radius (shared types like `ScanCursor`, base-class behavior), run all directly-affected specs together in one enumerated command instead of widening to a package wildcard. If you genuinely cannot enumerate the affected set, that is a signal the change needs splitting, not a reason to run everything.
+
 ## What Good Regression Tests Look Like
 
 A good regression test:
