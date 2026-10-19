@@ -72,6 +72,7 @@ class CGroupTest extends Specification {
         // cleanup blocks).
         def extras = []
         def eventloopsToBreak = []
+        def savedSlotThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds
 
         def reply
 
@@ -431,6 +432,33 @@ class CGroupTest extends Specification {
         }
         !inspector.socketMap.containsValue(selfKillSocket)
 
+        when: 'the reply write happens on a slot worker thread, the deferred close is still reactor-safe'
+        // TcpSocket.write() runs doWrite() inline on the calling thread and its reactor
+        // check is checks-gated (off by default), so async-reply writes make onWrite run
+        // on a slot worker — closing the socket there must go through its reactor
+        def slotWriteSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46417)
+        slotWriteSocket.setInspector(inspector)
+        registerSocketOnInspector(inspector, fixtureEventloop, slotWriteSocket)
+        extras << slotWriteSocket
+        def slotCGroup = new CGroup(null, null, slotWriteSocket)
+        slotCGroup.from(BaseCommand.mockAGroup())
+        def slotAddrInet = slotWriteSocket.remoteAddress.address
+        def slotAddrStr = (slotAddrInet == null ? slotWriteSocket.remoteAddress.hostString : slotAddrInet.hostAddress) + ':' + slotWriteSocket.remoteAddress.port
+        def slotReply = slotCGroup.execute("client kill ${slotAddrStr}")
+        // make the current thread look like THE slot worker (and NOT a net worker);
+        // replacing (not appending) keeps the accounting arrays' indexing valid
+        savedSlotThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = [Thread.currentThread().threadId()]
+        inspector.onWrite(slotWriteSocket, ByteBuf.empty(), 1)
+        then:
+        slotReply == OKReply.INSTANCE
+        noExceptionThrown()
+        def slotCloseDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(slotWriteSocket) && System.currentTimeMillis() < slotCloseDeadline) {
+            Thread.sleep(20)
+        }
+        !inspector.socketMap.containsValue(slotWriteSocket)
+
         when: 'CLIENT KILL ADDR matches by remote address in Redis form'
         def addrSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46412)
         addrSocket.setInspector(inspector)
@@ -654,6 +682,7 @@ class CGroupTest extends Specification {
         cleanup:
         extras.each { unregisterSocketOnInspector(inspector, fixtureEventloop, it) }
         eventloopsToBreak.each { it.breakEventloop() }
+        MultiWorkerServer.STATIC_GLOBAL_V.slotWorkerThreadIds = savedSlotThreadIds
         fixture.cleanup()
     }
 

@@ -823,11 +823,13 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         // CLIENT KILL of the calling client defers the close to here (the reply bytes
         // have just been handed to the socket channel), mirroring Redis's
-        // CLIENT CLOSE_AFTER_REPLY semantics.
+        // CLIENT CLOSE_AFTER_REPLY semantics. onWrite may run on a slot worker
+        // (async-reply writes), so the close must go through the socket's own
+        // reactor — closeEx checks the reactor thread unconditionally.
         if (veloUserData.isCloseAfterReply()) {
             veloUserData.setCloseAfterReply(false);
             log.info("Inspector close client after reply written, remote address={}", socket.getRemoteAddress());
-            socket.close();
+            socket.getReactor().submit(socket::close);
         }
     }
 
