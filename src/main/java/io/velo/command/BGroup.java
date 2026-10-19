@@ -1011,6 +1011,8 @@ public class BGroup extends BaseCommand {
                 var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
 
                 // each key is checked on the worker owning it, never blocking the current worker
+                // the continuation below runs on the worker of the last checked key, which is also the
+                // reactor used to schedule the timeout, the reply itself is sent back through the promise
                 popOtherKeyAsync(1, keys, isLeft).whenComplete((r, e) -> {
                     if (e != null) {
                         log.error("{} error={}", isLeft ? "blpop" : "brpop", e.getMessage());
