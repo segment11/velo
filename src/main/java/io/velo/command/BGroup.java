@@ -455,7 +455,8 @@ public class BGroup extends BaseCommand {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var cv = getCv(slotWithKeyHash);
         if (cv == null) {
-            return new IntegerReply(-1);
+            // a missing key is an infinite array of zero bits
+            return new IntegerReply(isBit1 ? -1 : 0);
         }
 
         if (!cv.isTypeString()) {

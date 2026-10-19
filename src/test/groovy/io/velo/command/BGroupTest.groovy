@@ -228,6 +228,12 @@ class BGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == -1
 
+        when: 'missing key is an infinite array of zero bits, so bit 0 is at position 0'
+        reply = bGroup.execute('bitpos a 0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.compressedData = 'foobar'.bytes
