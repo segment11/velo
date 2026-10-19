@@ -201,6 +201,38 @@ class SocketInspectorTest extends Specification {
     }
 
     /**
+     * Regression test for the bug 73 R1 re-review — onDisconnect must tolerate being
+     * called from a thread that is not a net worker (the same if (threadIndex != -1)
+     * shape onRead/onWrite already use), instead of doing
+     * connectedClientCountArray[-1]-- and throwing ArrayIndexOutOfBoundsException.
+     */
+    def 'test on disconnect from non net worker thread skips client count'() {
+        given:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        def inspector = new SocketInspector(1, 1)
+        def socket = mockTcpSocket(eventloopCurrent, 46400)
+        Eventloop[] oneEventloop = [eventloopCurrent]
+        BlockingList.initBySlotWorkerEventloopArray(oneEventloop)
+
+        and: 'the current thread is not a net worker'
+        def savedNetWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Long.MAX_VALUE] as long[]
+
+        when:
+        inspector.onDisconnect(socket)
+
+        then:
+        noExceptionThrown()
+
+        cleanup:
+        MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = savedNetWorkerThreadIds
+        inspector.clearAll()
+    }
+
+    /**
      * Regression test for bug 66 — the SimpleServer is wired with the inspector at DI/build time and can
      * start accepting connections before {@code MultiWorkerServer.onStart()} calls
      * {@link SocketInspector#initByNetWorkerEventloopArray}. The fix eager-allocates the per-worker counter

@@ -868,8 +868,12 @@ public class SocketInspector implements TcpSocket.Inspector {
         // remove from blocking list
         BlockingList.removeBySocket(socket);
 
+        // tolerate non-net-worker threads the same way onRead/onWrite do — the
+        // counter is per net worker and only meaningful on a net worker thread
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
-        connectedClientCountArray[threadIndex]--;
+        if (threadIndex != -1) {
+            connectedClientCountArray[threadIndex]--;
+        }
     }
 
     @Override
