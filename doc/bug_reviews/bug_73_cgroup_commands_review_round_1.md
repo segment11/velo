@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2 (round 1 verification complete)
-**Status:** 7 findings fixed and accepted; A1 closed (`94db1fa4`); R1 follow-up `9f06178c` REJECTED in re-review round 2 (closes on a slot-worker thread)
+**Status:** 7 findings fixed and accepted; A1 closed (`94db1fa4`); R1 closed and hardened (`00cbbc54`, `fbf3e06c`, `d0e37a45`, `31c3abc6`) — see 'R1 hardening' for verification evidence
 **Review branch:** `review/cgroup`
 **Reviewed commit:** `0accc625dd94fb52917d08664ff8bafb39f2a203`
 
@@ -790,6 +790,95 @@ Secondary issues in the same change, to fold into the fix:
 Suggested fix direction (minimal, keeps the approved design): in `SocketInspector.onWrite`, do not close inline on a foreign thread — instead `socket.getReactor().submit(() -> socket.close())` (net workers are already eventloops, so `submit` runs inline when already on the reactor), or gate the close on `getNetThreadLocalIndexByCurrentThread() != -1`. Independently, make `SocketInspector.onDisconnect` tolerate non-net threads the same way `onRead`/`onWrite` already do (slot-thread fallback, skip the counter otherwise), so no future caller can trip it. A regression test must invoke the hook from a thread that is **not** in `netWorkerThreadIds` — that is the case that currently throws.
 
 Fix Log rows for A1/R1 should be marked rejected-pending-rework, not closed: `66df3744` records R1 as closed on a test that only exercises the net-worker thread.
+
+
+### Re-review round 3 (AI agent 2) — R1 reworked
+
+**Correction to round 2.** My round-2 mechanism was wrong. I reported that the inline `socket.close()` reaches `onDisconnect` and corrupts `connectedClientCountArray[-1]`. It does not: `TcpSocket.closeEx` calls `checkInReactorThread(this)` **unconditionally** (`activej core-net/.../TcpSocket.java:555-556`), and `Reactor.checkInReactorThread` → `Checks.checkState(reactor.inReactorThread(), ...)` (`Reactor.java:68-71`) throws unconditionally — `Checks.checkState` is a plain `if (!expression) throw` (`Checks.java:204-209`), not an assertion, so it fires in production without `-ea`. Measured:
+
+```
+Exception in thread "Thread-7" java.lang.IllegalStateException: Not in reactor thread
+	at io.activej.common.Checks.checkState(Checks.java:205)
+	at io.activej.reactor.Reactor.checkInReactorThread(Reactor.java:70)
+	at io.activej.net.socket.tcp.TcpSocket.closeEx(TcpSocket.java:556)
+	at io.activej.async.process.AsyncCloseable.close(AsyncCloseable.java:44)
+```
+
+So the real round-2 failure mode is: the self-kill close throws **before** `doClose()`, the channel is never closed, `onDisconnect` is never reached (the `-1` counter path is unreachable), the connection stays open, and the exception escapes through the reply write. Same defect class, different symptom — the required fix (schedule the close on the socket's reactor) is unchanged.
+
+**Thread contract, confirmed against the ActiveJ sources** (`~/ws/src_learn/activej`):
+
+| Hook | Called from | Thread |
+|---|---|---|
+| `onWrite` | `TcpSocket.doWrite()` (`TcpSocket.java:531`), reached from `write(ByteBuf)` on the **calling** thread (its reactor check is `if (CHECKS)`-gated, off in production) or from `onWriteReady()` | whichever thread wrote — for Velo replies, the slot worker; only the `onWriteReady` continuation is on the net worker |
+| `onDisconnect` | `TcpSocket.doClose()` (`TcpSocket.java:571`), reachable only through `closeEx()`, which requires the reactor thread | always the socket's net worker |
+
+**`00cbbc54` `fix: submit deferred client close to socket reactor` — ACCEPTED.**
+
+- Change is one line, `SocketInspector.java:829-833`:
+
+```java
+if (veloUserData.isCloseAfterReply()) {
+    veloUserData.setCloseAfterReply(false);
+    log.info("Inspector close client after reply written, remote address={}", socket.getRemoteAddress());
+    socket.getReactor().submit(socket::close);
+}
+```
+
+- `Eventloop.execute` only offers to the concurrent queue and never runs inline (`Eventloop.java:985-991`), so the close always lands on the net worker — never inline, never on a slot worker — and always after the in-flight write task, which is exactly the intended `CLOSE_AFTER_REPLY` ordering. It also covers the `onWriteReady()` (net-worker) case, where the flag is now consumed one turn later instead of closing mid-drain.
+- **Red verified by the reviewer**: with `SocketInspector.java` reverted to `00dd4d9d` and this commit's test in place, `CGroupTest > test client FAILED`, `Caused by: java.lang.IllegalStateException at CGroupTest.groovy:452` — the added case is a genuine regression test for this defect (it registers the calling thread as a slot worker, not a net worker, which is exactly what the earlier tests missed).
+- **Green verified**: `./gradlew :cleanTest :test --tests "io.velo.command.CGroupTest"` → `tests="11" skipped="0" failures="0" errors="0"`.
+- **JaCoCo verified**: `SocketInspector.java:832` covered; `:829` partial with both arms (true from the self-kill cases, false from ordinary writes).
+
+Nits, none blocking:
+
+- `savedSlotThreadIds` is assigned twice in `CGroupTest` (once in the `given:` preamble, once inside the new `when:`); the second one is the meaningful one, the first is redundant.
+- The returned `CompletableFuture` is not inspected; a throwing `close()` would go to the eventloop fatal-error handler (`Eventloop.java:1046-1059`) instead of propagating into the reply pipeline. Arguably better than before (the throw no longer corrupts the reply path), just worth knowing.
+- Because `execute` never runs inline, a queued close is dropped if the eventloop stops first; in that window the server-stop path already closes all sockets (`MultiWorkerServer.java:1283-1287`), so no leak in practice.
+
+**Uncommitted working-tree change — approved.** The `onDisconnect` guard (`SocketInspector.java:871-877`, `if (threadIndex != -1)`) is the hardening this review asked for: correct, and with the reactor submit the `-1` path is now unreachable for this flow, so it is pure defense in depth. Its `threadIndex == -1` arm is uncovered (`:874`, 1 of 2 branches) — acceptable for a defensive guard; if the repo wants it pinned, the reviewer's throwaway probe (call `inspector.onDisconnect(socket)` from a thread that is not in `netWorkerThreadIds`, assert no exception) makes a good permanent test.
+
+**Still open, out of scope for `00cbbc54`:**
+
+- The flag is only consumed by `onWrite`, so `CLIENT REPLY OFF` + `CLIENT KILL <own addr>` writes nothing and the connection is never closed (Redis closes regardless of reply mode). New connection-leak finding.
+- Pipelined commands after a self-kill: the close now happens after the *first* subsequent write, so pending replies from the same pipeline are dropped; Redis flushes the whole output buffer before closing.
+- `closeAfterReply` is a plain field; now low risk (set and read are on the same thread and `submit` supplies the happens-before for the close), `volatile` would still be the honest declaration.
+
+
+### R1 hardening (AI agent 2, four commits) — written for independent verification
+
+Scope: make the deferred close (`CLIENT KILL` of the calling client, Redis `CLIENT CLOSE_AFTER_REPLY`) correct end to end and document the thread contract, so a reviewer can verify each step without reading the whole history. Commits, oldest first:
+
+| # | Commit | What it changes | Red evidence | Green evidence | JaCoCo |
+|---|---|---|---|---|---|
+| 1 | `00cbbc54` | `SocketInspector.onWrite` submits the close to the socket's reactor instead of closing inline | reviewer: revert `SocketInspector.java` to `00dd4d9d` → `CGroupTest > test client FAILED, Caused by: java.lang.IllegalStateException at CGroupTest.groovy:452` | `CGroupTest` `tests="11" failures="0"` | `SocketInspector.java:832` covered, `:829` partial (both arms) |
+| 2 | `fbf3e06c` | `onDisconnect` guards the per-net-worker client count | reviewer: guard reverted → `SocketInspectorTest > test on disconnect from non net worker thread skips client count FAILED, Caused by: java.lang.ArrayIndexOutOfBoundsException at SocketInspectorTest.groovy:225` | `SocketInspectorTest` `tests="11" failures="0"` | `SocketInspector.java:874` `All 2 branches covered` |
+| 3 | `d0e37a45` | consume the pending flag when the reply is suppressed (`CLIENT REPLY OFF`/`SKIP`) | reviewer: `MultiWorkerServerTest > test pending client kill close fires when the reply is suppressed FAILED` — `socket.isClosed() false`, i.e. the self-killed connection stayed open | `MultiWorkerServerTest` 24 tests, only the 2 pre-existing failures below remain | `SocketInspector.java:852-875` fully covered, both `closeIfPending` call sites |
+| 4 | `31c3abc6` | `closeAfterReply` becomes `volatile`; contract documented in the field, in `closeIfPending`, and on the `onDisconnect` guard | n/a (visibility, not behaviour) | `CGroupTest` 11/11, `SocketInspectorTest` 11/11 | — |
+
+**Pre-existing failures, not caused by these commits:** `MultiWorkerServerTest > test mock inject and handle` (`NoSuchElementException` at `MultiWorkerServer.java:701`) and `MultiWorkerServerTest > test cluster slot cross shards` (`NullPointerException` at `MultiWorkerServer.java:523`). Both fail on `00cbbc54` too — verified by stashing the new feature method and re-running the class (23 tests, 2 failed).
+
+**Thread contract the code relies on** (verify against `~/ws/src_learn/activej`, not memory):
+
+| Fact | Source | Consequence for Velo |
+|---|---|---|
+| `TcpSocket.closeEx` calls `checkInReactorThread(this)` **unconditionally** | `core-net/.../TcpSocket.java:555-556` | closing off-reactor always throws `IllegalStateException: Not in reactor thread`, in production too |
+| `Checks.checkState` is a plain `if (!expr) throw`, not an assert | `util-common/.../Checks.java:204-209` | `-ea` is irrelevant; the above is not a debug-only check |
+| `TcpSocket.write` checks the reactor only `if (CHECKS)` | `TcpSocket.java:444-447`, `Checks` off without `-ea` | Velo may write a reply from a slot worker; `onWrite` therefore runs on the slot worker (see the `// when async reply, slot eventloop trigger write` branch in `SocketInspector.onRead`/`onWrite`) |
+| `Eventloop.execute` only offers to the concurrent queue; it never runs inline | `Eventloop.java:985-991` | `submit(socket::close)` always runs on the net worker, always after the in-flight write — the intended ordering, with no special-casing for "already on the reactor" |
+| `inspector.onWrite` fires from `doWrite()`, `inspector.onDisconnect` from `doClose()` | `TcpSocket.java:531`, `:571` | the flag must be consumed in `onWrite`; the close must be submitted, never inline |
+
+**Where the flag can be set and consumed** (grep targets for a reviewer):
+
+- set: `CGroup.killClientsMatching`, `if (s == socket)` → `setCloseAfterReply(true)` — only the calling client, filter form or legacy form alike.
+- consumed #1: `SocketInspector.onWrite` → `closeIfPending(socket, "after reply written")` — the reply went out.
+- consumed #2: `SocketInspector.closeIfReplySuppressed` → `closeIfPending(socket, "after suppressed reply")`, called from the two `replyMode != on` branches in `MultiWorkerServer.handleRequest` (the `isReuseNetWorkerEventloop` branch and the `getByteBufPromiseByOtherEventloop` continuation) — `CLIENT REPLY OFF`/`SKIP` discards the reply, so `onWrite` would never fire.
+- both funnel through `SocketInspector.closeIfPending(TcpSocket, String)`, which clears the flag first and then always submits the close to the socket's reactor.
+
+**Still open (deliberately not in these commits):**
+
+- Pipelined commands after a self-kill: the close happens after the first subsequent write, so later replies of the same pipeline are dropped; Redis flushes the whole output buffer before closing.
+- `handleFast` answers `PING`/`ECHO` before the reply mode is consulted, so `CLIENT REPLY OFF` does not suppress those two replies (Redis does). Unrelated to the close flag — the reply is written, so `onWrite` still closes the client — but a real Redis-compat divergence, filed separately.
 
 ## Summary
 
