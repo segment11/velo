@@ -796,6 +796,11 @@ class CGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
 
+        when: 'same-worker copy onto an existing destination without REPLACE returns 0'
+        reply = cGroup.execute('copy a b')
+        then:
+        reply == IntegerReply.REPLY_0
+
         when: 'typo option replace_ is a syntax error (used to be silently ignored)'
         reply = cGroup.execute('copy a b replace_')
         then:
