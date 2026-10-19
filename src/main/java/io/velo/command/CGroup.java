@@ -12,6 +12,7 @@ import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Set;
 
@@ -607,6 +608,11 @@ public class CGroup extends BaseCommand {
                 // unknown option — Redis replies a syntax error instead of ignoring it
                 return ErrorReply.SYNTAX;
             }
+        }
+
+        // Redis rejects copying onto the same key (checked after option parsing, before the source lookup)
+        if (Arrays.equals(data[1], data[2])) {
+            return new ErrorReply("source and destination objects are the same");
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();

@@ -777,6 +777,23 @@ class CGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
 
+        when: 'copy onto the same key is rejected (Redis: source and destination objects are the same)'
+        reply = cGroup.execute('copy a a')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'source and destination objects are the same'
+
+        when: 'same-key copy with REPLACE is also rejected'
+        reply = cGroup.execute('copy a a replace')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'source and destination objects are the same'
+
+        when: 'same-key copy with a garbage option is a syntax error first (Redis parses options first)'
+        reply = cGroup.execute('copy a a garbage')
+        then:
+        reply == ErrorReply.SYNTAX
+
         when:
         def eventloop = Eventloop.builder()
                 .withIdleInterval(Duration.ofMillis(100))
