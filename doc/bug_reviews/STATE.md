@@ -15,7 +15,7 @@ Single source of truth for report id allocation and module coverage.
 | 70 | scan command (SGroup) | 1 | review complete, fix phase pending |
 | 71 | hscan/sscan (HGroup/SGroup) | 1 | 71.3 fixed (ebbc7a2c), 71.4 fixed (78aca093); 71.1 REFUTED no action; 71.2/71.5 open, need product decision |
 | 72 | BGroup commands | 1 | all findings fixed: 72.1–72.3 + 72.5–72.10 in 9 commits, 72.11 fixed (`b00a7354`), 72.4 retracted; full re-review pending |
-| 73 | CGroup commands | 1 | 7 findings fixed + accepted; follow-ups A1 `94db1fa4` and R1 hardened by `00cbbc54`/`fbf3e06c`/`d0e37a45`/`31c3abc6`; open: pipelined self-kill replies, PING/ECHO bypass CLIENT REPLY OFF |
+| 73 | CGroup commands | 1 | 7 findings fixed + accepted; follow-ups A1 `94db1fa4` and R1 hardened by `00cbbc54`/`fbf3e06c`/`d0e37a45`/`31c3abc6`; verified e2e against a 2-slot/2-net worker server (all 5 cases pass, leak case red on the pre-fix jar); open: pipelined self-kill replies, PING/ECHO bypass CLIENT REPLY OFF |
 
 ## Module coverage (latest round per module)
 

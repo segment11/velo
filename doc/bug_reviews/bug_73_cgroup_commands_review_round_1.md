@@ -880,6 +880,42 @@ Scope: make the deferred close (`CLIENT KILL` of the calling client, Redis `CLIE
 - Pipelined commands after a self-kill: the close happens after the first subsequent write, so later replies of the same pipeline are dropped; Redis flushes the whole output buffer before closing.
 - `handleFast` answers `PING`/`ECHO` before the reply mode is consulted, so `CLIENT REPLY OFF` does not suppress those two replies (Redis does). Unrelated to the close flag — the reply is written, so `onWrite` still closes the client — but a real Redis-compat divergence, filed separately.
 
+
+#### End-to-end verification against a running server (AI agent 2)
+
+The deferred close was verified end to end against a real server, because the unit tests can only
+simulate the write hook.
+
+**Setup** — `java -Xmx2g -Xms2g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=256m -jar build/libs/velo-1.0.0.jar <config>` with `slotWorkers=2`, `netWorkers=2`, `slotNumber=4`, `net.listenAddresses=0.0.0.0:7390`. Two slot workers plus two net workers is required: it keeps `isReuseNetWorkerEventloop` false (`MultiWorkerServer.java:1041-1049`), so replies are produced on a slot worker and `onWrite` runs there — the configuration in which the old inline `socket.close()` threw. Client: a raw RESP script (no redis-cli, so the bytes that arrive before EOF are observable byte for byte).
+
+| # | Case | Expected | Observed |
+|---|---|---|---|
+| a | legacy `CLIENT KILL <own ip:port>` (same connection) | `+OK`, then the server closes | `b'+OK\r\n'` then EOF — PASS |
+| b | `CLIENT REPLY OFF` + `CLIENT KILL <own ip:port>` | no reply bytes, connection still closed | `b''` then EOF — PASS |
+| c | `CLIENT KILL ID <self> SKIPME NO` (filter form self kill) | `:1`, then close | `b':1\r\n'` then EOF — PASS |
+| d | control: one connection kills another | killer `+OK`, victim closed with no reply | PASS |
+| e | control: `SET` / `GET` on an unrelated connection | unaffected | `+OK` / `hello` — PASS |
+
+**Server log — the flag is set on a slot worker, the close runs on the net worker**, i.e. exactly the reactor hand-off `00cbbc54` introduces, and case (b) is the `d0e37a45` path:
+
+```
+[slot-worker-0] Client kill scheduled after reply, addr=/127.0.0.1:33886
+[net-worker-1]  Inspector close client after reply written,  remote address=/127.0.0.1:33886
+[slot-worker-1] Client kill scheduled after reply, addr=/127.0.0.1:33902
+[net-worker-0]  Inspector close client after suppressed reply, remote address=/127.0.0.1:33902
+```
+
+**Negative control** — a jar built from `d0e37a45^` (same config, port 7391): case (a) passed (that part was already fixed by `00cbbc54`), case (b) **leaked**:
+
+```
+=== b) self kill with CLIENT REPLY OFF still closes (no leak)
+bytes after kill = b''
+server closed connection = False
+AssertionError: connection leaked: server never closed it
+```
+
+so case (b) closing is attributable to `d0e37a45` and not to something else in the build.
+
 ## Summary
 
 | # | Finding | Severity | Class | Verdict | Disposition |
