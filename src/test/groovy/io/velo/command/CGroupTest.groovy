@@ -671,6 +671,29 @@ class CGroupTest extends Specification {
         reply == ErrorReply.SYNTAX
     }
 
+    def 'test command'() {
+        given:
+        def cGroup = new CGroup(null, null, null)
+
+        and:
+        def loader = CachedGroovyClassLoader.instance
+        def classpath = Utils.projectPath('/dyn/src')
+        loader.init(GroovyClassLoader.getClass().classLoader, classpath, null)
+
+        when: 'bare COMMAND (no subcommand) delegates to the script and returns info for all commands'
+        def reply = cGroup.execute('command')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == CommandRegistry.size()
+        (reply as MultiBulkReply).replies.length > 0
+
+        when: 'COMMAND COUNT still delegates and returns the registry size'
+        reply = cGroup.execute('command count')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == CommandRegistry.size()
+    }
+
     def 'test copy'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

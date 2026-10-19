@@ -546,10 +546,8 @@ public class CGroup extends BaseCommand {
     }
 
     private Reply command() {
-        if (data.length < 2) {
-            return ErrorReply.FORMAT;
-        }
-
+        // No arity guard here: bare COMMAND (data.length == 1) is valid and is handled
+        // by the script (CommandCommand.handle: data.length == 1 -> info()).
         var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/CommandCommandHandle.groovy");
 
         var variables = new HashMap<String, Object>();
