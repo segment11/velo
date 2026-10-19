@@ -735,13 +735,45 @@ class CGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
 
-        when:
+        when: 'typo option replace_ is a syntax error (used to be silently ignored)'
         reply = cGroup.execute('copy a b replace_')
         then:
-        reply == IntegerReply.REPLY_0
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = cGroup.execute('copy a b replace')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when: 'unknown option is a syntax error (Redis rejects, Velo used to silently ignore)'
+        reply = cGroup.execute('copy a b replce')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'trailing garbage after REPLACE is a syntax error'
+        reply = cGroup.execute('copy a b replace whatever')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'dangling DB without a value is a syntax error'
+        reply = cGroup.execute('copy a b db')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'non-numeric DB value is not integer'
+        reply = cGroup.execute('copy a b db nonsense')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'nonzero DB is out of range (Velo is single-db)'
+        reply = cGroup.execute('copy a b db 5')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'DB index is out of range'
+
+        when: 'DB 0 is accepted and performs the copy'
+        inMemoryGetSet.remove(slot, 'b')
+        reply = cGroup.execute('copy a b db 0')
         then:
         reply == IntegerReply.REPLY_1
 
@@ -776,8 +808,8 @@ class CGroupTest extends Specification {
             result == IntegerReply.REPLY_1
         }.result
 
-        when:
-        reply = cGroup.execute('copy a b replace_')
+        when: 'cross-worker copy without options when dst exists returns async 0'
+        reply = cGroup.execute('copy a b')
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->

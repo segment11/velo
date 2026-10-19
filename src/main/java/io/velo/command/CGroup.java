@@ -586,9 +586,26 @@ public class CGroup extends BaseCommand {
 
         boolean replace = false;
         for (int i = 3; i < data.length; i++) {
-            if ("replace".equalsIgnoreCase(new String(data[i]))) {
+            var option = new String(data[i]);
+            if ("replace".equalsIgnoreCase(option)) {
                 replace = true;
-                break;
+            } else if ("db".equalsIgnoreCase(option)) {
+                if (i + 1 >= data.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                long dbId;
+                try {
+                    dbId = Long.parseLong(new String(data[++i]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+                // Velo has a single logical db; mirror the Redis standalone error for other ids
+                if (dbId != 0) {
+                    return new ErrorReply("DB index is out of range");
+                }
+            } else {
+                // unknown option — Redis replies a syntax error instead of ignoring it
+                return ErrorReply.SYNTAX;
             }
         }
 
