@@ -765,6 +765,9 @@ public class BGroup extends BaseCommand {
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_INTEGER;
                 }
+                if (initCapacity <= 0) {
+                    return ErrorReply.CAPACITY_NOT_POSITIVE;
+                }
                 needCreateNew = true;
             }
 
@@ -951,6 +954,9 @@ public class BGroup extends BaseCommand {
             initCapacity = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
+        }
+        if (initCapacity <= 0) {
+            return ErrorReply.CAPACITY_NOT_POSITIVE;
         }
 
         for (int i = 4; i < data.length; i++) {

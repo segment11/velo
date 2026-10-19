@@ -668,6 +668,18 @@ class BGroupTest extends Specification {
         then:
         // bad expansion should return NOT_INTEGER
         reply == ErrorReply.NOT_INTEGER
+
+        when: 'zero capacity is rejected before reaching guava'
+        inMemoryGetSet.remove(slot, 'c')
+        reply = bGroup.execute('bf.insert c capacity 0 items item0')
+        then:
+        reply == ErrorReply.CAPACITY_NOT_POSITIVE
+        bGroup.execute('bf.card c') == IntegerReply.REPLY_0
+
+        when: 'negative capacity is rejected with a fixed error, not a guava exception'
+        reply = bGroup.execute('bf.insert d capacity -1 items item0')
+        then:
+        reply == ErrorReply.CAPACITY_NOT_POSITIVE
     }
 
     def 'test bf scandump and loadchunk'() {
@@ -836,6 +848,18 @@ class BGroupTest extends Specification {
         then:
         // bad capacity should return NOT_INTEGER
         reply == ErrorReply.NOT_INTEGER
+
+        when: 'zero capacity is rejected before reaching guava'
+        inMemoryGetSet.remove(slot, 'c')
+        reply = bGroup.execute('bf.reserve c 0.01 0')
+        then:
+        reply == ErrorReply.CAPACITY_NOT_POSITIVE
+        bGroup.execute('bf.card c') == IntegerReply.REPLY_0
+
+        when: 'negative capacity is rejected with a fixed error, not a guava exception'
+        reply = bGroup.execute('bf.reserve d 0.01 -5')
+        then:
+        reply == ErrorReply.CAPACITY_NOT_POSITIVE
     }
 
     def 'test bf reserve rejects non-positive expansion'() {
