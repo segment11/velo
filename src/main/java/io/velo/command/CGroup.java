@@ -236,7 +236,17 @@ public class CGroup extends BaseCommand {
                 return ErrorReply.FORMAT;
             }
 
-            var clientName = new String(data[2]);
+            // Redis restricts client names to printable ASCII 0x21..0x7E (no spaces,
+            // newlines or special characters) so CLIENT LIST lines stay parseable.
+            var nameBytes = data[2];
+            for (byte b : nameBytes) {
+                if (b < 0x21 || b > 0x7E) {
+                    return new ErrorReply("Client names cannot contain spaces, newlines or special characters.");
+                }
+            }
+
+            // Redis treats setting an empty name as removing the current name
+            var clientName = nameBytes.length == 0 ? null : new String(nameBytes);
             var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
             veloUserData.setClientName(clientName);
             return OKReply.INSTANCE;

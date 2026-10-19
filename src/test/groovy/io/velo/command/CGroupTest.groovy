@@ -226,6 +226,40 @@ class CGroupTest extends Specification {
         reply instanceof BulkReply
         (reply as BulkReply).asString().split('\n').length == 2
 
+        when: 'CLIENT SETNAME with a space is rejected (Redis validates printable ASCII only)'
+        reply = cGroup.execute('client setname "a b"')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'Client names cannot contain spaces, newlines or special characters.'
+
+        when: 'CLIENT SETNAME with a newline is rejected'
+        reply = cGroup.execute('client setname "a\nb"')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'Client names cannot contain spaces, newlines or special characters.'
+
+        when: 'CLIENT SETNAME with a byte above 0x7E is rejected'
+        reply = cGroup.execute('client setname "a' + (char) 0x7F + 'b"')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'Client names cannot contain spaces, newlines or special characters.'
+
+        when: 'CLIENT SETNAME with printable ASCII punctuation is accepted'
+        reply = cGroup.execute('client setname abc!~')
+        then:
+        reply == OKReply.INSTANCE
+
+        when: 'CLIENT SETNAME with an empty name clears the name so GETNAME returns nil'
+        reply = cGroup.execute('client setname ""')
+        then:
+        reply == OKReply.INSTANCE
+        cGroup.execute('client getname') == NilReply.INSTANCE
+
+        when: 'restore the name for later cases'
+        reply = cGroup.execute('client setname xxx')
+        then:
+        reply == OKReply.INSTANCE
+
         // ----- CLIENT KILL filter parsing (Task 3) -----
 
         when: 'CLIENT KILL with no filter args is format error'
