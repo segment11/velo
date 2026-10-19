@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2 (round 1 verification complete)
-**Status:** fix phase complete — all 7 findings fixed, one commit each; re-review done (7 accepted, 1 test-only action item A1 open)
+**Status:** 7 findings fixed and accepted; A1 closed (`94db1fa4`); R1 follow-up `9f06178c` REJECTED in re-review round 2 (closes on a slot-worker thread)
 **Review branch:** `review/cgroup`
 **Reviewed commit:** `0accc625dd94fb52917d08664ff8bafb39f2a203`
 
@@ -717,6 +717,79 @@ Coverage claims otherwise verified as accurate: `command()` delegation (73.2), l
 - **"Transient gradle failures" are actually a heap problem, not flakiness.** The fix log records repeated first-run failures "passing on immediate rerun with unchanged sources". The reviewer reproduced it and captured the cause: `:compileTestGroovy FAILED ... > Java heap space` (observed 3 times in this re-review). `gradle.properties` sets only `org.gradle.java.home`; no `org.gradle.jvmargs`, so Groovy compilation runs in the Gradle daemon with the default heap while the repo compiles `src/test/groovy` + `dyn/test` together (`build.gradle:34-35`). Suggested follow-up: set `org.gradle.jvmargs=-Xmx4g` (or raise the daemon heap) so green claims do not depend on a lucky rerun. Not part of bug 73. *(Agent 1 note: reproduced again twice during the A1/R1 work — same `:compileTestGroovy` first-fail-then-pass pattern; the heap fix is recommended to the repo owner.)*
 - **Sibling unguarded `asyncExecute` lambdas** (carried over from round 1): `SGroup.java:2031` (SMOVE cross-slot, identical hang), `ZGroup.java:1372` (promise pre-completed on the calling thread → wrong success reply, lost dst write), `BGroup.java:1154` (`recheckBlockingList`, blocked client never woken). Belong to the owning modules' next rounds; cross-referenced from 73.1. Note the 73.1 fix pattern (try/catch + `finalPromise.setException` + non-null message) is the template for all three.
 - **Unchanged from round 1:** minor CLIENT KILL filter-form validation divergences (`USER <unknown-user>` → `:0`, `ID 0`/negative accepted); CLIENT LIST `TYPE`/`ID` filters unsupported; bare `COMMAND` now returns the full array with no ACL/cost guard (Redis-equivalent, still unbounded).
+
+
+### Re-review round 2 (AI agent 2) — follow-ups A1 and R1
+
+Reviewed: `94db1fa4` (`test: cover same-worker copy dst-exists branch again`) and `9f06178c` (`fix: close self-killed client after reply written`), docs commit `66df3744`.
+
+**A1 — ACCEPTED.** The same-worker `copy a b` case (second call returns `REPLY_0`) is added to `CGroupTest.'test copy'`. Re-measured at HEAD:
+
+```
+python3 scripts/jacoco_cover.py io.velo.command.CGroup 660 685
+  675  ✓ covered
+  676  ✓ covered       All 4 branches covered.
+  677  ✓ covered
+```
+
+`CGroup.java:676-677` is restored to fully covered. A1 is closed.
+
+**R1 (`9f06178c`) — REJECTED, new defect in the follow-up fix.** The intent is right and the mechanism is a faithful port of Redis `CLIENT CLOSE_AFTER_REPLY`, but the close is executed on the wrong thread, and in any deployment with distinct slot and net workers (`slotWorkers > 1 || netWorkers > 1`, i.e. exactly the sharded setup Velo exists for) it throws and leaks a counter.
+
+Mechanism — `CGroup.java:539-546` sets the flag instead of closing:
+
+```java
+if (s == socket) {
+    SocketInspector.createUserDataIfNotSet(s).setCloseAfterReply(true);
+    killed++;
+    continue;
+}
+```
+
+and `SocketInspector.java:826-832` performs the close from the `onWrite` hook:
+
+```java
+if (veloUserData.isCloseAfterReply()) {
+    veloUserData.setCloseAfterReply(false);
+    socket.close();
+}
+```
+
+Why that is the wrong thread:
+
+1. `CLIENT KILL` parses to **no keys** (`CGroup.parseSlots` returns an empty list for non-`copy` commands), so `Request.getSingleSlot()` returns `SLOT_CAN_HANDLE_BY_ANY_WORKER` (`Request.java:213-214`) and `handleRequest` dispatches through `getByteBufPromiseByOtherEventloop(..., slotWorkerEventloopArray[i])` (`MultiWorkerServer.java:599-608`). The reply promise is therefore completed **on a slot worker thread**, and the reactive pipeline continues on that thread: `.streamTo(ChannelConsumers.ofSocket(socket))` (`MultiWorkerServer.java:845-848`) → `ChannelConsumers.ofSocket` = `ofAsyncConsumer(socket::write, socket)` → `TcpSocket.write` → `doWrite` → `inspector.onWrite(...)` (`activej TcpSocket.java:444-531`).
+2. Velo's own `SocketInspector.onWrite` already documents and handles this: `// when async reply, slot eventloop trigger write` — it falls back to `getSlotThreadLocalIndexByCurrentThread()` when `getNetThreadLocalIndexByCurrentThread()` is `-1` (`SocketInspector.java:814-820`). So slot-thread `onWrite` is a first-class, expected case, not an edge case.
+3. `socket.close()` → `AsyncCloseable.close()` → `TcpSocket.closeEx` → `doClose()` → `reactor.closeChannel(...)` **and `inspector.onDisconnect(this)`** — on that same slot worker thread.
+4. `SocketInspector.onDisconnect` ends with an unguarded net-worker index:
+
+```java
+var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
+connectedClientCountArray[threadIndex]--;
+```
+
+`getNetThreadLocalIndexByCurrentThread()` returns `-1` for a thread that is not a net worker (`MultiWorkerServer.java:1875-1882`), so this is `connectedClientCountArray[-1]--`.
+
+Reproduced (temporary probe `CGroupR1CloseThreadProbeSpec`, run against HEAD, then deleted — the same call `onWrite` makes on the slot-worker path, isolated from the rest of `onDisconnect`):
+
+```
+R1 thread probe: onDisconnect(non-net-worker) -> java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 1
+R1 thread probe: onDisconnect(net-worker)     -> thrown=null connectedClientCountArray=[0]
+```
+
+Why the added tests miss it: both new cases invoke the hook **inside `fixtureEventloop.execute { ... }`**, i.e. on a thread that the fixture has registered in `netWorkerThreadIds` (`clientFixture()` sets `STATIC_GLOBAL_V.netWorkerThreadIds = [eventloop.getEventloopThread().threadId()]`). The tests therefore prove the mechanism works on a net worker — the one thread where it is never used in a multi-worker deployment. They also hand-call `inspector.onWrite(socket, ByteBuf.empty(), 1)` with a synthetic buffer, so they do not exercise the real write path or assert that the reply bytes precede the close.
+
+Severity/impact: `doClose()` closes the channel *before* calling the inspector, so the `+OK` still reaches the client (that part of the intent is achieved) — but the exception then propagates out of `onWrite` → `doWrite` → `write()` → the reply pipeline, `connectedClientCountArray` is never decremented (per-worker connected-client drift, `INFO`/monitoring wrong), and the stack trace is logged per self-kill. In the single-worker configuration (`slotWorkers == 1 && netWorkers == 1`, where `isReuseNetWorkerEventloop` makes the slot worker *be* the net worker — `MultiWorkerServer.java:1041-1049`) the bug is invisible, which is why it survives a local run.
+
+Secondary issues in the same change, to fold into the fix:
+
+- **Leak when no reply is ever written.** The flag is only consumed by `onWrite`. `CLIENT REPLY OFF` + `CLIENT KILL <own addr>` produces no write (`MultiWorkerServer.java:576-578` returns `ByteBuf.empty()` for `replyMode != on`), so `onWrite` never fires and the connection is never closed. Redis closes regardless of reply mode.
+- **Pipelined commands.** `onWrite` closes on the *first* write that happens after the flag is set, which for a pipelined `CLIENT KILL <self>; PING` may be the kill's `+OK` — the pending `+PONG` is then discarded (`closeEx` recycles `writeBuf`). Redis flushes the whole output buffer before closing (`networking.c` freeClient path), so all pipelined replies are delivered.
+- **Field visibility.** `closeAfterReply` is a plain (non-`volatile`) field written on a slot worker and read on the net worker in the cases where the write crosses threads; no happens-before edge is established for it. Make it `volatile` (or `AtomicBoolean`).
+- **Partial writes.** `onWrite` fires even when `channel.write` wrote fewer bytes than the buffer, and the close then discards the remainder. Harmless for the 5-byte `+OK`, but the close belongs after `onWriteReady()` drained `writeBuf`, not on first attempt.
+
+Suggested fix direction (minimal, keeps the approved design): in `SocketInspector.onWrite`, do not close inline on a foreign thread — instead `socket.getReactor().submit(() -> socket.close())` (net workers are already eventloops, so `submit` runs inline when already on the reactor), or gate the close on `getNetThreadLocalIndexByCurrentThread() != -1`. Independently, make `SocketInspector.onDisconnect` tolerate non-net threads the same way `onRead`/`onWrite` already do (slot-thread fallback, skip the counter otherwise), so no future caller can trip it. A regression test must invoke the hook from a thread that is **not** in `netWorkerThreadIds` — that is the case that currently throws.
+
+Fix Log rows for A1/R1 should be marked rejected-pending-rework, not closed: `66df3744` records R1 as closed on a test that only exercises the net-worker thread.
 
 ## Summary
 
