@@ -36,7 +36,7 @@ class CommandRegistryPopulationTest extends Specification {
         def size = CommandRegistry.size()
 
         then:
-        size == 213
+        size == 211
 
         and: 'a representative known command is present'
         CommandRegistry.get('get') != null

@@ -44,22 +44,6 @@ public class BGroup extends BaseCommand {
                 "Count the number of set bits (population counting) in a string.",
                 "2.6.0", "O(N)"));
         CommandRegistry.register(new CommandEntry(
-                "bitfield", -2,
-                Set.of("write", "denyoom"),
-                1, 1, 1,
-                Set.of("@write", "@bitmap", "@slow"),
-                "bitmap",
-                "Perform arbitrary bitfield integer operations on strings.",
-                "3.2.0", "O(1) for each subcommand specified"));
-        CommandRegistry.register(new CommandEntry(
-                "bitop", -4,
-                Set.of("write", "denyoom"),
-                2, -1, 1,
-                Set.of("@write", "@bitmap", "@slow"),
-                "bitmap",
-                "Perform bitwise operations between multiple strings.",
-                "2.6.0", "O(N)"));
-        CommandRegistry.register(new CommandEntry(
                 "bitpos", -3,
                 Set.of("readonly"),
                 1, 1, 1,
@@ -209,27 +193,11 @@ public class BGroup extends BaseCommand {
     @Override
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
-        if ("bitcount".equals(cmd) || "bitfield".equals(cmd) || "bitfield_ro".equals(cmd) ||
-                "bitpos".equals(cmd) || cmd.startsWith("bf.")) {
+        if ("bitcount".equals(cmd) || "bitpos".equals(cmd) || cmd.startsWith("bf.")) {
             if (data.length < 2) {
                 return slotWithKeyHashList;
             }
             slotWithKeyHashList.add(slot(data[1], slotNumber));
-            return slotWithKeyHashList;
-        }
-
-        if ("bitop".equals(cmd)) {
-            if (data.length < 5) {
-                return slotWithKeyHashList;
-            }
-
-            // begin with dst key
-            // eg. bitop and dest src1 src2
-            for (int i = 2; i < data.length; i++) {
-                var keyBytes = data[i];
-                var slotWithKeyHash = slot(keyBytes, slotNumber);
-                slotWithKeyHashList.add(slotWithKeyHash);
-            }
             return slotWithKeyHashList;
         }
 
@@ -343,7 +311,7 @@ public class BGroup extends BaseCommand {
             return lGroup.lmove(true);
         }
 
-        return NilReply.INSTANCE;
+        return ErrorReply.UNKNOWN_COMMAND(cmd);
     }
 
     private Reply bitcount() {

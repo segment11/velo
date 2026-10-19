@@ -35,8 +35,9 @@ class BGroupTest extends Specification {
         where:
         cmd           | expectedSize
         'bitcount'    | 1
-        'bitfield'    | 1
-        'bitfield_ro' | 1
+        // bitfield, bitfield_ro and bitop are not implemented, no slot is parsed for them
+        'bitfield'    | 0
+        'bitfield_ro' | 0
         'bitpos'      | 1
         'bf.add'      | 1
         'bitop'       | 0
@@ -69,7 +70,7 @@ class BGroupTest extends Specification {
 
         expect:
         _BGroup.parseSlots('bitcount', data1, slotNumber).size() == 0
-        _BGroup.parseSlots('bitop', data5, slotNumber).size() == 3
+        _BGroup.parseSlots('bitop', data5, slotNumber).size() == 0
         _BGroup.parseSlots('blpop', data4, slotNumber).size() == 2
         _BGroup.parseSlots('brpop', data4, slotNumber).size() == 2
         _BGroup.parseSlots('blmove', data6, slotNumber).size() == 2
@@ -98,13 +99,53 @@ class BGroupTest extends Specification {
         bGroup.from(BaseCommand.mockAGroup())
 
         expect:
-        bGroup.execute(input) == expected
+        (bGroup.execute(input) instanceof ErrorReply) == (expected instanceof ErrorReply) && bGroup.execute(input) == expected
 
         where:
         input       | expected
         'bf.xxx'    | ErrorReply.SYNTAX
         'bgsave'    | OKReply.INSTANCE
-        'zzz'       | NilReply.INSTANCE
+    }
+
+    def 'test handle - unknown command'() {
+        given:
+        def bGroup = new BGroup(null, null, null)
+        bGroup.from(BaseCommand.mockAGroup())
+
+        expect:
+        def reply = bGroup.execute('zzz')
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == ErrorReply.UNKNOWN_COMMAND('zzz').message
+    }
+
+    def 'test unimplemented bitmap commands report unknown command'() {
+        given:
+        def bGroup = new BGroup(null, null, null)
+        bGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def bitopData = new byte[4][]
+        bitopData[0] = 'bitop'.bytes
+        bitopData[1] = 'and'.bytes
+        bitopData[2] = 'd'.bytes
+        bitopData[3] = 's'.bytes
+        def bitfieldData = new byte[2][]
+        bitfieldData[0] = 'bitfield'.bytes
+        bitfieldData[1] = 's'.bytes
+
+        expect: 'bitop and bitfield are not implemented, they must not answer with a nil reply'
+        bGroup.execute('bitop and d s').message == ErrorReply.UNKNOWN_COMMAND('bitop').message
+        bGroup.execute('bitfield s get i8 0').message == ErrorReply.UNKNOWN_COMMAND('bitfield').message
+        bGroup.execute('bitfield_ro s get i8 0').message == ErrorReply.UNKNOWN_COMMAND('bitfield_ro').message
+
+        and: 'and they must not be advertised as available commands'
+        CommandRegistry.get('bitop') == null
+        CommandRegistry.get('bitfield') == null
+
+        and: 'no slot is parsed for them'
+        bGroup.parseSlots('bitop', bitopData, 1).isEmpty()
+        bGroup.parseSlots('bitfield', bitfieldData, 1).isEmpty()
+        bGroup.parseSlots('bitfield_ro', bitfieldData, 1).isEmpty()
     }
 
     def 'test handle - brpoplpush timeout'() {
