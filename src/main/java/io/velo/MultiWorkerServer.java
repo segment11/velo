@@ -575,6 +575,10 @@ public class MultiWorkerServer extends Launcher {
         var firstSlot = request.getSingleSlot();
         if (isReuseNetWorkerEventloop) {
             if (veloUserData.replyMode != VeloUserDataInSocket.ReplyMode.on) {
+                // CLIENT REPLY OFF/SKIP: this command's reply is discarded, never written, so a
+                // pending CLIENT KILL self-close (Redis CLOSE_AFTER_REPLY) has nothing left to
+                // wait for — onWrite would never see it. Redis closes on a discarded reply too.
+                socketInspector.closeIfReplySuppressed((TcpSocket) socket);
                 return Promise.of(ByteBuf.empty());
             }
 
@@ -639,6 +643,8 @@ public class MultiWorkerServer extends Launcher {
             var replyMode = veloUserData.replyMode;
 
             if (replyMode != VeloUserDataInSocket.ReplyMode.on) {
+                // CLIENT REPLY OFF/SKIP — see the note on the matching branch above
+                socketInspector.closeIfReplySuppressed((TcpSocket) socket);
                 return Promise.of(ByteBuf.empty());
             }
 

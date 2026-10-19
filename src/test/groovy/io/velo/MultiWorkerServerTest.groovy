@@ -236,6 +236,93 @@ class MultiWorkerServerTest extends Specification {
         }
     }
 
+    /**
+     * Bug 73 R1 follow-up — {@code CLIENT KILL} of the calling client defers the close until the
+     * reply has been written (Redis {@code CLIENT CLOSE_AFTER_REPLY}, consumed in
+     * {@link SocketInspector#onWrite}). When the reply is suppressed ({@code CLIENT REPLY OFF} /
+     * {@code SKIP}) no byte is ever written, so the pending flag has to be consumed where the
+     * suppression happens — otherwise the self-killed connection stays open forever.
+     */
+    def 'test pending client kill close fires when the reply is suppressed'() {
+        given:
+        def oldPassword = ConfForGlobal.PASSWORD
+        def oldSocketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector
+        def config = Config.create()
+                .with('doFileLock', "false")
+                .with('slotNumber', '1')
+                .with('slotWorkers', '1')
+                .with('netWorkers', '1')
+                .with("net.listenAddresses", "localhost:7379")
+        def eventloopCurrent = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloopCurrent.keepAlive(true)
+        def waitLatch = new CountDownLatch(1)
+        Thread.start {
+            waitLatch.countDown()
+            eventloopCurrent.run()
+        }
+        waitLatch.await()
+        def socket = SocketInspectorTest.mockTcpSocket(eventloopCurrent)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        def inspector = new SocketInspector()
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = inspector
+
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 1)
+        LocalPersist.instance.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+
+        def m = new MultiWorkerServer()
+        m.configInject = config
+        m.primaryReactor(config)
+        m.netWorkerEventloopArray = eventloopArray
+        m.requestHandlerArray = new RequestHandler[1]
+        m.requestHandlerArray[0] = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), config)
+        m.scheduleRunnableArray = new TaskRunnable[1]
+        m.scheduleRunnableArray[0] = new TaskRunnable((byte) 0, (byte) 1)
+        m.socketInspector = inspector
+        m.onStart()
+
+        AclUsers.instance.initForTest()
+        ConfForGlobal.PASSWORD = null
+        // not PING/ECHO: handleFast answers those before the reply mode is consulted
+        def data = new byte[2][]
+        data[0] = 'client'.bytes
+        data[1] = 'getname'.bytes
+        def request = new Request(data, false, false)
+        String responseText = null
+
+        and: 'the client is in CLIENT REPLY OFF with a CLIENT KILL self-close pending'
+        def veloUserData = (VeloUserDataInSocket) socket.getUserData()
+        veloUserData.setReplyMode(VeloUserDataInSocket.ReplyMode.off)
+        veloUserData.setCloseAfterReply(true)
+        println "DEBUG reuse=${m.isReuseNetWorkerEventloop} mode=${veloUserData.replyMode} same=${veloUserData.is(SocketInspector.createUserDataIfNotSet(socket))} flag=${veloUserData.isCloseAfterReply()}"
+
+        when:
+        m.handleRequest(request, socket).whenResult { reply ->
+            responseText = new String(reply.array())
+        }.result
+
+        then: 'the reply itself is suppressed, exactly as CLIENT REPLY OFF requires'
+        responseText == ''
+
+        and: 'but the pending self-close is consumed here instead of waiting for a write that never comes'
+        def deadline = System.currentTimeMillis() + 2000
+        while (!socket.isClosed() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+        }
+        socket.isClosed()
+        !veloUserData.isCloseAfterReply()
+
+        cleanup:
+        ConfForGlobal.PASSWORD = oldPassword
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = oldSocketInspector
+        if (m?.primaryScheduleRunnable != null) {
+            m.onStop()
+        }
+        eventloopCurrent.breakEventloop()
+    }
+
     def 'test fast auth gate keeps quit available'() {
         given:
         def oldPassword = ConfForGlobal.PASSWORD

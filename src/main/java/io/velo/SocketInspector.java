@@ -826,11 +826,52 @@ public class SocketInspector implements TcpSocket.Inspector {
         // CLIENT CLOSE_AFTER_REPLY semantics. onWrite may run on a slot worker
         // (async-reply writes), so the close must go through the socket's own
         // reactor — closeEx checks the reactor thread unconditionally.
-        if (veloUserData.isCloseAfterReply()) {
-            veloUserData.setCloseAfterReply(false);
-            log.info("Inspector close client after reply written, remote address={}", socket.getRemoteAddress());
-            socket.getReactor().submit(socket::close);
+        // This hook only ever runs when bytes are written; when the reply is
+        // suppressed (CLIENT REPLY OFF/SKIP) nobody writes anything, so the
+        // pending flag is consumed by closeIfReplySuppressed instead.
+        closeIfPending(socket, "after reply written");
+    }
+
+    /**
+     * Consumes a pending {@code CLIENT KILL} self-close and closes {@code socket} on its own reactor.
+     *
+     * <p>Used by both halves of the deferred close:
+     * <ul>
+     *   <li>{@link #onWrite} — the reply of the killing command went out, Redis {@code CLOSE_AFTER_REPLY};</li>
+     *   <li>{@link #closeIfReplySuppressed} — that reply was suppressed, so there is nothing to wait for.</li>
+     * </ul>
+     *
+     * <p>The close is always submitted to the socket's own reactor because {@code TcpSocket.closeEx}
+     * calls {@code checkInReactorThread} unconditionally (not behind ActiveJ's {@code Checks},
+     * which are off in production), so calling {@code socket.close()} from the worker that produced
+     * the reply — a slot worker for async replies — would throw and leave the connection open.
+     *
+     * @param socket the socket to close when a self-close is pending
+     * @param reason log marker describing what triggered the close
+     */
+    private void closeIfPending(TcpSocket socket, String reason) {
+        var veloUserData = (VeloUserDataInSocket) socket.getUserData();
+        if (veloUserData == null || !veloUserData.isCloseAfterReply()) {
+            return;
         }
+        veloUserData.setCloseAfterReply(false);
+        log.info("Inspector close client {}, remote address={}", reason, socket.getRemoteAddress());
+        socket.getReactor().submit(socket::close);
+    }
+
+    /**
+     * Closes {@code socket} when a {@code CLIENT KILL} self-close is pending but this command's reply
+     * was suppressed ({@code CLIENT REPLY OFF} / {@code SKIP}).
+     *
+     * <p>{@link #onWrite} can only consume the flag when a reply is actually written; with the reply
+     * suppressed no byte ever leaves the process and the self-killed connection would stay open
+     * forever. Redis behaves the same way: {@code CLIENT_CLOSE_AFTER_REPLY} closes the client when its
+     * reply is discarded rather than written.
+     *
+     * @param socket the client whose reply was suppressed
+     */
+    public void closeIfReplySuppressed(TcpSocket socket) {
+        closeIfPending(socket, "after suppressed reply");
     }
 
     @Override
