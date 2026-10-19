@@ -387,8 +387,8 @@ class CGroupTest extends Specification {
         def sizeBefore = inspector.socketMap.size()
         reply = cGroup.execute("client kill ${addrToKillStr}")
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1L
+        // Redis old form replies +OK on a successful kill (not an integer count)
+        reply == OKReply.INSTANCE
         // poll for the reactor-driven close to complete on the eventloop
         def addrDeadline = System.currentTimeMillis() + 2000
         while (inspector.socketMap.containsValue(addrToKill) && System.currentTimeMillis() < addrDeadline) {
@@ -396,6 +396,31 @@ class CGroupTest extends Specification {
         }
         !inspector.socketMap.containsValue(addrToKill)
         inspector.socketMap.size() == sizeBefore - 1
+
+        when: 'CLIENT KILL legacy form with no match replies an error (Redis: No such client)'
+        reply = cGroup.execute('client kill 127.0.0.1:1')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'No such client'
+
+        when: 'CLIENT KILL legacy form can kill the calling client itself (Redis sets skipme=0 for the old form)'
+        // use a dedicated issuing socket so the fixture socket lifecycle is untouched
+        def selfKillSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46416)
+        selfKillSocket.setInspector(inspector)
+        registerSocketOnInspector(inspector, fixtureEventloop, selfKillSocket)
+        extras << selfKillSocket
+        def selfCGroup = new CGroup(null, null, selfKillSocket)
+        selfCGroup.from(BaseCommand.mockAGroup())
+        def selfAddrInet = selfKillSocket.remoteAddress.address
+        def selfAddrStr = (selfAddrInet == null ? selfKillSocket.remoteAddress.hostString : selfAddrInet.hostAddress) + ':' + selfKillSocket.remoteAddress.port
+        reply = selfCGroup.execute("client kill ${selfAddrStr}")
+        then:
+        reply == OKReply.INSTANCE
+        def selfKillDeadline = System.currentTimeMillis() + 2000
+        while (inspector.socketMap.containsValue(selfKillSocket) && System.currentTimeMillis() < selfKillDeadline) {
+            Thread.sleep(20)
+        }
+        !inspector.socketMap.containsValue(selfKillSocket)
 
         when: 'CLIENT KILL ADDR matches by remote address in Redis form'
         def addrSocket = SocketInspectorTest.mockTcpSocket(fixtureEventloop, 46412)

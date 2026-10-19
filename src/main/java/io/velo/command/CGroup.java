@@ -325,7 +325,9 @@ public class CGroup extends BaseCommand {
 
     /**
      * Parsed view of a {@code CLIENT KILL} filter form. {@code skipMe} defaults to true
-     * to match Redis. All other fields are optional; only the set ones are matched.
+     * to match Redis — except for the legacy 3-arg form, where Redis sets {@code skipme = 0}
+     * ("with the old form, you can kill yourself") and {@code oldForm} is true. All other
+     * fields are optional; only the set ones are matched.
      */
     private record ClientKillFilter(
             Long id,
@@ -334,7 +336,8 @@ public class CGroup extends BaseCommand {
             String addr,
             String laddr,
             boolean skipMe,
-            Long maxAgeSeconds
+            Long maxAgeSeconds,
+            boolean oldForm
     ) {
     }
 
@@ -347,7 +350,8 @@ public class CGroup extends BaseCommand {
         if (data.length == 3) {
             var legacyAddr = new String(data[2]);
             if (legacyAddr.contains(":")) {
-                return new ClientKillFilter(null, null, null, legacyAddr, null, true, null);
+                // Redis sets skipme=0 for the old form: the caller can kill itself
+                return new ClientKillFilter(null, null, null, legacyAddr, null, false, null, true);
             }
             // data.length == 3 with no colon in arg[2] is malformed — fall through to SYNTAX.
             return null;
@@ -410,7 +414,7 @@ public class CGroup extends BaseCommand {
             }
         }
 
-        return new ClientKillFilter(id, type, user, addr, laddr, skipMe, maxAgeSeconds);
+        return new ClientKillFilter(id, type, user, addr, laddr, skipMe, maxAgeSeconds, false);
     }
 
     /**
@@ -548,6 +552,11 @@ public class CGroup extends BaseCommand {
         }
 
         log.info("Client kill complete, killed={}", killed);
+        // Redis old form replies +OK on success / -ERR No such client on miss;
+        // the filter form replies the number of killed clients.
+        if (filter.oldForm()) {
+            return killed == 0 ? new ErrorReply("No such client") : OKReply.INSTANCE;
+        }
         return new IntegerReply(killed);
     }
 
