@@ -433,10 +433,12 @@ public class BGroup extends BaseCommand {
         int start;
         int end;
         boolean isIndexUseBit;
+        boolean isEndGiven;
         if (data.length == 3) {
             start = 0;
             end = -1;
             isIndexUseBit = false;
+            isEndGiven = false;
         } else {
             if (data.length != 4 && data.length != 5 && data.length != 6) {
                 return ErrorReply.SYNTAX;
@@ -450,6 +452,7 @@ public class BGroup extends BaseCommand {
             }
 
             isIndexUseBit = data.length == 6 && "bit".equalsIgnoreCase(new String(data[5]));
+            isEndGiven = data.length >= 5;
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -487,6 +490,11 @@ public class BGroup extends BaseCommand {
                     break;
                 }
             }
+        }
+
+        if (pos == -1 && !isBit1 && !isEndGiven) {
+            // the right of the string is padded with zeros when no range or the start argument only is given
+            pos = valueBytes.length * 8;
         }
 
         return new IntegerReply(pos);

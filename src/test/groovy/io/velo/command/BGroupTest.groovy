@@ -261,6 +261,37 @@ class BGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == -1
 
+        when: 'all bits are ones, the right of the string is padded with zeros when no range or start only'
+        def cvOnes = Mock.prepareCompressedValueList(1)[0]
+        cvOnes.compressedData = [0xff, 0xff, 0xff] as byte[]
+        inMemoryGetSet.put(slot, 'b', 0, cvOnes)
+        reply = bGroup.execute('bitpos b 0')
+        then:
+        (reply as IntegerReply).integer == 24
+
+        when: 'start only'
+        reply = bGroup.execute('bitpos b 0 0')
+        then:
+        (reply as IntegerReply).integer == 24
+
+        when: 'both start and end given, no clear bit in range'
+        reply = bGroup.execute('bitpos b 0 0 2')
+        then:
+        (reply as IntegerReply).integer == -1
+
+        when: 'both start and end given with BIT unit, no clear bit in range'
+        reply = bGroup.execute('bitpos b 0 0 5 bit')
+        then:
+        (reply as IntegerReply).integer == -1
+
+        when: 'searching a set bit never uses the padding'
+        def cvZeros = Mock.prepareCompressedValueList(1)[0]
+        cvZeros.compressedData = [0x00, 0x00, 0x00] as byte[]
+        inMemoryGetSet.put(slot, 'c', 0, cvZeros)
+        reply = bGroup.execute('bitpos c 1')
+        then:
+        (reply as IntegerReply).integer == -1
+
         when:
         reply = bGroup.execute('bitpos a 0 0 -1 byte')
         then:
