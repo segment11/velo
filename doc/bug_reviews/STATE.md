@@ -5,7 +5,7 @@ Single source of truth for report id allocation and module coverage.
 
 ## next_bug_id
 
-73
+74
 
 ## Allocated
 
@@ -15,6 +15,7 @@ Single source of truth for report id allocation and module coverage.
 | 70 | scan command (SGroup) | 1 | review complete, fix phase pending |
 | 71 | hscan/sscan (HGroup/SGroup) | 1 | 71.3 fixed (ebbc7a2c), 71.4 fixed (78aca093); 71.1 REFUTED no action; 71.2/71.5 open, need product decision |
 | 72 | BGroup commands | 1 | all findings fixed: 72.1–72.3 + 72.5–72.10 in 9 commits, 72.11 fixed (`b00a7354`), 72.4 retracted; full re-review pending |
+| 73 | CGroup commands | 1 | all 7 fixed in 7 commits (73.2 `2f91f43b`, 73.6 `686c5914`, 73.4 `28fced74`, 73.3 `30f31f95`, 73.7 `3dc99870`, 73.5 `1189e147`, 73.1 `df89638e`); re-review pending |
 
 ## Module coverage (latest round per module)
 
@@ -26,6 +27,7 @@ Single source of truth for report id allocation and module coverage.
 | scan | bug_70 round 1 | fix phase pending |
 | hscan/sscan | bug_71 round 1 | 71.3/71.4 fixed; 71.2 + 71.5 open (design decision pending) |
 | BGroup (bitmap/bloom/blocking-list B commands) | bug_72 round 1 | everything disposed (72.11 fixed in `b00a7354`, 72.4 retracted); re-review pending |
+| CGroup (client/command/config/copy C commands) | bug_73 round 1 | verification done — 73.1 REFINED, 73.2–73.7 CONFIRMED (reproduced); all 7 open, fix order in doc |
 | types / config / metrics / cluster / net / compression / commands (string/hash/list/set/zset/geo/hll) | see doc/bug_reviews/ | check reports |
 
 ## Known id collisions (historical, do not propagate)
