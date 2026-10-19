@@ -1034,7 +1034,8 @@ public class BGroup extends BaseCommand {
                         long timeoutMillis = (long) (timeoutSeconds * 1000);
                         var reactor = Reactor.getCurrentReactor();
                         reactor.delay(timeoutMillis, () -> {
-                            if (!finalPromise.isComplete()) {
+                            // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
+                            if (one.tryMarkDelivered()) {
                                 finalPromise.set(NilReply.INSTANCE);
                                 removeBlockingWaiter(keys, one);
                             }
@@ -1057,7 +1058,8 @@ public class BGroup extends BaseCommand {
                 long timeoutMillis = (long) (timeoutSeconds * 1000);
                 var reactor = Reactor.getCurrentReactor();
                 reactor.delay(timeoutMillis, () -> {
-                    if (!finalPromise.isComplete()) {
+                    // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
+                    if (one.tryMarkDelivered()) {
                         finalPromise.set(NilReply.INSTANCE);
                         BlockingList.removeOne(firstKey, one);
                     }
@@ -1180,15 +1182,28 @@ public class BGroup extends BaseCommand {
             return false;
         }
 
+        // one-shot delivery arbiter: only the winner may pop, save and complete
+        if (!one.tryMarkDelivered()) {
+            return false;
+        }
+
         BlockingList.removeOne(Wal.keyString(keyBytes), one);
         var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();
-        LGroup.saveRedisList(rl, slotWithKeyHash, baseCommand, dictMap);
 
         var replies = new Reply[2];
         replies[0] = new BulkReply(keyBytes);
         replies[1] = new BulkReply(valueBytes);
-        one.settablePromise().set(new MultiBulkReply(replies));
-        return true;
+        var won = one.settablePromise().trySet(new MultiBulkReply(replies));
+        if (!won) {
+            // unreachable while every completer honours the arbiter; safety net for a foreign setter
+            if (isLeft) {
+                rl.addFirst(valueBytes);
+            } else {
+                rl.addLast(valueBytes);
+            }
+        }
+        LGroup.saveRedisList(rl, slotWithKeyHash, baseCommand, dictMap);
+        return won;
     }
 
     private Reply blmpop() {
@@ -1296,7 +1311,8 @@ public class BGroup extends BaseCommand {
                 long timeoutMillis = (long) (timeoutSeconds * 1000);
                 var reactor = Reactor.getCurrentReactor();
                 reactor.delay(timeoutMillis, () -> {
-                    if (!finalPromise.isComplete()) {
+                    // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
+                    if (one.tryMarkDelivered()) {
                         finalPromise.set(NilReply.INSTANCE);
                         removeBlockingWaiter(keys, one);
                     }
@@ -1417,6 +1433,11 @@ public class BGroup extends BaseCommand {
 
         var rl = LGroup.getRedisList(slotWithKeyHash, baseCommand);
         if (rl == null || rl.size() == 0) {
+            return false;
+        }
+
+        // one-shot delivery arbiter: only the winner may pop, save and complete
+        if (!one.tryMarkDelivered()) {
             return false;
         }
 

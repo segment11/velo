@@ -1165,6 +1165,137 @@ class BGroupTest extends Specification {
         !promiseForEmpty.isComplete()
         BlockingList.removeOne('emptyone', oneForEmpty)
 
+        when: 'the delivery arbiter is one-shot'
+        def casPromise = new SettablePromise<Reply>()
+        def casOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(casPromise, null, true, System.currentTimeMillis(), null)
+        casOne.tryMarkDelivered()
+        then:
+        !casOne.tryMarkDelivered()
+
+        when: 'a waiter that lost the delivery race never pops the list'
+        def cvCas = Mock.prepareCompressedValueList(1)[0]
+        cvCas.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlCas = new RedisList()
+        rlCas.addFirst('must-survive'.bytes)
+        cvCas.compressedData = rlCas.encode()
+        inMemoryGetSet.put(slot, 'cas', 0, cvCas)
+        def lostPromise = new SettablePromise<Reply>()
+        def lostOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(lostPromise, null, true, System.currentTimeMillis(), null)
+        lostOne.tryMarkDelivered()
+        def lostCompleted = BGroup.completeIfListNotEmpty(BaseCommand.slot('cas', 1), 'cas'.bytes, bGroup, bGroup.dictMap, lostOne, true)
+        then:
+        !lostCompleted
+        !lostPromise.isComplete()
+
+        when: 'a fresh waiter still gets the element the loser never popped'
+        def winPromise = new SettablePromise<Reply>()
+        def winOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(winPromise, null, true, System.currentTimeMillis(), null)
+        def winCompleted = BGroup.completeIfListNotEmpty(BaseCommand.slot('cas', 1), 'cas'.bytes, bGroup, bGroup.dictMap, winOne, true)
+        then:
+        winCompleted
+        winPromise.isComplete()
+        ((winPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'must-survive'.bytes
+
+        when: 'a foreign completion during the re-check does not lose the element'
+        def foreignPromise = new SettablePromise<Reply>()
+        def hookedGetSet = new InMemoryGetSet() {
+            @Override
+            io.velo.persist.OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash) {
+                if (key == 'foreign' && !foreignPromise.isComplete()) {
+                    foreignPromise.set(NilReply.INSTANCE)
+                }
+                return super.getBuf(slot, key, bucketIndex, keyHash)
+            }
+        }
+        def bGroupForeign = new BGroup(null, null, null)
+        bGroupForeign.byPassGetSet = hookedGetSet
+        bGroupForeign.from(BaseCommand.mockAGroup())
+        def cvForeign = Mock.prepareCompressedValueList(1)[0]
+        cvForeign.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlForeign = new RedisList()
+        rlForeign.addFirst('foreign-window'.bytes)
+        cvForeign.compressedData = rlForeign.encode()
+        hookedGetSet.put(slot, 'foreign', 0, cvForeign)
+        def foreignOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(foreignPromise, null, true, System.currentTimeMillis(), null)
+        def foreignCompleted = BGroup.completeIfListNotEmpty(BaseCommand.slot('foreign', 1), 'foreign'.bytes, bGroupForeign, bGroupForeign.dictMap, foreignOne, true)
+        then:
+        !foreignCompleted
+        foreignPromise.isComplete()
+        foreignPromise.getResult() == NilReply.INSTANCE
+
+        when: 'the element the loser rolled back is still deliverable'
+        def afterForeignPromise = new SettablePromise<Reply>()
+        def afterForeignOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(afterForeignPromise, null, true, System.currentTimeMillis(), null)
+        def afterForeignCompleted = BGroup.completeIfListNotEmpty(BaseCommand.slot('foreign', 1), 'foreign'.bytes, bGroupForeign, bGroupForeign.dictMap, afterForeignOne, true)
+        then:
+        afterForeignCompleted
+        ((afterForeignPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'foreign-window'.bytes
+
+        when: 'a foreign completion during the right-pop re-check also rolls the element back'
+        def foreignRightPromise = new SettablePromise<Reply>()
+        def hookedRightGetSet = new InMemoryGetSet() {
+            @Override
+            io.velo.persist.OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash) {
+                if (key == 'foreign-right' && !foreignRightPromise.isComplete()) {
+                    foreignRightPromise.set(NilReply.INSTANCE)
+                }
+                return super.getBuf(slot, key, bucketIndex, keyHash)
+            }
+        }
+        def bGroupForeignRight = new BGroup(null, null, null)
+        bGroupForeignRight.byPassGetSet = hookedRightGetSet
+        bGroupForeignRight.from(BaseCommand.mockAGroup())
+        def cvForeignRight = Mock.prepareCompressedValueList(1)[0]
+        cvForeignRight.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlForeignRight = new RedisList()
+        rlForeignRight.addFirst('foreign-right-val'.bytes)
+        cvForeignRight.compressedData = rlForeignRight.encode()
+        hookedRightGetSet.put(slot, 'foreign-right', 0, cvForeignRight)
+        def foreignRightOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(foreignRightPromise, null, false, System.currentTimeMillis(), null)
+        def foreignRightCompleted = BGroup.completeIfListNotEmpty(BaseCommand.slot('foreign-right', 1), 'foreign-right'.bytes, bGroupForeignRight, bGroupForeignRight.dictMap, foreignRightOne, false)
+        then:
+        !foreignRightCompleted
+        foreignRightPromise.getResult() == NilReply.INSTANCE
+
+        when: 'the right-pop loser rolled its element back to the tail'
+        def afterForeignRightPromise = new SettablePromise<Reply>()
+        def afterForeignRightOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(afterForeignRightPromise, null, false, System.currentTimeMillis(), null)
+        def afterForeignRightCompleted = BGroup.completeIfListNotEmpty(BaseCommand.slot('foreign-right', 1), 'foreign-right'.bytes, bGroupForeignRight, bGroupForeignRight.dictMap, afterForeignRightOne, false)
+        then:
+        afterForeignRightCompleted
+        ((afterForeignRightPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'foreign-right-val'.bytes
+
+        when: 'a timeout that fires after a delivery cannot nil the reply'
+        inMemoryGetSet.remove(slot, 'timeout-after-delivery')
+        def asyncTimeout = bGroup.execute('blpop timeout-after-delivery 0.2') as AsyncReply
+        def earlyValues = new byte[1][]
+        earlyValues[0] = 'early'.bytes
+        def earlyConsumed = BlockingList.setReplyLPushIfBlockingListExist('timeout-after-delivery', earlyValues)
+        then:
+        earlyConsumed != null && earlyConsumed.length == 0
+        asyncTimeout.settablePromise.isComplete()
+        when:
+        Thread.sleep(400)
+        eventloopCurrent.run()
+        then:
+        asyncTimeout.settablePromise.getResult() instanceof MultiBulkReply
+
+        when: 'a multi-key timeout that fires after a delivery cannot nil the reply'
+        inMemoryGetSet.remove(slot, 'multi-timeout-1')
+        inMemoryGetSet.remove(slot, 'multi-timeout-2')
+        def asyncMultiTimeout = bGroup.execute('blpop multi-timeout-1 multi-timeout-2 0.2') as AsyncReply
+        def multiValues = new byte[1][]
+        multiValues[0] = 'multi-early'.bytes
+        def multiConsumed = BlockingList.setReplyLPushIfBlockingListExist('multi-timeout-1', multiValues)
+        then:
+        multiConsumed != null && multiConsumed.length == 0
+        asyncMultiTimeout.settablePromise.isComplete()
+        when:
+        Thread.sleep(400)
+        eventloopCurrent.run()
+        then:
+        asyncMultiTimeout.settablePromise.getResult() instanceof MultiBulkReply
+
         when: 'two slot workers, the waiter must be registered on the worker owning the pushed key'
         localPersist.cleanUp()
         def workers = [startWorkerThread('velo-test-worker-1'), startWorkerThread('velo-test-worker-2')]
@@ -1537,6 +1668,34 @@ class BGroupTest extends Specification {
         def completedMpopTwice = BGroup.completeMpopIfListNotEmpty(BaseCommand.slot('mpoprace', 1), 'mpoprace'.bytes, bGroup, bGroup.dictMap, mpopOneForRace, true, 2)
         then:
         !completedMpopTwice
+
+        when: 'an mpop waiter that lost the delivery race never pops the list'
+        def cvMpopCas = Mock.prepareCompressedValueList(1)[0]
+        cvMpopCas.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlMpopCas = new RedisList()
+        rlMpopCas.addFirst('m-one'.bytes)
+        rlMpopCas.addLast('m-two'.bytes)
+        cvMpopCas.compressedData = rlMpopCas.encode()
+        inMemoryGetSet.put(slot, 'mpopcas', 0, cvMpopCas)
+        def mpopLostPromise = new SettablePromise<Reply>()
+        def mpopLostOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(mpopLostPromise, null, true, System.currentTimeMillis(), null, 2)
+        mpopLostOne.tryMarkDelivered()
+        def mpopLostCompleted = BGroup.completeMpopIfListNotEmpty(BaseCommand.slot('mpopcas', 1), 'mpopcas'.bytes, bGroup, bGroup.dictMap, mpopLostOne, true, 2)
+        then:
+        !mpopLostCompleted
+        !mpopLostPromise.isComplete()
+
+        when: 'a fresh mpop waiter still gets both elements the loser never popped'
+        def mpopWinPromise = new SettablePromise<Reply>()
+        def mpopWinOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(mpopWinPromise, null, true, System.currentTimeMillis(), null, 2)
+        def mpopWinCompleted = BGroup.completeMpopIfListNotEmpty(BaseCommand.slot('mpopcas', 1), 'mpopcas'.bytes, bGroup, bGroup.dictMap, mpopWinOne, true, 2)
+        then:
+        mpopWinCompleted
+        mpopWinPromise.isComplete()
+        def mpopWinReply = mpopWinPromise.getResult() as MultiBulkReply
+        (mpopWinReply.replies[1] as MultiBulkReply).replies.length == 2
+        ((mpopWinReply.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'm-one'.bytes
+        ((mpopWinReply.replies[1] as MultiBulkReply).replies[1] as BulkReply).raw == 'm-two'.bytes
 
         when: 'two slot workers, the second key must be checked on the worker owning it'
         localPersist.cleanUp()

@@ -413,6 +413,21 @@ class BlockingListTest extends Specification {
         (inner4.replies[0] as BulkReply).raw == 'r'.bytes
         (inner4.replies[1] as BulkReply).raw == 'q'.bytes
 
+        when: 'a waiter that already lost the delivery race consumes nothing and is removed as stale'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def stalePromise = new SettablePromise<Reply>()
+        def staleOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(stalePromise, null, true, System.currentTimeMillis(), null)
+        staleOne.tryMarkDelivered()
+        BlockingList.addOne('stale', staleOne)
+        def staleValues = new byte[1][]
+        staleValues[0] = 'keep'.bytes
+        def kept = BlockingList.setReplyRPushIfBlockingListExist('stale', staleValues)
+        then:
+        kept != null && kept.length == 1
+        kept[0] == 'keep'.bytes
+        !stalePromise.isComplete()
+        BlockingList.blockingClientCount() == 0
+
         cleanup:
         BlockingList.clearBlockingListPromisesForAllKeys()
     }

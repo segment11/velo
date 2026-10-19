@@ -697,6 +697,33 @@ class RGroupTest extends Specification {
         rlSrcBlockAfter != null
         rlSrcBlockAfter.size() == 1
 
+        when: 'a move timeout that fires after a delivery cannot nil the reply'
+        // drop waiters still pending from the earlier indefinite cases, so the push reaches this one
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def asyncMoveTimeout = rGroup.moveBlock(s1, s2, true, true, 0.2) as AsyncReply
+        def lpushData = new byte[3][]
+        lpushData[0] = 'lpush'.bytes
+        lpushData[1] = 'a'.bytes
+        lpushData[2] = 'moved'.bytes
+        def lGroup = new LGroup('lpush', lpushData, null)
+        lGroup.byPassGetSet = inMemoryGetSet
+        lGroup.from(rGroup)
+        lGroup.slotWithKeyHashListParsed = lGroup.parseSlots('lpush', lpushData, 1)
+        def pushReply = lGroup.handle()
+        then:
+        pushReply == IntegerReply.REPLY_1
+        asyncMoveTimeout.settablePromise.isComplete()
+        asyncMoveTimeout.settablePromise.getResult() instanceof BulkReply
+        (asyncMoveTimeout.settablePromise.getResult() as BulkReply).raw == 'moved'.bytes
+        when:
+        Thread.sleep(400)
+        eventloopCurrent.run()
+        then:
+        asyncMoveTimeout.settablePromise.getResult() instanceof BulkReply
+        (asyncMoveTimeout.settablePromise.getResult() as BulkReply).raw == 'moved'.bytes
+
         when:
         localPersist.cleanUp()
         LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)

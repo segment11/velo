@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * For blocking list pop, move
@@ -37,27 +38,115 @@ public class BlockingList {
     }
 
     /**
-     * Promise with left or right and created time
-     *
-     * @param settablePromise promise
-     * @param socket          the client socket
-     * @param isLeft          is left or right
-     * @param createdTime     created time for timeout
-     * @param xx              parameter when do move
-     * @param mpopCount       number of elements to pop for BLMPOP, 0 means BLPOP/BRPOP (single-element reply)
+     * Promise with left or right and created time, for blocking list commands.
+     * <p>
+     * A class rather than a record: it carries a one-shot delivery arbiter ({@link #tryMarkDelivered()}),
+     * so exactly one completer may consume values and complete the promise even when several workers
+     * race (bug 72.11). Waiters are removed by identity, which is safe because every waiter holds a
+     * distinct promise.
+     * <p>
+     * Instances are immutable except for the delivery arbiter.
      */
-    public record PromiseWithLeftOrRightAndCreatedTime(SettablePromise<Reply> settablePromise,
-                                                       ITcpSocket socket,
-                                                       boolean isLeft,
-                                                       long createdTime,
-                                                       DstKeyAndDstLeftWhenMove xx,
-                                                       int mpopCount) {
+    public static final class PromiseWithLeftOrRightAndCreatedTime {
+        private final SettablePromise<Reply> settablePromise;
+        private final ITcpSocket socket;
+        private final boolean isLeft;
+        private final long createdTime;
+        private final DstKeyAndDstLeftWhenMove xx;
+        private final int mpopCount;
+
+        private final AtomicBoolean delivered = new AtomicBoolean();
+
+        /**
+         * @param settablePromise promise
+         * @param socket          the client socket
+         * @param isLeft          is left or right
+         * @param createdTime     created time for timeout
+         * @param xx              parameter when do move
+         * @param mpopCount       number of elements to pop for BLMPOP, 0 means BLPOP/BRPOP (single-element reply)
+         */
+        public PromiseWithLeftOrRightAndCreatedTime(SettablePromise<Reply> settablePromise,
+                                                    ITcpSocket socket,
+                                                    boolean isLeft,
+                                                    long createdTime,
+                                                    DstKeyAndDstLeftWhenMove xx,
+                                                    int mpopCount) {
+            this.settablePromise = settablePromise;
+            this.socket = socket;
+            this.isLeft = isLeft;
+            this.createdTime = createdTime;
+            this.xx = xx;
+            this.mpopCount = mpopCount;
+        }
+
+        /**
+         * Convenience constructor without a pop count, defaults {@code mpopCount} to 0 (single-element reply).
+         *
+         * @param settablePromise promise
+         * @param socket          the client socket
+         * @param isLeft          is left or right
+         * @param createdTime     created time for timeout
+         * @param xx              parameter when do move
+         */
         public PromiseWithLeftOrRightAndCreatedTime(SettablePromise<Reply> settablePromise,
                                                     ITcpSocket socket,
                                                     boolean isLeft,
                                                     long createdTime,
                                                     DstKeyAndDstLeftWhenMove xx) {
             this(settablePromise, socket, isLeft, createdTime, xx, 0);
+        }
+
+        /**
+         * @return the promise to complete when a value is delivered
+         */
+        public SettablePromise<Reply> settablePromise() {
+            return settablePromise;
+        }
+
+        /**
+         * @return the client socket
+         */
+        public ITcpSocket socket() {
+            return socket;
+        }
+
+        /**
+         * @return true when values are taken from the head of the list
+         */
+        public boolean isLeft() {
+            return isLeft;
+        }
+
+        /**
+         * @return created time in milliseconds, used for timeout
+         */
+        public long createdTime() {
+            return createdTime;
+        }
+
+        /**
+         * @return the destination for the move variants, null for plain pops
+         */
+        public DstKeyAndDstLeftWhenMove xx() {
+            return xx;
+        }
+
+        /**
+         * @return number of elements to pop for BLMPOP, 0 means BLPOP/BRPOP (single-element reply)
+         */
+        public int mpopCount() {
+            return mpopCount;
+        }
+
+        /**
+         * One-shot delivery arbiter: the single compare-and-set winner is the only completer allowed to
+         * consume values and complete the promise. ActiveJ promises are not thread-safe and its
+         * {@code trySet} is check-then-act, so the atomic arbiter runs before any value is touched.
+         *
+         * @return true for the first caller, false for every later one
+         */
+        public boolean tryMarkDelivered() {
+            return delivered.compareAndSet(false, true);
         }
     }
 
@@ -242,6 +331,13 @@ public class BlockingList {
         while (it.hasNext()) {
             var promise = it.next();
             if (promise.settablePromise.isComplete()) {
+                it.remove();
+                removedCount++;
+                continue;
+            }
+
+            // one-shot delivery arbiter: a waiter that lost the race consumes no value, drop it as stale
+            if (!promise.tryMarkDelivered()) {
                 it.remove();
                 removedCount++;
                 continue;

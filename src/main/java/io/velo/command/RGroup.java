@@ -645,7 +645,8 @@ public class RGroup extends BaseCommand {
             long timeoutMillis = (long) (timeoutSeconds * 1000);
             var reactor = Reactor.getCurrentReactor();
             reactor.delay(timeoutMillis, () -> {
-                if (!finalPromise.isComplete()) {
+                // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
+                if (one.tryMarkDelivered()) {
                     finalPromise.set(NilReply.INSTANCE);
                     BlockingList.removeBlockingListPromiseByKey(srcKey, one);
                 }
