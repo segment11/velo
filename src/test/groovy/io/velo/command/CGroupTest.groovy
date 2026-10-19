@@ -9,6 +9,7 @@ import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
 import io.velo.SocketInspectorTest
 import io.velo.Utils
+import io.velo.VeloUserDataInSocket
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
@@ -152,6 +153,26 @@ class CGroupTest extends Specification {
         reply = cGroup.execute('client reply off')
         then:
         reply == EmptyReply.INSTANCE
+
+        when: 'CLIENT REPLY with an unknown mode is rejected as a syntax error'
+        reply = cGroup.execute('client reply maybe')
+        then:
+        reply == ErrorReply.SYNTAX
+        // the rejected call must not change the stored reply mode (still off from the
+        // previous valid case — the pre-73.6 bug folded unknown modes into ON)
+        def replyModeField = VeloUserDataInSocket.class.getDeclaredField('replyMode')
+        replyModeField.setAccessible(true)
+        replyModeField.get(SocketInspector.createUserDataIfNotSet(socket)) == VeloUserDataInSocket.ReplyMode.off
+
+        when: 'CLIENT REPLY skip returns EmptyReply'
+        reply = cGroup.execute('client reply skip')
+        then:
+        reply == EmptyReply.INSTANCE
+
+        when: 'CLIENT REPLY on returns OK again'
+        reply = cGroup.execute('client reply on')
+        then:
+        reply == OKReply.INSTANCE
 
         when: 'CLIENT SETINFO lib-name + lib-ver is accepted'
         reply = cGroup.execute('client setinfo lib-name Jedis lib-ver 4.3')

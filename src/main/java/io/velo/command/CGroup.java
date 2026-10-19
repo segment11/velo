@@ -188,6 +188,15 @@ public class CGroup extends BaseCommand {
             }
 
             var replyModeStr = new String(data[2]).toLowerCase();
+            // Redis rejects unknown CLIENT REPLY modes with a syntax error; validate
+            // before touching the stored mode so a typo cannot silently act as ON.
+            switch (replyModeStr) {
+                case "on", "off", "skip" -> {
+                }
+                default -> {
+                    return ErrorReply.SYNTAX;
+                }
+            }
             var replyMode = VeloUserDataInSocket.ReplyMode.from(replyModeStr);
 
             var remoteAddress = ((TcpSocket) socket).getRemoteAddress();
