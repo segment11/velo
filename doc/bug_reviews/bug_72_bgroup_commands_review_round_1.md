@@ -407,12 +407,13 @@ Correct the three CommandEntry arities (4 / -4 / -4); assert against `redis.io/c
 
 **Severity:** Medium
 **Class:** Concurrency
-**Status:** `CONFIRMED (inspection + runtime probe)` — opened 2026-10-19 from the `bc55bcad` interim re-review, **open**
+**Status:** `fixed` (`b00a7354`, 2026-10-19) — CAS arbiter on the waiter (`tryMarkDelivered`) gates every completer before any value is touched; see Fix Log
 
 ### Cited files / lines
 
 ```java
-// BGroup.java:1204-1221 — completeIfListNotEmpty: check, pop, then set
+// BGroup.java:1171-1196 — completeIfListNotEmpty: check, pop, then set (line anchor corrected 2026-10-19:
+// originally mis-cited as 1204-1221, which is blmpop argument parsing)
 if (one.settablePromise().isComplete()) {
     return false;
 }
@@ -450,6 +451,13 @@ So the second `set()` throws rather than overwriting: the value is silently lost
 into the worker eventloop task. `tryComplete` does not exist in this version; `SettablePromise.trySet(T)` does
 (`public boolean trySet(T)`), which is the primitive a fix needs.
 
+> **Environment qualifier (added on review of `c9d38475`, 2026-10-19):** `AbstractPromise.CHECKS` is bound to
+> `Checks.isEnabled(AbstractPromise.class)`, and `Checks` bytecode defaults to the JVM assertion status
+> (overridable via the `chk` system property). The probe above ran in a Gradle test JVM where assertions are on,
+> so it threw. A plain production JVM without `-ea` (and without `-Dchk`) skips the guard: the second `set()`
+> silently overwrites the result and re-fires the next-chain callbacks instead of throwing. Either way the
+> popped element is lost — the finding's conclusion is unchanged; only the failure mode differs by environment.
+
 ### Trigger / impact
 
 Two keys of one blocking command on different workers, both non-empty at the same moment (or a push racing a
@@ -459,19 +467,59 @@ hit; `bc55bcad` widened the window by adding concurrent completers (per-worker r
 
 ### Suggested fix direction
 
-Replace `isComplete()` + `set()` with `trySet()` in both `BGroup.completeIfListNotEmpty` and
-`BGroup.completeMpopIfListNotEmpty` (and in `BlockingList.setReplyIfBlockingListExist` for the push side), and on
-a lost race push the value back to the end it was taken from, then save the list:
+> **Refined 2026-10-19 after reading ActiveJ sources** (`~/ws/src_learn/activej`, core-promise:
+> `AbstractPromise.java:165-171`): `tryComplete`/`trySet` is check-then-act — `if (!isComplete()) { complete(value); return true; }`
+> with no lock and no atomic. Two workers can both pass the check, both run `complete()` (CHECKS on → the second
+> throws; CHECKS off → double result write and the `next` callback chain fires **twice**, i.e. AsyncReply can send
+> the reply buffer twice on the socket), and both return `true`. So the earlier `trySet` + push-back direction
+> only narrows the window; it does not close the bug. The arbiter must be a real CAS, and it must run **before**
+> any value is consumed.
 
-```java
-if (!one.settablePromise().trySet(new MultiBulkReply(replies))) {
-    if (isLeft) { rl.addFirst(valueBytes); } else { rl.addLast(valueBytes); }
-    LGroup.saveRedisList(rl, slotWithKeyHash, baseCommand, dictMap);
-}
-```
+**Invariant: arbitrate first, commit second — exactly one completer wins an atomic CAS on the waiter, and only
+the winner pops / consumes / saves / sets the promise. A loser never touches a value, so there is nothing to
+roll back.**
 
-TDD: a test that completes the promise from between the `isComplete()` check and the `set()`, asserting the
-popped value is still in the list afterwards.
+1. `BlockingList.PromiseWithLeftOrRightAndCreatedTime`: convert record → final class with the **same constructor
+   signatures and accessor methods** (zero call-site churn; `LinkedList.remove(one)` keeps working — identity
+   equality is equal or stronger than the record's component equality here, since every waiter carries a distinct
+   promise). Add `private final AtomicBoolean delivered` + `public boolean tryMarkDelivered()` using
+   `compareAndSet(false, true)`.
+2. Winner gates (CAS before any pop / batch-slot consume):
+   - `BGroup.completeIfListNotEmpty` / `completeMpopIfListNotEmpty` — after the fast-path empty checks:
+     `if (!one.tryMarkDelivered()) return false;` then removeOne → pop → save → `trySet` (defensive; on an
+     impossible `false`, log + push-back safety net).
+   - `BlockingList.setReplyIfBlockingListExist` — per waiter, after the existing `isComplete()` lazy-cleanup
+     check: `if (!promise.tryMarkDelivered()) { it.remove(); removedCount++; continue; }`. Only then null the
+     `fromLeftToRight` slot / collect the mpop batch / hand off to `moveDstCallback` — a loser never consumes
+     pushed values.
+   - Timeout callbacks — same shape in all four places: `BGroup.java:1037-1039` (blpop multi-key),
+     `BGroup.java:1059-1063` (blpop single-key), `BGroup.java:1298-1301` (blmpop), and **`RGroup.java:647-652`
+     (BLMOVE/BRPOPLPUSH timeout — same bug class, same waiter infrastructure)**:
+     `if (one.tryMarkDelivered()) { finalPromise.set(NilReply.INSTANCE); removeBlockingWaiter(...); }`.
+   - Error/immediate chain paths (`BGroup.java:1019/1024/1279/1284`) are the only completer before
+     registration — safe as-is; optional CAS for symmetry.
+3. Threading note: the winner's `complete()` fires `whenComplete` callbacks synchronously on the winning worker,
+   exactly as today; because the promise is now written by exactly one thread by construction, ActiveJ's
+   non-thread-safe promise internals are never contended.
+
+TDD:
+
+- Red first, inside the existing `def 'test blpop'()` / `def 'test blpop'`-adjacent methods and
+  `BlockingListTest`:
+  - `tryMarkDelivered()` is one-shot (true once, false after);
+  - pre-mark a waiter delivered **while its promise is still incomplete** → `completeIfListNotEmpty` /
+    `completeMpopIfListNotEmpty` return false, the list keeps its element, the promise stays incomplete (proves
+    the CAS — not `isComplete()` — gates the pop; red on current code);
+  - push side: a pre-marked waiter is treated as stale by `setReplyIfBlockingListExist` — the pushed values are
+    not consumed (full array returned) and the waiter is removed;
+  - timeout: pre-marked waiter → the delay runnable sets nothing.
+- Green: record → class + the four CAS gates.
+- Invariant stress (two-eventloop harness already in `BGroupTest`): ~200 iterations of one `BLPOP a b 1` with
+  concurrent pushes to both keys; assert exactly one element is delivered and `delivered + remaining == pushed`
+  (no loss, no duplication).
+- Focused tests: `BGroupTest`, `BlockingListTest`, `RGroupTest`, `LGroupTest`; JaCoCo via
+  `scripts/jacoco_cover.py` must show both CAS outcomes (win/lose) covered on every touched site.
+- One commit (one bug): `fix: arbitrate blocking pop delivery with cas before popping`.
 
 ## Notes / non-findings
 
@@ -639,6 +687,7 @@ run to see it fail for the expected reason, then the minimal production change w
 | 72.10 | `test bloom filter arity matches the redis bloom grammar`: `bf.loadchunk` arity `3` (expected `4`), `bf.reserve` `-3`, `bf.insert` `-2` | `b11e003a` | `./gradlew :test --tests "io.velo.command.CommandRegistryTest" --tests "io.velo.command.CommandRegistryPopulationTest" --tests "io.velo.command.BGroupTest"` → BUILD SUCCESSFUL | metadata-only change, no new executable lines; registry is data, asserted directly by the new spec method |
 | 72.3 | `test blpop` (two worker event loops): push to the key owned by worker-2 returned `null` (no waiter visible) and the blocked reply stayed pending | `bc55bcad` | `./gradlew :test --tests "io.velo.command.BGroupTest" --tests "io.velo.command.BlockingListTest" --tests "io.velo.command.RGroupTest"` → BUILD SUCCESSFUL | `BGroup` 1110-1230: **49/49 lines, all branch lines fully covered** (cross-worker waiter registration, cross-worker pop chain, re-check helper) |
 | 72.5 | `test blmpop` (two worker event loops): `IllegalStateException: Thread id not match, thread id=53, thread id protected for safe=54` from `BGroup.blmpop(BGroup.java:1287)` | `4cffebaf` | `./gradlew :test --tests "io.velo.command.BGroupTest" --tests "io.velo.command.BlockingListTest" --tests "io.velo.command.RGroupTest" --tests "io.velo.command.MGroupTest"` → BUILD SUCCESSFUL | `BGroup` 1276-1465: **76/77 lines covered, 0 not covered**; one defensive branch stays partial (`firstRl == null` while the cv exists) — see Residual Risk |
+| 72.11 | `test blpop` / `test blmpop` / `test blmpop wake-up returns nested array`: `groovy.lang.MissingMethodException: No signature of method: PromiseWithLeftOrRightAndCreatedTime.tryMarkDelivered()` (BGroupTest.groovy:1171/1596, BlockingListTest.groovy:420) | `b00a7354` | `./gradlew :test --tests "io.velo.command.BGroupTest" --tests "io.velo.command.BlockingListTest" --tests "io.velo.command.RGroupTest"` → BUILD SUCCESSFUL (77/77; the pre-existing `LGroupTest > test lpush` failure is unchanged, see Test environment notes) | all changed regions fully covered incl. branches: `BGroup` 1030-1070 (25/25, both timeout closures win+lose), 1180-1215 (19/19, CAS gate + trySet rollback both isLeft variants), 1310-1320 (8/8), 1435-1450 (7/7); `BlockingList` `tryMarkDelivered` + push-side CAS gate (win + stale); `RGroup` 644-656 (9/9, move timeout win+lose) |
 | 72.1 | `test unimplemented bitmap commands report unknown command` + `test handle - unknown command`: `bitop`/`bitfield`/`bitfield_ro` answered `(nil)`, registry advertised `bitop`/`bitfield` | `503930f4` | `./gradlew :test --tests "io.velo.command.BGroupTest" --tests "io.velo.command.CommandRegistryTest" --tests "io.velo.command.CommandRegistryPopulationTest"` → BUILD SUCCESSFUL | `BGroup` 190-215 and 270-320: 14/14 and 29/29 lines fully covered |
 
 ### Notes on the fixes
@@ -744,6 +793,10 @@ Notes for the re-review / next round:
   completer's popped element is dropped. Narrow window; `tryComplete` + value push-back is the follow-up shape
   (candidate 72.11). Also, waiters on non-delivering keys linger until a push or timeout touches them — bounded
   memory, pre-existing class.
+  - **Update 2026-10-19:** fixed in `b00a7354` — see Finding 11. The `tryComplete` direction above was refined
+    before implementation: ActiveJ's `tryComplete` is itself check-then-act, so the shipped fix uses an
+    `AtomicBoolean` CAS arbiter on the waiter record (now class) instead, with `trySet` + push-back only as a
+    safety net. The lingering-waiter note remains (bounded, lazily cleaned on the next push).
 - `BITOP`/`BITFIELD` remain unimplemented, they are now honestly reported as unknown commands. Implementing
   them is a separate feature, not a bug fix.
 
@@ -761,4 +814,4 @@ Notes for the re-review / next round:
 | 72.8 | BITPOS all-ones + bit=0 → -1 (Redis: first bit past string) | Low | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`127ff5c4`) |
 | 72.9 | bf.reserve/insert capacity<=0 → Guava message leak | Low | Correctness | `REFINED` (capacity 0 silently OK; negative leaks Guava text) | fixed (`4e09e22d`) |
 | 72.10 | bf.loadchunk/reserve/insert registry arity wrong | Low | Redis protocol compatibility | `CONFIRMED (inspection)` | fixed (`b11e003a`) |
-| 72.11 | Multi-key blocking pop drops the value of the losing completer | Medium | Concurrency | `CONFIRMED (inspection + runtime probe)` | open — opened from the `bc55bcad` interim review |
+| 72.11 | Multi-key blocking pop drops the value of the losing completer | Medium | Concurrency | `CONFIRMED (inspection + runtime probe)` | fixed (`b00a7354`) — one-shot CAS arbiter before any pop; trySet rollback as safety net |

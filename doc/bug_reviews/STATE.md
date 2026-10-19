@@ -14,7 +14,7 @@ Single source of truth for report id allocation and module coverage.
 | 1–70 | see doc/bug_reviews/ | various | closed |
 | 70 | scan command (SGroup) | 1 | review complete, fix phase pending |
 | 71 | hscan/sscan (HGroup/SGroup) | 1 | 71.3 fixed (ebbc7a2c), 71.4 fixed (78aca093); 71.1 REFUTED no action; 71.2/71.5 open, need product decision |
-| 72 | BGroup commands | 1 | 9 findings fixed in 9 commits, 72.4 retracted; 72.11 opened by the bc55bcad interim re-review (losing completer drops a popped value) and still open; full re-review pending |
+| 72 | BGroup commands | 1 | all findings fixed: 72.1–72.3 + 72.5–72.10 in 9 commits, 72.11 fixed (`b00a7354`), 72.4 retracted; full re-review pending |
 
 ## Module coverage (latest round per module)
 
@@ -25,7 +25,7 @@ Single source of truth for report id allocation and module coverage.
 | acl | bug_69 round 1 | check report |
 | scan | bug_70 round 1 | fix phase pending |
 | hscan/sscan | bug_71 round 1 | 71.3/71.4 fixed; 71.2 + 71.5 open (design decision pending) |
-| BGroup (bitmap/bloom/blocking-list B commands) | bug_72 round 1 | 72.11 open (multi key blocking pop value loss); everything else disposed; re-review pending |
+| BGroup (bitmap/bloom/blocking-list B commands) | bug_72 round 1 | everything disposed (72.11 fixed in `b00a7354`, 72.4 retracted); re-review pending |
 | types / config / metrics / cluster / net / compression / commands (string/hash/list/set/zset/geo/hll) | see doc/bug_reviews/ | check reports |
 
 ## Known id collisions (historical, do not propagate)
