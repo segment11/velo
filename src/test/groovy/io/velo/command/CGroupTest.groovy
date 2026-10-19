@@ -1,16 +1,10 @@
 package io.velo.command
 
+import io.activej.bytebuf.ByteBuf
 import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.ITcpSocket
 import io.activej.net.socket.tcp.TcpSocket
-import io.velo.BaseCommand
-import io.velo.CompressedValue
-import io.velo.ConfForGlobal
-import io.velo.MultiWorkerServer
-import io.velo.SocketInspector
-import io.velo.SocketInspectorTest
-import io.velo.Utils
-import io.velo.VeloUserDataInSocket
+import io.velo.*
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.CannotReadException
@@ -19,10 +13,10 @@ import io.velo.persist.Mock
 import io.velo.reply.*
 import spock.lang.Specification
 
-import java.net.InetAddress
-import java.net.InetSocketAddress
 import java.nio.channels.SocketChannel
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class CGroupTest extends Specification {
     def _CGroup = new CGroup(null, null, null)
@@ -418,6 +412,19 @@ class CGroupTest extends Specification {
         reply = selfCGroup.execute("client kill ${selfAddrStr}")
         then:
         reply == OKReply.INSTANCE
+        // Redis CLOSE_AFTER_REPLY: the caller is closed only after its reply is
+        // written, so right after the command the socket must still be registered
+        Thread.sleep(200)
+        inspector.socketMap.containsValue(selfKillSocket)
+
+        when: 'the reply write fires the inspector hook, the caller is closed'
+        def writeLatch = new CountDownLatch(1)
+        fixtureEventloop.execute {
+            inspector.onWrite(selfKillSocket, ByteBuf.empty(), 1)
+            writeLatch.countDown()
+        }
+        writeLatch.await(2, TimeUnit.SECONDS)
+        then:
         def selfKillDeadline = System.currentTimeMillis() + 2000
         while (inspector.socketMap.containsValue(selfKillSocket) && System.currentTimeMillis() < selfKillDeadline) {
             Thread.sleep(20)
@@ -469,17 +476,28 @@ class CGroupTest extends Specification {
         inspector.socketMap.containsValue(socket)
         inspector.socketMap.size() == sizeBefore3
 
-        when: 'CLIENT KILL TYPE normal SKIPME no kills the issuing socket too'
+        when: 'CLIENT KILL TYPE normal SKIPME no kills the issuing socket too (after its reply)'
         def sizeBefore4 = inspector.socketMap.size()
         reply = cGroup.execute('client kill type normal skipme no')
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1L
-        // poll for the reactor-driven close to complete on the eventloop
+        // CLOSE_AFTER_REPLY: the caller is closed only when its reply is written
+        inspector.socketMap.containsValue(socket)
+
+        when: 'the reply write fires the inspector hook, the issuing socket is closed'
+        def skipMeWriteLatch = new java.util.concurrent.CountDownLatch(1)
+        fixtureEventloop.execute {
+            inspector.onWrite(socket, io.activej.bytebuf.ByteBuf.empty(), 1)
+            skipMeWriteLatch.countDown()
+        }
+        skipMeWriteLatch.await(2, java.util.concurrent.TimeUnit.SECONDS)
         def skipMeDeadline = System.currentTimeMillis() + 2000
         while (inspector.socketMap.containsValue(socket) && System.currentTimeMillis() < skipMeDeadline) {
             Thread.sleep(20)
         }
+
+        then:
         !inspector.socketMap.containsValue(socket)
         inspector.socketMap.size() == sizeBefore4 - 1
         // re-register the issuing socket so later cases can still issue commands on it
@@ -711,10 +729,10 @@ class CGroupTest extends Specification {
 
         [
                 inspector: inspector,
-                socket: socket,
-                cGroup: cGroup,
+                socket   : socket,
+                cGroup   : cGroup,
                 eventloop: eventloop,
-                cleanup: {
+                cleanup  : {
                     unregisterSocketOnInspector(inspector, eventloop, socket)
                     LocalPersist.instance.setSocketInspector(null)
                     eventloop.breakEventloop()

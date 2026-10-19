@@ -137,6 +137,27 @@ public class VeloUserDataInSocket {
     boolean isConnectionReadonly = false;
 
     /**
+     * Whether the socket should be closed after the next reply is written — the Velo
+     * equivalent of Redis {@code CLIENT CLOSE_AFTER_REPLY}, used by {@code CLIENT KILL}
+     * when the calling client kills itself so the {@code +OK} reply is not lost.
+     */
+    boolean closeAfterReply = false;
+
+    /**
+     * @return whether the socket should be closed after the next reply is written
+     */
+    public boolean isCloseAfterReply() {
+        return closeAfterReply;
+    }
+
+    /**
+     * @param closeAfterReply whether the socket should be closed after the next reply is written
+     */
+    public void setCloseAfterReply(boolean closeAfterReply) {
+        this.closeAfterReply = closeAfterReply;
+    }
+
+    /**
      * Enum to represent the reply mode for the socket connection.
      */
     public enum ReplyMode {

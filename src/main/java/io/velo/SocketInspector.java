@@ -820,6 +820,15 @@ public class SocketInspector implements TcpSocket.Inspector {
             assert threadIndex != -1;
             netOutBytesLengthArray[ConfForGlobal.netWorkers + threadIndex] += bytes;
         }
+
+        // CLIENT KILL of the calling client defers the close to here (the reply bytes
+        // have just been handed to the socket channel), mirroring Redis's
+        // CLIENT CLOSE_AFTER_REPLY semantics.
+        if (veloUserData.isCloseAfterReply()) {
+            veloUserData.setCloseAfterReply(false);
+            log.info("Inspector close client after reply written, remote address={}", socket.getRemoteAddress());
+            socket.close();
+        }
     }
 
     @Override

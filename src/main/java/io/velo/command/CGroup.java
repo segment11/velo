@@ -536,6 +536,15 @@ public class CGroup extends BaseCommand {
             if (!matchesClientKillFilter(s, filter)) {
                 continue;
             }
+            if (s == socket) {
+                // The caller killed itself: defer the close until after its reply is
+                // written (Redis CLIENT CLOSE_AFTER_REPLY) — handled in
+                // SocketInspector.onWrite, so the +OK is not lost to a closed socket.
+                SocketInspector.createUserDataIfNotSet(s).setCloseAfterReply(true);
+                killed++;
+                log.info("Client kill scheduled after reply, addr={}", addr);
+                continue;
+            }
             try {
                 s.getReactor().submit(() -> {
                     try {
