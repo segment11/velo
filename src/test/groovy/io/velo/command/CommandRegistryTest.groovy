@@ -103,4 +103,27 @@ class CommandRegistryTest extends Specification {
         snapshot.size() == 1
         snapshot[0].name() == 'get'
     }
+
+    def 'test bloom filter arity matches the redis bloom grammar'() {
+        given: 'B command metadata registered by the BGroup static block'
+        new BGroup(null, null, null)
+        for (CommandEntry entry : savedSnapshot) {
+            CommandRegistry.register(entry)
+        }
+
+        expect: 'BF.LOADCHUNK key iterator data is exactly 4 tokens, BF.RESERVE and BF.INSERT need at least 4'
+        CommandRegistry.get('bf.loadchunk').arity() == 4
+        CommandRegistry.get('bf.reserve').arity() == -4
+        CommandRegistry.get('bf.insert').arity() == -4
+
+        and: 'unrelated B command arity stays unchanged'
+        CommandRegistry.get('bf.add').arity() == -3
+        CommandRegistry.get('bf.madd').arity() == -3
+        CommandRegistry.get('bf.card').arity() == 2
+        CommandRegistry.get('bf.exists').arity() == 3
+        CommandRegistry.get('bf.info').arity() == -2
+        CommandRegistry.get('bf.scandump').arity() == 3
+        CommandRegistry.get('bitcount').arity() == -2
+        CommandRegistry.get('bitpos').arity() == -3
+    }
 }

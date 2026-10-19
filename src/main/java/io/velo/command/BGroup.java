@@ -135,7 +135,7 @@ public class BGroup extends BaseCommand {
                 "Return information about a Bloom filter.",
                 "1.0.0", "O(1)"));
         CommandRegistry.register(new CommandEntry(
-                "bf.insert", -2,
+                "bf.insert", -4,
                 Set.of("write", "denyoom"),
                 1, 1, 1,
                 Set.of("@write", "@bloom"),
@@ -143,7 +143,7 @@ public class BGroup extends BaseCommand {
                 "Add one or more elements to a Bloom filter, creating it if it does not yet exist.",
                 "1.0.0", "O(N)"));
         CommandRegistry.register(new CommandEntry(
-                "bf.loadchunk", 3,
+                "bf.loadchunk", 4,
                 Set.of("write"),
                 1, 1, 1,
                 Set.of("@write", "@bloom"),
@@ -167,7 +167,7 @@ public class BGroup extends BaseCommand {
                 "Determine whether multiple items exist in a Bloom filter.",
                 "1.0.0", "O(N)"));
         CommandRegistry.register(new CommandEntry(
-                "bf.reserve", -3,
+                "bf.reserve", -4,
                 Set.of("write"),
                 1, 1, 1,
                 Set.of("@write", "@bloom"),
