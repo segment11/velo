@@ -140,8 +140,14 @@ public class VeloUserDataInSocket {
      * Whether the socket should be closed after the next reply is written — the Velo
      * equivalent of Redis {@code CLIENT CLOSE_AFTER_REPLY}, used by {@code CLIENT KILL}
      * when the calling client kills itself so the {@code +OK} reply is not lost.
+     *
+     * <p>{@code volatile}: the flag is set on the worker that handles {@code CLIENT KILL} and read
+     * on the worker that writes the reply. Those are usually the same thread, but when the reply of
+     * an earlier command is still queued the reader is the socket's net worker, so the write has to
+     * be visible across threads. It is always cleared by the thread that consumed it, and the close
+     * itself is submitted to the socket's reactor, which adds the happens-before for the close.
      */
-    boolean closeAfterReply = false;
+    volatile boolean closeAfterReply = false;
 
     /**
      * @return whether the socket should be closed after the next reply is written

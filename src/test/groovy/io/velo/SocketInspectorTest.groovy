@@ -201,10 +201,15 @@ class SocketInspectorTest extends Specification {
     }
 
     /**
-     * Regression test for the bug 73 R1 re-review — onDisconnect must tolerate being
-     * called from a thread that is not a net worker (the same if (threadIndex != -1)
-     * shape onRead/onWrite already use), instead of doing
-     * connectedClientCountArray[-1]-- and throwing ArrayIndexOutOfBoundsException.
+     * Pins the self-protection guard added in the bug 73 R1 re-review — onDisconnect must tolerate
+     * being called from a thread that is not a net worker (the same if (threadIndex != -1) shape
+     * onRead/onWrite already use) instead of doing connectedClientCountArray[-1]-- and throwing
+     * ArrayIndexOutOfBoundsException.
+     *
+     * <p>Simulated, not reachable in production: every TcpSocket close path runs on the socket's
+     * own reactor (closeEx calls checkInReactorThread unconditionally), so a real client always
+     * disconnects on its net worker. The bogus thread-id array below only stands in for "this
+     * thread is not a net worker" so the defensive branch is exercised at all.
      */
     def 'test on disconnect from non net worker thread skips client count'() {
         given:
@@ -217,7 +222,7 @@ class SocketInspectorTest extends Specification {
         Eventloop[] oneEventloop = [eventloopCurrent]
         BlockingList.initBySlotWorkerEventloopArray(oneEventloop)
 
-        and: 'the current thread is not a net worker'
+        and: 'stand in for a non-net-worker thread (impossible in production, see the javadoc)'
         def savedNetWorkerThreadIds = MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds
         MultiWorkerServer.STATIC_GLOBAL_V.netWorkerThreadIds = [Long.MAX_VALUE] as long[]
 

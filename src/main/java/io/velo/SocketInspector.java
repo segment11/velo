@@ -909,8 +909,12 @@ public class SocketInspector implements TcpSocket.Inspector {
         // remove from blocking list
         BlockingList.removeBySocket(socket);
 
-        // tolerate non-net-worker threads the same way onRead/onWrite do — the
-        // counter is per net worker and only meaningful on a net worker thread
+        // Self-protection only, same shape as onRead/onWrite above. Every TcpSocket close path
+        // runs on the socket's own reactor (closeEx calls checkInReactorThread unconditionally),
+        // so in production this is always a net worker thread and threadIndex is never -1.
+        // The guard only matters for a caller that closes a socket from elsewhere (a test, a
+        // tool, a future code path): without it connectedClientCountArray[-1]-- throws
+        // ArrayIndexOutOfBoundsException and the per-worker client count drifts.
         var threadIndex = MultiWorkerServer.STATIC_GLOBAL_V.getNetThreadLocalIndexByCurrentThread();
         if (threadIndex != -1) {
             connectedClientCountArray[threadIndex]--;
