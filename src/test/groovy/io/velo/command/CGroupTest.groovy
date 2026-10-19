@@ -4,6 +4,7 @@ import io.activej.eventloop.Eventloop
 import io.activej.net.socket.tcp.ITcpSocket
 import io.activej.net.socket.tcp.TcpSocket
 import io.velo.BaseCommand
+import io.velo.CompressedValue
 import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
 import io.velo.SocketInspector
@@ -12,6 +13,7 @@ import io.velo.Utils
 import io.velo.VeloUserDataInSocket
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.CannotReadException
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
 import io.velo.reply.*
@@ -892,7 +894,62 @@ class CGroupTest extends Specification {
             result == IntegerReply.REPLY_0
         }.result
 
+        when: 'cross-worker copy completes the async promise even when the dst worker throws'
+        def throwCGroup = new ThrowOnDstCGroup(null, null, null)
+        throwCGroup.byPassGetSet = inMemoryGetSet
+        throwCGroup.from(BaseCommand.mockAGroup())
+        throwCGroup.crossRequestWorker = true
+        reply = throwCGroup.execute('copy a b')
+        then:
+        reply instanceof AsyncReply
+        // before 73.1 the exception was swallowed by the dst eventloop and the
+        // promise never completed — the client connection hung forever
+        def hangDeadline = System.currentTimeMillis() + 3000
+        while (!(reply as AsyncReply).settablePromise.isComplete() && System.currentTimeMillis() < hangDeadline) {
+            Thread.sleep(20)
+        }
+        (reply as AsyncReply).settablePromise.isComplete()
+        // completed exceptionally, with a non-null message so the error reply is not empty
+        def captured = new Exception[1]
+        (reply as AsyncReply).settablePromise.whenException { e -> captured[0] = e }
+        captured[0] instanceof RuntimeException
+        captured[0].message != null
+
+        when: 'cross-worker copy keeps the original message when the exception carries one'
+        reply = throwCGroup.execute('copy a b2')
+        then:
+        reply instanceof AsyncReply
+        def hangDeadline2 = System.currentTimeMillis() + 3000
+        while (!(reply as AsyncReply).settablePromise.isComplete() && System.currentTimeMillis() < hangDeadline2) {
+            Thread.sleep(20)
+        }
+        (reply as AsyncReply).settablePromise.isComplete()
+        def captured2 = new Exception[1]
+        (reply as AsyncReply).settablePromise.whenException { e -> captured2[0] = e }
+        captured2[0].message == 'boom'
+
         cleanup:
         eventloop.breakEventloop()
+    }
+
+    /**
+     * A CGroup whose dst-slot read always fails, used to prove the cross-worker
+     * COPY path completes its async promise (with an exception) instead of hanging.
+     */
+    private static class ThrowOnDstCGroup extends CGroup {
+        ThrowOnDstCGroup(String cmd, byte[][] data, ITcpSocket socket) {
+            super(cmd, data, socket)
+        }
+
+        @Override
+        CompressedValue getCv(SlotWithKeyHash s) {
+            if ('b' == new String(s.rawKey())) {
+                throw new CannotReadException()
+            }
+            if ('b2' == new String(s.rawKey())) {
+                throw new RuntimeException('boom')
+            }
+            return super.getCv(s)
+        }
     }
 }

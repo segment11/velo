@@ -651,14 +651,23 @@ public class CGroup extends BaseCommand {
 
             boolean finalReplace = replace;
             dstOneSlot.asyncExecute(() -> {
-                var dstCv = getCv(dstSlotWithKeyHash);
-                if (dstCv != null && !finalReplace) {
-                    finalPromise.set(IntegerReply.REPLY_0);
-                    return;
-                }
+                try {
+                    var dstCv = getCv(dstSlotWithKeyHash);
+                    if (dstCv != null && !finalReplace) {
+                        finalPromise.set(IntegerReply.REPLY_0);
+                        return;
+                    }
 
-                setCv(srcCv, dstSlotWithKeyHash);
-                finalPromise.set(IntegerReply.REPLY_1);
+                    setCv(srcCv, dstSlotWithKeyHash);
+                    finalPromise.set(IntegerReply.REPLY_1);
+                } catch (Exception e) {
+                    log.error("Copy cross slot error, dst slot={}", dstSlot, e);
+                    // the promise must always complete or the client connection hangs;
+                    // transferAsyncReply builds the error reply from getMessage(), and
+                    // e.g. CannotReadException carries a null message, so wrap with one
+                    finalPromise.setException(new RuntimeException(
+                            e.getMessage() != null ? e.getMessage() : "copy failed: " + e.getClass().getSimpleName(), e));
+                }
             });
 
             return asyncReply;
