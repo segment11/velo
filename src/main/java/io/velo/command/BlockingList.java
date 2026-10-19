@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * For blocking list pop, move
@@ -124,16 +123,18 @@ public class BlockingList {
         final long expectThreadId;
 
         final HashMap<String, List<PromiseWithLeftOrRightAndCreatedTime>> blockingListPromisesByKey = new HashMap<>();
-        final AtomicInteger clientCount = new AtomicInteger(0);
-        final AtomicInteger keyCount = new AtomicInteger(0);
+        // only the worker thread owning this Inner ever mutates them, plain int is enough
+        // they are diagnostics only (INFO and the prometheus gauge), a stale read is acceptable
+        private int clientCount;
+        private int keyCount;
 
         void addOne(String key, PromiseWithLeftOrRightAndCreatedTime one) {
             var list = blockingListPromisesByKey.computeIfAbsent(key, k -> new LinkedList<>());
             if (list.isEmpty()) {
-                keyCount.incrementAndGet();
+                keyCount++;
             }
             list.add(one);
-            clientCount.incrementAndGet();
+            clientCount++;
         }
 
         void removeOne(String key, PromiseWithLeftOrRightAndCreatedTime one) {
@@ -142,9 +143,9 @@ public class BlockingList {
                 return;
             }
             if (list.remove(one)) {
-                clientCount.decrementAndGet();
+                clientCount--;
                 if (list.isEmpty()) {
-                    keyCount.decrementAndGet();
+                    keyCount--;
                 }
             }
         }
@@ -178,7 +179,7 @@ public class BlockingList {
     public static int blockingClientCount() {
         var total = 0;
         for (var inner : inners) {
-            total += inner.clientCount.get();
+            total += inner.clientCount;
         }
         return total;
     }
@@ -191,7 +192,7 @@ public class BlockingList {
     public static int blockingKeyCount() {
         var total = 0;
         for (var inner : inners) {
-            total += inner.keyCount.get();
+            total += inner.keyCount;
         }
         return total;
     }
@@ -348,9 +349,9 @@ public class BlockingList {
         }
 
         if (removedCount > 0) {
-            inner.clientCount.addAndGet(-removedCount);
+            inner.clientCount -= removedCount;
             if (list.isEmpty()) {
-                inner.keyCount.decrementAndGet();
+                inner.keyCount--;
             }
         }
 
@@ -395,10 +396,10 @@ public class BlockingList {
         var inner = getInner();
         var list = inner.blockingListPromisesByKey.computeIfAbsent(key, k -> new LinkedList<>());
         if (list.isEmpty()) {
-            inner.keyCount.incrementAndGet();
+            inner.keyCount++;
         }
         list.add(one);
-        inner.clientCount.incrementAndGet();
+        inner.clientCount++;
         return one;
     }
 
@@ -415,9 +416,9 @@ public class BlockingList {
             return;
         }
         if (list.remove(one)) {
-            inner.clientCount.decrementAndGet();
+            inner.clientCount--;
             if (list.isEmpty()) {
-                inner.keyCount.decrementAndGet();
+                inner.keyCount--;
             }
         }
     }
@@ -443,8 +444,8 @@ public class BlockingList {
                     }
                 }
                 if (totalRemoved > 0) {
-                    inner.clientCount.addAndGet(-totalRemoved);
-                    inner.keyCount.set(inner.blockingListPromisesByKey.size());
+                    inner.clientCount -= totalRemoved;
+                    inner.keyCount = inner.blockingListPromisesByKey.size();
                 }
             });
         }
@@ -454,8 +455,8 @@ public class BlockingList {
     static void clearBlockingListPromisesForAllKeys() {
         for (var inner : inners) {
             inner.blockingListPromisesByKey.clear();
-            inner.clientCount.set(0);
-            inner.keyCount.set(0);
+            inner.clientCount = 0;
+            inner.keyCount = 0;
         }
     }
 }
