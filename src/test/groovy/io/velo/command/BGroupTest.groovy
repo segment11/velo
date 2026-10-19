@@ -6,6 +6,7 @@ import com.github.luben.zstd.ZstdOutputStream
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.TypeMismatchException
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
@@ -1116,6 +1117,26 @@ class BGroupTest extends Specification {
         def completedTwice = BGroup.completeIfListNotEmpty(BaseCommand.slot('race', 1), 'race'.bytes, bGroup, bGroup.dictMap, oneForRace, true)
         then:
         !completedTwice
+
+        when: 'a later key holds another type, the multi key check fails and the error is forwarded'
+        inMemoryGetSet.remove(slot, 'wtypea')
+        def cvWrongTypeKey = Mock.prepareCompressedValueList(1)[0]
+        cvWrongTypeKey.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvWrongTypeKey.compressedData = 'not-a-list'.bytes
+        inMemoryGetSet.put(slot, 'wtypeb', 0, cvWrongTypeKey)
+        reply = bGroup.execute('blpop wtypea wtypeb 0')
+        then:
+        reply instanceof AsyncReply
+        def wrongTypeException = (reply as AsyncReply).settablePromise.getException()
+        wrongTypeException instanceof TypeMismatchException
+
+        when: 'same for brpop'
+        inMemoryGetSet.put(slot, 'wtypeb', 0, cvWrongTypeKey)
+        reply = bGroup.execute('brpop wtypea wtypeb 0')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getException() instanceof TypeMismatchException
+        inMemoryGetSet.remove(slot, 'wtypeb')
 
         when: 'the last element is taken when popping from the right'
         def promiseForRight = new SettablePromise<Reply>()
