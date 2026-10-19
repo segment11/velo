@@ -1,13 +1,16 @@
 package io.velo.command;
 
 import com.github.luben.zstd.Zstd;
+import com.google.common.annotations.VisibleForTesting;
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.promise.Promise;
 import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
+import io.velo.DictMap;
 import io.velo.type.RedisBF;
 import io.velo.type.RedisBitSet;
 
@@ -1035,51 +1038,25 @@ public class BGroup extends BaseCommand {
                 SettablePromise<Reply> finalPromise = new SettablePromise<>();
                 var asyncReply = new AsyncReply(finalPromise);
 
-                boolean isSet = false;
-                for (int i = 1; i < keys.size(); i++) {
-                    var otherKey = keys.get(i);
-                    var otherKeyBytes = Wal.keyBytes(otherKey);
-                    var otherSlotWithKeyHash = slotWithKeyHashListParsed.get(i);
+                var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
 
-                    var oneSlot = localPersist.oneSlot(otherSlotWithKeyHash.slot());
-                    var p = oneSlot.asyncCall(() -> {
-                        var otherRl = LGroup.getRedisList(otherSlotWithKeyHash, this);
-                        if (otherRl == null || otherRl.size() == 0) {
-                            return null;
-                        }
-
-                        var otherValueBytes = isLeft ? otherRl.removeFirst() : otherRl.removeLast();
-                        LGroup.saveRedisList(otherRl, otherSlotWithKeyHash, this, dictMap);
-                        return otherValueBytes;
-                    });
-
-                    // wait until this promise complete
-                    var otherValueBytes = p.whenComplete((r, e) -> {
-                        if (e != null) {
-                            log.error("{} error={}", isLeft ? "blpop" : "brpop", e.getMessage());
-                            finalPromise.setException(e);
-                            return;
-                        }
-
-                        if (r != null) {
-                            var replies = new Reply[2];
-                            replies[0] = new BulkReply(otherKeyBytes);
-                            replies[1] = new BulkReply(r);
-                            finalPromise.set(new MultiBulkReply(replies));
-                        }
-                    }).getResult();
-
-                    if (otherValueBytes != null) {
-                        isSet = true;
-                        break;
+                // each key is checked on the worker owning it, never blocking the current worker
+                popOtherKeyAsync(1, keys, isLeft).whenComplete((r, e) -> {
+                    if (e != null) {
+                        log.error("{} error={}", isLeft ? "blpop" : "brpop", e.getMessage());
+                        finalPromise.setException(e);
+                        return;
                     }
-                }
 
-                if (!isSet) {
-                    var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
-                    for (var key : keys) {
-                        BlockingList.addOne(key, one);
+                    if (r != null) {
+                        finalPromise.set(r);
+                        return;
                     }
+
+                    // register the waiter on every key owning worker, so a push to any of them can wake it up
+                    addBlockingWaiter(keys, one);
+                    // close the check then register window, a push may land between both steps
+                    recheckBlockingList(keys, one, isLeft);
 
                     if (!isBlockIndefinitely) {
                         long timeoutMillis = (long) (timeoutSeconds * 1000);
@@ -1087,13 +1064,11 @@ public class BGroup extends BaseCommand {
                         reactor.delay(timeoutMillis, () -> {
                             if (!finalPromise.isComplete()) {
                                 finalPromise.set(NilReply.INSTANCE);
-                                for (var key : keys) {
-                                    BlockingList.removeOne(key, one);
-                                }
+                                removeBlockingWaiter(keys, one);
                             }
                         });
                     }
-                }
+                });
 
                 return asyncReply;
             }
@@ -1127,6 +1102,121 @@ public class BGroup extends BaseCommand {
         replies[0] = new BulkReply(firstKeyBytes);
         replies[1] = new BulkReply(valueBytes);
         return new MultiBulkReply(replies);
+    }
+
+    /**
+     * Pop one value from the first non-empty key, starting at {@code fromIndex}.
+     * Every key is read and written on the worker owning it, chained without blocking the current worker,
+     * so the first key with a value wins and the following keys are never touched.
+     *
+     * @param fromIndex index of the first key to check
+     * @param keys      all blocking keys
+     * @param isLeft    take the first element when true, the last one otherwise
+     * @return promise of the reply, null when all the checked keys are empty
+     */
+    private Promise<Reply> popOtherKeyAsync(int fromIndex, ArrayList<String> keys, boolean isLeft) {
+        if (fromIndex >= keys.size()) {
+            return Promise.of(null);
+        }
+
+        var keyBytes = Wal.keyBytes(keys.get(fromIndex));
+        var slotWithKeyHash = slotWithKeyHashListParsed.get(fromIndex);
+        return localPersist.oneSlot(slotWithKeyHash.slot()).asyncCall(() -> {
+            var rl = LGroup.getRedisList(slotWithKeyHash, this);
+            if (rl == null || rl.size() == 0) {
+                return (Reply) null;
+            }
+
+            var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();
+            LGroup.saveRedisList(rl, slotWithKeyHash, this, dictMap);
+            var replies = new Reply[2];
+            replies[0] = new BulkReply(keyBytes);
+            replies[1] = new BulkReply(valueBytes);
+            return (Reply) new MultiBulkReply(replies);
+        }).then(reply -> reply != null ? Promise.of(reply) : popOtherKeyAsync(fromIndex + 1, keys, isLeft));
+    }
+
+    /**
+     * Register one blocking promise on the worker owning each key.
+     *
+     * @param keys the blocking keys
+     * @param one  the promise wrapper
+     */
+    private void addBlockingWaiter(ArrayList<String> keys, BlockingList.PromiseWithLeftOrRightAndCreatedTime one) {
+        for (int i = 0; i < keys.size(); i++) {
+            var key = keys.get(i);
+            var slot = slotWithKeyHashListParsed.get(i).slot();
+            localPersist.oneSlot(slot).asyncExecute(() -> BlockingList.addOne(key, one));
+        }
+    }
+
+    /**
+     * Remove one blocking promise from the worker owning each key.
+     *
+     * @param keys the blocking keys
+     * @param one  the promise wrapper
+     */
+    private void removeBlockingWaiter(ArrayList<String> keys, BlockingList.PromiseWithLeftOrRightAndCreatedTime one) {
+        for (int i = 0; i < keys.size(); i++) {
+            var key = keys.get(i);
+            var slot = slotWithKeyHashListParsed.get(i).slot();
+            localPersist.oneSlot(slot).asyncExecute(() -> BlockingList.removeOne(key, one));
+        }
+    }
+
+    /**
+     * Complete the blocking reply when a push landed between the emptiness check and the waiter
+     * registration, the list is re-read on its owning worker.
+     *
+     * @param keys   the blocking keys
+     * @param one    the promise wrapper
+     * @param isLeft take the first element when true, the last one otherwise
+     */
+    private void recheckBlockingList(ArrayList<String> keys, BlockingList.PromiseWithLeftOrRightAndCreatedTime one,
+                                     boolean isLeft) {
+        for (int i = 0; i < keys.size(); i++) {
+            var keyBytes = Wal.keyBytes(keys.get(i));
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            localPersist.oneSlot(slotWithKeyHash.slot()).asyncExecute(() -> {
+                completeIfListNotEmpty(slotWithKeyHash, keyBytes, this, dictMap, one, isLeft);
+            });
+        }
+    }
+
+    /**
+     * Complete a pending blocking reply with one value when the list is not empty,
+     * used to close the window between the emptiness check and the waiter registration.
+     *
+     * @param slotWithKeyHash slot and key hash of the blocking key
+     * @param keyBytes        the blocking key
+     * @param baseCommand     the command owning the storage access
+     * @param dictMap         dictionary map used when the list is saved back
+     * @param one             the promise wrapper
+     * @param isLeft          take the first element when true, the last one otherwise
+     * @return true when the promise was completed
+     */
+    @VisibleForTesting
+    static boolean completeIfListNotEmpty(BaseCommand.SlotWithKeyHash slotWithKeyHash, byte[] keyBytes,
+                                          BaseCommand baseCommand, DictMap dictMap,
+                                          BlockingList.PromiseWithLeftOrRightAndCreatedTime one, boolean isLeft) {
+        if (one.settablePromise().isComplete()) {
+            return false;
+        }
+
+        var rl = LGroup.getRedisList(slotWithKeyHash, baseCommand);
+        if (rl == null || rl.size() == 0) {
+            return false;
+        }
+
+        BlockingList.removeOne(Wal.keyString(keyBytes), one);
+        var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();
+        LGroup.saveRedisList(rl, slotWithKeyHash, baseCommand, dictMap);
+
+        var replies = new Reply[2];
+        replies[0] = new BulkReply(keyBytes);
+        replies[1] = new BulkReply(valueBytes);
+        one.settablePromise().set(new MultiBulkReply(replies));
+        return true;
     }
 
     private Reply blmpop() {

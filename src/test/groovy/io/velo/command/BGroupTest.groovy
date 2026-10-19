@@ -968,6 +968,17 @@ class BGroupTest extends Specification {
         reply instanceof AsyncReply
         !(reply as AsyncReply).settablePromise.isComplete()
 
+        when: 'second key holds an existing but empty list, still blocks'
+        def cvEmptyList = Mock.prepareCompressedValueList(1)[0]
+        cvEmptyList.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvEmptyList.compressedData = new RedisList().encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvEmptyList)
+        reply = bGroup.execute('blpop a b 0')
+        then:
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
+        inMemoryGetSet.remove(slot, 'b')
+
         when:
         rl.addFirst('b'.bytes)
         cv.compressedData = rl.encode()
@@ -1033,6 +1044,185 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('blpop >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'a push lands between the check and the registration, the re-check completes the reply'
+        inMemoryGetSet.remove(slot, 'race')
+        def promiseForRace = new SettablePromise<Reply>()
+        def oneForRace = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(promiseForRace, null, true, System.currentTimeMillis(), null)
+        BlockingList.addOne('race', oneForRace)
+        def completedWhenEmpty = BGroup.completeIfListNotEmpty(BaseCommand.slot('race', 1), 'race'.bytes, bGroup, bGroup.dictMap, oneForRace, true)
+        then:
+        !completedWhenEmpty
+        !promiseForRace.isComplete()
+
+        when:
+        def cvRace = Mock.prepareCompressedValueList(1)[0]
+        cvRace.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlRace = new RedisList()
+        rlRace.addFirst('pushed-in-window'.bytes)
+        cvRace.compressedData = rlRace.encode()
+        inMemoryGetSet.put(slot, 'race', 0, cvRace)
+        BlockingList.addOne('race', oneForRace)
+        def completedWhenNotEmpty = BGroup.completeIfListNotEmpty(BaseCommand.slot('race', 1), 'race'.bytes, bGroup, bGroup.dictMap, oneForRace, true)
+        then:
+        completedWhenNotEmpty
+        promiseForRace.isComplete()
+        promiseForRace.getResult() instanceof MultiBulkReply
+        (promiseForRace.getResult() as MultiBulkReply).replies[1] instanceof BulkReply
+        ((promiseForRace.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'pushed-in-window'.bytes
+
+        when: 'an already completed promise is left alone'
+        def completedTwice = BGroup.completeIfListNotEmpty(BaseCommand.slot('race', 1), 'race'.bytes, bGroup, bGroup.dictMap, oneForRace, true)
+        then:
+        !completedTwice
+
+        when: 'the last element is taken when popping from the right'
+        def promiseForRight = new SettablePromise<Reply>()
+        def oneForRight = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(promiseForRight, null, false, System.currentTimeMillis(), null)
+        BlockingList.addOne('raceright', oneForRight)
+        def rlRight = new RedisList()
+        rlRight.addFirst('first'.bytes)
+        rlRight.addLast('last'.bytes)
+        cvRace.compressedData = rlRight.encode()
+        inMemoryGetSet.put(slot, 'raceright', 0, cvRace)
+        def completedFromRight = BGroup.completeIfListNotEmpty(BaseCommand.slot('raceright', 1), 'raceright'.bytes, bGroup, bGroup.dictMap, oneForRight, false)
+        then:
+        completedFromRight
+        ((promiseForRight.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'last'.bytes
+
+        when: 'an existing but empty list does not complete the promise'
+        def promiseForEmpty = new SettablePromise<Reply>()
+        def oneForEmpty = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(promiseForEmpty, null, true, System.currentTimeMillis(), null)
+        BlockingList.addOne('emptyone', oneForEmpty)
+        def rlEmpty = new RedisList()
+        cvRace.compressedData = rlEmpty.encode()
+        inMemoryGetSet.put(slot, 'emptyone', 0, cvRace)
+        def completedWhenEmptyList = BGroup.completeIfListNotEmpty(BaseCommand.slot('emptyone', 1), 'emptyone'.bytes, bGroup, bGroup.dictMap, oneForEmpty, true)
+        then:
+        !completedWhenEmptyList
+        !promiseForEmpty.isComplete()
+        BlockingList.removeOne('emptyone', oneForEmpty)
+
+        when: 'two slot workers, the waiter must be registered on the worker owning the pushed key'
+        localPersist.cleanUp()
+        def workers = [startWorkerThread('velo-test-worker-1'), startWorkerThread('velo-test-worker-2')]
+        def loop1 = workers[0][0]
+        def loop2 = workers[1][0]
+        LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
+        localPersist.initSlotRuntimeBindings([loop1, loop2] as Eventloop[], new io.velo.RequestHandler[2],
+                [workers[0][1] as long, workers[1][1] as long] as long[])
+        localPersist.oneSlot(0 as short)
+        localPersist.oneSlot(1 as short)
+        BlockingList.initBySlotWorkerEventloopArray([loop1, loop2] as Eventloop[])
+        BlockingList.clearBlockingListPromisesForAllKeys()
+
+        and: 'two keys hashed into two different slots'
+        def bGroupWorkers = new BGroup(null, null, null)
+        bGroupWorkers.from(BaseCommand.mockAGroup(0 as byte, 2 as byte, 2 as short))
+        def keyOnWorker1 = (1..500).collect { 'multi1_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def keyOnWorker2 = (1..500).collect { 'multi2_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+
+        and: 'blpop on worker-1 for one key on worker-1 and one key on worker-2'
+        def asyncReplyCross = []
+        def registered = new java.util.concurrent.CountDownLatch(1)
+        loop1.execute({
+            asyncReplyCross << bGroupWorkers.execute("blpop ${keyOnWorker1} ${keyOnWorker2} 0")
+            registered.countDown()
+        })
+        registered.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        Thread.sleep(300)
+        and: 'push to the key owned by worker-2'
+        def pushedOnWorker2 = []
+        def pushDone = new java.util.concurrent.CountDownLatch(1)
+        loop2.execute({
+            def values = new byte[1][]
+            values[0] = 'from-worker-2'.bytes
+            pushedOnWorker2 << BlockingList.setReplyLPushIfBlockingListExist(keyOnWorker2, values)
+            pushDone.countDown()
+        })
+        pushDone.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        and: 'the blocking reply is completed'
+        def crossPromise = (asyncReplyCross[0] as AsyncReply).settablePromise
+        def crossReply = null
+        crossPromise.whenResult { r -> crossReply = r }
+        for (int i = 0; i < 100 && crossReply == null; i++) {
+            Thread.sleep(50)
+        }
+        then:
+        // empty array means every pushed value was handed to a waiting client
+        pushedOnWorker2[0] != null && (pushedOnWorker2[0] as byte[][]).length == 0
+        crossReply instanceof MultiBulkReply
+        ((crossReply as MultiBulkReply).replies[0] as BulkReply).raw == keyOnWorker2.bytes
+        ((crossReply as MultiBulkReply).replies[1] as BulkReply).raw == 'from-worker-2'.bytes
+
+        cleanup:
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        // rebind BlockingList to this thread again, later tests in this spec run here
+        BlockingList.initBySlotWorkerEventloopArray([Eventloop.builder().withCurrentThread().build()] as Eventloop[])
+        workers?.each { w ->
+            try {
+                w[0].breakEventloop()
+                w[2].join(3000)
+            } catch (Throwable ignored) {
+            }
+        }
+        localPersist.cleanUp()
+    }
+
+    private static List startWorkerThread(String name) {
+        var loopQ = new java.util.concurrent.LinkedBlockingQueue<Eventloop>()
+        def eventloop = Eventloop.builder().withIdleInterval(Duration.ofMillis(20)).build()
+        eventloop.keepAlive(true)
+        def thread = Thread.start {
+            loopQ.put(eventloop)
+            eventloop.run()
+        }
+        def loop = loopQ.take()
+        def ready = new java.util.concurrent.CountDownLatch(1)
+        loop.execute { ready.countDown() }
+        ready.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        return [loop, loop.getEventloopThread().threadId(), thread]
+    }
+
+    def 'test brpop'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when: 'second key has values, the last one is taken'
+        inMemoryGetSet.remove(slot, 'a')
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rl = new RedisList()
+        rl.addFirst('first'.bytes)
+        rl.addLast('last'.bytes)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cv)
+        def reply = bGroup.execute('brpop a b 0')
+        then:
+        reply instanceof AsyncReply
+        // same worker, the promise is already complete when the reply is returned
+        def brpopResult = (reply as AsyncReply).settablePromise.getResult()
+        brpopResult instanceof MultiBulkReply
+        ((brpopResult as MultiBulkReply).replies[0] as BulkReply).raw == 'b'.bytes
+        ((brpopResult as MultiBulkReply).replies[1] as BulkReply).raw == 'last'.bytes
+
+        when: 'second key is empty, the waiter stays pending'
+        def cvEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvEmpty.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvEmpty.compressedData = new RedisList().encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvEmpty)
+        reply = bGroup.execute('brpop a b 0')
+        then:
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
 
         cleanup:
         localPersist.cleanUp()
