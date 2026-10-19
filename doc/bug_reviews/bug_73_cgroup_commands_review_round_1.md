@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2 (round 1 verification complete)
-**Status:** fix phase complete — all 7 findings fixed, one commit each (see `## Fix Log`); re-review pending
+**Status:** fix phase complete — all 7 findings fixed, one commit each; re-review done (7 accepted, 1 test-only action item A1 open)
 **Review branch:** `review/cgroup`
 **Reviewed commit:** `0accc625dd94fb52917d08664ff8bafb39f2a203`
 
@@ -604,6 +604,8 @@ Fix order per Review Feedback: 73.2 → 73.6 → 73.4 → 73.3 → 73.7 → 73.5
 | 73.5 | `test client` RED: legacy kill returned `IntegerReply integer=1`, not `OKReply` (pinned case at former lines 334-335 inverted per review) | `1189e147` `fix: legacy client kill reply type and skipme default` | `tests="1" failures="0"` | legacy parse 348-358 both branches + `oldForm` reply 557-558 both branches covered; self-kill case uses a dedicated socket so the fixture lifecycle stays intact |
 | 73.6 | `test client` RED: `reply == ErrorReply.SYNTAX` got `OKReply` — `client reply maybe` folded to ON and was acknowledged | `686c5914` `fix: reject unknown client reply mode with syntax error` | `tests="1" failures="0"` | reply branch 185-216: 17/17 lines, 6/6 branch lines fully covered; stored-mode-unchanged proven via reflection on `replyMode` |
 | 73.7 | `test client` RED: `client setname "a b"` returned `OKReply`, not the validation error | `3dc99870` `fix: validate client setname charset and clear name on empty` | `tests="1" failures="0"` | charset loop 236-258: 12/12 lines, 5/5 branch lines fully covered (0x21/0x7E arms + empty-name ternary; `setname ""` → GETNAME nil asserted) |
+| A1 (re-review action) | coverage regression visible only via JaCoCo (no failing behavior) | `94db1fa4` `test: cover same-worker copy dst-exists branch again` | `tests="1" failures="0"` | `CGroup.java:676-677` restored: `All 4 branches covered` |
+| R1 (re-review follow-up) | `test client` RED on `1189e147`: self-killed socket already removed within 200ms (close-before-reply) | `9f06178c` `fix: close self-killed client after reply written` | `tests="1" failures="0"`; class sweep CGroupTest 11/11 + CommandCommandTest 7/7 + SocketInspectorTest 10/10 | `CGroup.java:539` both arms; `SocketInspector.java:827-832` both arms (true from self-kill cases, false from SocketInspectorTest) |
 
 Notes from the fix phase:
 
@@ -628,13 +630,93 @@ All seven verdicts accepted. Every reviewer correction was re-verified against t
 
 ## Re-review (AI agent 2)
 
-## Residual Risk
+**Reviewed state:** `71e7b230` (`docs: bug 73 all fixed with 7 commits, update fix log and state`), tree clean for `src/main/java/io/velo/command/CGroup.java` and `src/test/groovy/io/velo/command/CGroupTest.groovy`.
+**Method:** (a) independent Spock re-review spec `src/test/groovy/io/velo/command/CGroupReReview73Spec.groovy` asserting the *fixed* behaviour, written from the findings rather than from the fix agent's tests, then deleted; (b) per-commit diff review of all 7 shas; (c) focused test run at HEAD; (d) JaCoCo inspection via `scripts/jacoco_cover.py`; (e) wire-format assertions (`ErrorReply.buffer()` bytes) against Redis 7.2 strings.
 
-- **Sibling unguarded `asyncExecute` lambdas** (same defect class as 73.1, deferred by review decision): `SGroup.java:2031` (SMOVE cross-slot — identical client hang), `ZGroup.java:1372` (promise pre-completed on the calling thread — wrong success reply, lost dst write), `BGroup.java:1154` (`recheckBlockingList` — blocked client never woken). These belong to the owning modules' next rounds; cross-referenced from 73.1.
-- **Minor CLIENT KILL filter-form validation divergences** (recorded as non-findings): `USER <unknown-user>` returns `:0` where Redis errors `No such user 'x'`; `ID 0`/negative id accepted (returns `:0`) where Redis requires id ≥ 1. Candidates for a hardening pass only.
-- **CLIENT LIST `TYPE`/`ID` filters** remain unsupported (FORMAT error) — documented feature gap, not addressed in this round.
-- **Bare `COMMAND` cost**: now returns the full command array (`CommandRegistry.size()` entries) per Redis behavior; no ACL/rate guard was added (flagged by review as out of scope).
-- **Transient gradle first-run failures** were observed repeatedly during the fix phase (compile/test failing once after edits, passing on rerun with unchanged sources); not investigated as it never reproduced on a clean rerun — worth watching in CI.
+Spec output at HEAD (`./gradlew :cleanTest :test --tests "io.velo.command.CGroupReReview73Spec"` → `BUILD SUCCESSFUL`, all 7 features green):
+
+```
+73.2 bare COMMAND -> MultiBulkReply of 6 (registry=6)
+73.2 command count -> 6 ; command info get -> MultiBulkReply ; command docs -> MultiBulkReply ; command zzz -> ErrorReply{message='syntax error'}
+73.4 replce -> ErrorReply{message='syntax error'}; replace whatever -> ErrorReply{message='syntax error'}; db -> ErrorReply{message='syntax error'}; db nonsense -> ErrorReply{message='not integer'}; db 5 -> DB index is out of range; db -1 -> DB index is out of range
+73.4 db 0 -> REPLY_1; REPLACE DB 0 -> REPLY_1; no option -> REPLY_1; replace -> REPLY_1
+73.3 'copy a a' -> source and destination objects are the same ; 'copy a a replace' -> source and destination objects are the same ; 'copy a a garbage' -> ErrorReply{message='syntax error'}
+73.1 null-message exception -> RuntimeException: copy failed: CannotReadException
+73.1 own-message exception -> boom
+73.1 happy path -> REPLY_0
+73.6 off -> EmptyReply; maybe -> ErrorReply{message='syntax error'}; '' -> ErrorReply{message='syntax error'}; SKIP -> EmptyReply; ON -> OKReply
+73.7 space / newline / 0x7F / 0x80 -> Client names cannot contain spaces, newlines or special characters.
+73.7 'abc!~' -> OKReply; getname -> abc!~; setname '' -> OKReply; getname -> NilReply
+73.5 legacy kill of another -> OKReply ; legacy kill, no match -> ErrorReply 'No such client' ; legacy self kill -> OKReply
+73.5 filter kill -> IntegerReply(1) ; filter self -> IntegerReply(0)
+```
+
+### Per-commit verdict
+
+| Bug | Commit | Failing-test evidence (red) | Focused test (green) | JaCoCo | Re-review verdict |
+|---|---|---|---|---|---|
+| 73.2 | `2f91f43b` | verified: reverting only `CGroup.java` to `2f91f43b^` and running `CGroupTest.test command` → `BUILD FAILED` | pass | `command()` delegation executed | **ACCEPTED** |
+| 73.6 | `686c5914` | red state reproduced in the round-1 spec on `0accc625` (`client reply maybe -> OKReply`) | pass | lines 241-257: 11/11, 5/5 branch lines | **ACCEPTED** |
+| 73.4 | `28fced74` | red state reproduced in the round-1 spec on `0accc625` (5 malformed forms all returned `REPLY_1`) | pass, **but coverage regression** (below) | option scan branches all covered | **ACCEPTED WITH ACTION** |
+| 73.3 | `30f31f95` | red state reproduced in the round-1 spec on `0accc625` (`copy a a -> REPLY_0`) | pass | line 623 `All 2 branches covered` | **ACCEPTED** |
+| 73.7 | `3dc99870` | red state reproduced in the round-1 spec on `0accc625` (`setname "a b" -> OKReply`) | pass | lines 240-258: 11/11, 5/5 branch lines | **ACCEPTED** |
+| 73.5 | `1189e147` | red state reproduced in the round-1 spec on `0accc625` (integer replies + self preserved) | pass | lines 557-558 `All 2 branches covered` | **ACCEPTED**, one residual risk |
+| 73.1 | `df89638e` | red state reproduced in the round-1 spec on `0accc625` (`promise complete after 1s = false`, eventloop "Fatal error in CGroup$$Lambda") | pass | lines 655-669 covered incl. both ternary arms | **ACCEPTED** |
+
+Focused test run at HEAD:
+
+```
+./gradlew :cleanTest :test --tests "io.velo.command.CGroupTest" --tests "io.velo.command.CommandCommandTest" --tests "io.velo.script.ScriptHandleTest"
+BUILD SUCCESSFUL in 15s
+TEST-io.velo.command.CGroupTest.xml:         tests="11" skipped="0" failures="0" errors="0"
+TEST-io.velo.command.CommandCommandTest.xml: tests="7"  skipped="0" failures="0" errors="0"
+TEST-io.velo.script.ScriptHandleTest.xml:    tests="1"  skipped="0" failures="0" errors="0"
+```
+
+Matches the Fix Log's final sweep claim (11/11 + 7/7). No other test source in the repo references `copy` / `client setname` / `client reply` / `client kill` (grep over `src/test/groovy` + `dyn/test`), so the blast radius of these 7 commits is contained to `CGroupTest` and the dyn command tests — all green.
+
+### Per-bug correctness review
+
+- **73.1** — `try/catch` wraps the whole lambda body; both success completions are unchanged; the catch completes the promise exceptionally, which `transferAsyncReply` (`MultiWorkerServer.java:667-683`) maps to an error reply. The message fallback required by my review note is present and both arms verified (`copy failed: CannotReadException` and the original `boom`). The happy cross-worker path still completes with `:0`/`:1`. One thing the fix correctly did *not* do: leave `ReplyMode`-style "swallow and continue" semantics in place. Accepted.
+- **73.2** — the guard is removed rather than relaxed, which is safe: `handle()` only reaches `command()` when `"command".equals(cmd)`, so `data[0]` always exists and the script's own `data.length == 1 → info()` is the sole bare path. Verified that `COMMAND COUNT / INFO / DOCS / <unknown>` still behave, and that `COMMAND INFO get` returns a 1-element array. Accepted.
+- **73.4** — option scan is case-insensitive, consumes the `DB` value via `data[++i]` (loop counter and body increment agree, so the value is not re-scanned), rejects dangling `DB` and unknown tokens with `SYNTAX`, non-numeric with `NOT_INTEGER`, and nonzero db with `DB index is out of range` — the message choice recorded in the Response. `DB 0`, `REPLACE DB 0`, `replace`, and no-option forms all still copy. Accepted. See the coverage action below.
+- **73.3** — placement is exactly right: after the option loop (so `COPY a a garbage` is `SYNTAX`, matching `db.c` ordering) and before the source lookup (so a missing source still yields the same-object error, like Redis). `Arrays.equals(data[1], data[2])` is byte comparison, not slot comparison — verified that `copy a aX` (distinct key, same slot) still copies. Wire format asserted as `-ERR source and destination objects are the same\r\n`, i.e. no duplicated `ERR` prefix — the correction from my review was applied correctly. Accepted.
+- **73.7** — byte loop uses signed comparison, so both `< 0x21` and `>= 0x80` (negative byte) are rejected, matching Redis' `*val < '!' || *val > '~'`. Empty name maps to `null`, and the pre-existing `clientName == null → NilReply` path (`CGroup.java:158`) yields nil, verified. Rejected names leave the previous name untouched. Wire format asserted against the Redis string. Accepted.
+- **73.6** — validation happens before `setReplyMode`, so a rejected token cannot mutate the stored mode; verified by asserting the mode is still `on` after `maybe` and `""` were rejected. `ReplyMode.from` is untouched as agreed. Accepted.
+- **73.5** — `oldForm` is threaded through the record and the two reply branches are correct (`killed == 0 → ErrorReply("No such client")`, else `OKReply`), with the filter form untouched (verified `addr` filter still answers `IntegerReply(1)` and still skips the caller with `IntegerReply(0)`). `skipMe=false` on the legacy path makes self-kill work, verified by the caller socket actually being removed from the inspector map. Accepted — but see residual risk R1.
+
+### Action item (must be closed before this round is signed off)
+
+**A1 — 73.4 silently dropped JaCoCo coverage of a production branch.** The pre-73.4 test used `copy a b replace_` (expecting `REPLY_0`) to reach the same-worker "destination exists and no REPLACE" path; `28fced74` inverted that case to `SYNTAX`, which is correct, but nothing replaced it. Current state at HEAD:
+
+```
+python3 scripts/jacoco_cover.py io.velo.command.CGroup 660 685
+  675  ✓ covered
+  676  ~ partial       1 of 4 branches missed.
+  677  ✗ not-covered        # return IntegerReply.REPLY_0;
+```
+
+`CGroup.java:676-677` is the same-worker `if (existCv != null && !replace) return IntegerReply.REPLY_0;` — i.e. `COPY src dst` with an existing destination and no REPLACE, both keys on one slot worker. For contrast, the same branch at the pre-fix commit was fully covered:
+
+```
+# at 28fced74^ (CGroup.java + CGroupTest.groovy checked out), :test --tests io.velo.command.CGroupTest → tests="11" failures="0"
+python3 scripts/jacoco_cover.py io.velo.command.CGroup 618 632
+  625  ✓ covered       All 4 branches covered.
+  626  ✓ covered
+```
+
+So the branch went from covered to uncovered as a side effect of the fix, not by design. Fix: add one same-worker case to `CGroupTest.'test copy'` (`copy a b` twice — the second one must return `REPLY_0`), then re-check with `scripts/jacoco_cover.py`. This is a test-only change; it does not reopen 73.4.
+
+Coverage claims otherwise verified as accurate: `command()` delegation (73.2), lines 241-257 (73.6), 240-258 (73.7), 557-558 (73.5), 623 (73.3), option-scan branches (73.4), 655-669 including both ternary arms (73.1).
+
+### Residual Risk
+
+- **R1 (new, from the 73.5 fix) — self-kill may close the caller before its `+OK` is written.** With `skipMe=false` on the legacy path, `CLIENT KILL <own ip:port>` now closes the calling socket. `killClientsMatching` does `s.getReactor().submit(() -> s.close())` (`CGroup.java:539`) *during* `handle()`, while the reply is written afterwards by the net worker; there is no `CLIENT CLOSE_AFTER_REPLY` equivalent anywhere in the codebase (grep: no such flag; the only unconditional close loop is the server-stop path at `MultiWorkerServer.java:1283-1287`). Redis explicitly defers the close until after the reply is queued (`networking.c:3242-3243`). Consequence: the client may observe a reset connection instead of `+OK`. Not a fix failure — the fix moved Velo toward Redis — but a follow-up is warranted: track `closeThisClient` in `killClientsMatching` and close after the reply is enqueued. **Owner disposition (after re-review): the delayed close is approved and is to be implemented** — 73.5 itself stays accepted/closed, R1 is tracked as its own follow-up item in this doc and re-reviewed the same way. Required shape: thread a `closeThisClient` flag out of `killClientsMatching` (Redis sets it in the kill loop, `networking.c:3228-3231`) and close the socket only after the reply has been queued, rather than inside the reactor task submitted from `handle()`; the flag cannot be applied to sockets other than the caller, because for those the reply is irrelevant.
+  - **Closure (AI agent 1):** fixed in `9f06178c` (`fix: close self-killed client after reply written`), TDD — RED: the self-kill case rewritten to the CLOSE_AFTER_REPLY contract failed on `1189e147` (socket already removed within 200ms of the kill); GREEN: `killClientsMatching` sets `closeAfterReply` on the caller instead of submitting a reactor close (`CGroup.java:539`, both arms covered), and `SocketInspector.onWrite` closes the socket after the reply bytes were handed to the channel (`SocketInspector.java:827-832`, both arms covered; ActiveJ `TcpSocket` bytecode inspected to confirm `Inspector.onWrite` runs after `SocketChannel.write` returns). Applied to both kill forms (legacy and filter), matching Redis's `close_this_client`. The SKIPME-no case was updated to the same deterministic contract (registered until the write hook fires). Edge: with `CLIENT REPLY OFF` the suppressed reply may never invoke `onWrite`, leaving the flagged socket open until the client disconnects — Redis has the analogous flag-with-suppressed-reply corner; accepted as residual.
+- **Action item A1 (coverage regression on the same-worker `COPY` branch)** — **closed** in `94db1fa4` (`test: cover same-worker copy dst-exists branch again`): same-worker `copy a b` twice case added (second returns `:0`); `CGroup.java:676-677` back to `All 4 branches covered` / covered. Test-only, does not reopen 73.4.
+- **"Transient gradle failures" are actually a heap problem, not flakiness.** The fix log records repeated first-run failures "passing on immediate rerun with unchanged sources". The reviewer reproduced it and captured the cause: `:compileTestGroovy FAILED ... > Java heap space` (observed 3 times in this re-review). `gradle.properties` sets only `org.gradle.java.home`; no `org.gradle.jvmargs`, so Groovy compilation runs in the Gradle daemon with the default heap while the repo compiles `src/test/groovy` + `dyn/test` together (`build.gradle:34-35`). Suggested follow-up: set `org.gradle.jvmargs=-Xmx4g` (or raise the daemon heap) so green claims do not depend on a lucky rerun. Not part of bug 73. *(Agent 1 note: reproduced again twice during the A1/R1 work — same `:compileTestGroovy` first-fail-then-pass pattern; the heap fix is recommended to the repo owner.)*
+- **Sibling unguarded `asyncExecute` lambdas** (carried over from round 1): `SGroup.java:2031` (SMOVE cross-slot, identical hang), `ZGroup.java:1372` (promise pre-completed on the calling thread → wrong success reply, lost dst write), `BGroup.java:1154` (`recheckBlockingList`, blocked client never woken). Belong to the owning modules' next rounds; cross-referenced from 73.1. Note the 73.1 fix pattern (try/catch + `finalPromise.setException` + non-null message) is the template for all three.
+- **Unchanged from round 1:** minor CLIENT KILL filter-form validation divergences (`USER <unknown-user>` → `:0`, `ID 0`/negative accepted); CLIENT LIST `TYPE`/`ID` filters unsupported; bare `COMMAND` now returns the full array with no ACL/cost guard (Redis-equivalent, still unbounded).
 
 ## Summary
 
@@ -643,8 +725,8 @@ All seven verdicts accepted. Every reviewer correction was re-verified against t
 | 73.1 | Cross-slot COPY async lambda lacks exception handling → client hang | High | Correctness/Robustness | `REFINED` | fixed (`df89638e`); sibling sites SGroup:2031/ZGroup:1372/BGroup:1154 deferred to owning rounds |
 | 73.2 | Bare `COMMAND` rejected; dyn script branch dead | Medium | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`2f91f43b`) |
 | 73.3 | COPY source == destination not rejected | Medium | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`30f31f95`) |
-| 73.4 | COPY ignores unknown options / `DB` value | Medium | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`28fced74`) |
-| 73.5 | Legacy CLIENT KILL: reply type + skipme default | Low | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`1189e147`) |
+| 73.4 | COPY ignores unknown options / `DB` value | Medium | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`28fced74`); re-review action A1 (coverage regression) closed (`94db1fa4`) |
+| 73.5 | Legacy CLIENT KILL: reply type + skipme default | Low | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`1189e147`); R1 close-after-reply follow-up fixed (`9f06178c`) |
 | 73.6 | CLIENT REPLY unknown mode accepted as ON | Low | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`686c5914`) |
 | 73.7 | CLIENT SETNAME no charset validation / empty-name clear | Low | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`3dc99870`) |
 
