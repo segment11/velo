@@ -1326,6 +1326,7 @@ class BGroupTest extends Specification {
                 .withCurrentThread()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
+        def reactorMpop = eventloopCurrent
         reply = bGroup.execute('blmpop 1 1 x LEFT')
         Thread.sleep(2000)
         eventloopCurrent.run()
@@ -1334,6 +1335,23 @@ class BGroupTest extends Specification {
         (reply as AsyncReply).settablePromise.whenResult { result ->
             result == NilReply.INSTANCE
         }.result
+
+        when: 'a push completes the reply before the timeout fires, the timeout changes nothing'
+        inMemoryGetSet.remove(slot, 'x')
+        reply = bGroup.execute('blmpop 0.5 1 x LEFT')
+        def inTimeValues = new byte[1][]
+        inTimeValues[0] = 'in-time'.bytes
+        BlockingList.setReplyLPushIfBlockingListExist('x', inTimeValues)
+        Thread.sleep(1000)
+        reactorMpop.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.isComplete()
+        ((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[1] instanceof MultiBulkReply
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[1] as MultiBulkReply)
+                .replies[0] instanceof BulkReply
+        ((((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[1] as MultiBulkReply)
+                .replies[0] as BulkReply).raw == 'in-time'.bytes
 
         when: 'first key empty, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -1352,7 +1370,183 @@ class BGroupTest extends Specification {
         (mb.replies[1] as MultiBulkReply).replies.length == 1
         ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
 
+        when: 'second key holds another type, WRONGTYPE is returned'
+        def cvWrongType = Mock.prepareCompressedValueList(1)[0]
+        cvWrongType.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvWrongType.compressedData = 'notalist'.bytes
+        inMemoryGetSet.put(slot, 'b', 0, cvWrongType)
+        reply = bGroup.execute('blmpop 1 2 a b LEFT')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+        inMemoryGetSet.remove(slot, 'b')
+
+        when: 'first key holds an existing but empty list, the second key is used'
+        def cvFirstEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvFirstEmpty.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvFirstEmpty.compressedData = new RedisList().encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvFirstEmpty)
+        def cvSecondHas = Mock.prepareCompressedValueList(1)[0]
+        cvSecondHas.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlSecondHas = new RedisList()
+        rlSecondHas.addLast('from-second'.bytes)
+        cvSecondHas.compressedData = rlSecondHas.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvSecondHas)
+        reply = bGroup.execute('blmpop 1 2 a b LEFT')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies[0] instanceof BulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'b'.bytes
+
+        when: 'a middle key holds an existing but empty list, the last key is used'
+        inMemoryGetSet.remove(slot, 'a')
+        def cvMiddleEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvMiddleEmpty.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvMiddleEmpty.compressedData = new RedisList().encode()
+        inMemoryGetSet.put(slot, 'c', 0, cvMiddleEmpty)
+        def cvLastHas = Mock.prepareCompressedValueList(1)[0]
+        cvLastHas.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlLastHas = new RedisList()
+        rlLastHas.addLast('from-last'.bytes)
+        cvLastHas.compressedData = rlLastHas.encode()
+        inMemoryGetSet.put(slot, 'd', 0, cvLastHas)
+        reply = bGroup.execute('blmpop 1 3 a c d LEFT')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'd'.bytes
+        ((reply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] instanceof BulkReply
+        (((reply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'from-last'.bytes
+
+        when: 'a key payload that cannot be decoded is reported as an error reply'
+        inMemoryGetSet.remove(slot, 'c')
+        inMemoryGetSet.remove(slot, 'd')
+        def cvCorrupt = Mock.prepareCompressedValueList(1)[0]
+        cvCorrupt.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvCorrupt.compressedData = 'corrupted-list-payload'.bytes
+        inMemoryGetSet.put(slot, 'b', 0, cvCorrupt)
+        reply = bGroup.execute('blmpop 1 2 a b LEFT')
+        then:
+        reply instanceof ErrorReply
+        inMemoryGetSet.remove(slot, 'b')
+
+        when: 'a push lands between the check and the registration, the re-check completes the reply'
+        def mpopPromiseForRace = new SettablePromise<Reply>()
+        def mpopOneForRace = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(mpopPromiseForRace, null, true, System.currentTimeMillis(), null, 2)
+        BlockingList.addOne('mpoprace', mpopOneForRace)
+        def notCompletedWhenEmpty = BGroup.completeMpopIfListNotEmpty(BaseCommand.slot('mpoprace', 1), 'mpoprace'.bytes, bGroup, bGroup.dictMap, mpopOneForRace, true, 2)
+        then:
+        !notCompletedWhenEmpty
+        !mpopPromiseForRace.isComplete()
+
+        when: 'an existing but empty list does not complete the promise'
+        def cvMpopEmptyList = Mock.prepareCompressedValueList(1)[0]
+        cvMpopEmptyList.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvMpopEmptyList.compressedData = new RedisList().encode()
+        inMemoryGetSet.put(slot, 'mpopempty', 0, cvMpopEmptyList)
+        def mpopPromiseForEmpty = new SettablePromise<Reply>()
+        def mpopOneForEmpty = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(mpopPromiseForEmpty, null, true, System.currentTimeMillis(), null, 2)
+        BlockingList.addOne('mpopempty', mpopOneForEmpty)
+        def notCompletedWhenEmptyList = BGroup.completeMpopIfListNotEmpty(BaseCommand.slot('mpopempty', 1), 'mpopempty'.bytes, bGroup, bGroup.dictMap, mpopOneForEmpty, true, 2)
+        then:
+        !notCompletedWhenEmptyList
+        !mpopPromiseForEmpty.isComplete()
+        BlockingList.removeOne('mpopempty', mpopOneForEmpty)
+
+        when:
+        def cvMpopRace = Mock.prepareCompressedValueList(1)[0]
+        cvMpopRace.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlMpopRace = new RedisList()
+        rlMpopRace.addFirst('one'.bytes)
+        rlMpopRace.addLast('two'.bytes)
+        rlMpopRace.addLast('three'.bytes)
+        cvMpopRace.compressedData = rlMpopRace.encode()
+        inMemoryGetSet.put(slot, 'mpoprace', 0, cvMpopRace)
+        BlockingList.addOne('mpoprace', mpopOneForRace)
+        def completedMpop = BGroup.completeMpopIfListNotEmpty(BaseCommand.slot('mpoprace', 1), 'mpoprace'.bytes, bGroup, bGroup.dictMap, mpopOneForRace, true, 2)
+        then:
+        completedMpop
+        mpopPromiseForRace.isComplete()
+        def mpopRaceReply = mpopPromiseForRace.getResult() as MultiBulkReply
+        (mpopRaceReply.replies[0] as BulkReply).raw == 'mpoprace'.bytes
+        (mpopRaceReply.replies[1] as MultiBulkReply).replies.length == 2
+        ((mpopRaceReply.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'one'.bytes
+        ((mpopRaceReply.replies[1] as MultiBulkReply).replies[1] as BulkReply).raw == 'two'.bytes
+
+        when: 'an already completed promise is left alone'
+        def completedMpopTwice = BGroup.completeMpopIfListNotEmpty(BaseCommand.slot('mpoprace', 1), 'mpoprace'.bytes, bGroup, bGroup.dictMap, mpopOneForRace, true, 2)
+        then:
+        !completedMpopTwice
+
+        when: 'two slot workers, the second key must be checked on the worker owning it'
+        localPersist.cleanUp()
+        def workersMpop = [startWorkerThread('velo-mpop-worker-1'), startWorkerThread('velo-mpop-worker-2')]
+        def mpopLoop1 = workersMpop[0][0]
+        def mpopLoop2 = workersMpop[1][0]
+        LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
+        localPersist.initSlotRuntimeBindings([mpopLoop1, mpopLoop2] as Eventloop[], new io.velo.RequestHandler[2],
+                [workersMpop[0][1] as long, workersMpop[1][1] as long] as long[])
+        localPersist.oneSlot(0 as short)
+        localPersist.oneSlot(1 as short)
+        BlockingList.initBySlotWorkerEventloopArray([mpopLoop1, mpopLoop2] as Eventloop[])
+        BlockingList.clearBlockingListPromisesForAllKeys()
+
+        and: 'two keys hashed into two different slots'
+        def mpopGroup = new BGroup(null, null, null)
+        mpopGroup.from(BaseCommand.mockAGroup(0 as byte, 2 as byte, 2 as short))
+        def mpopKey1 = (1..500).collect { 'mpop1_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def mpopKey2 = (1..500).collect { 'mpop2_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+
+        and: 'blmpop runs on worker-1 and must not touch the slot of worker-2 directly'
+        def mpopReplies = []
+        def mpopExecuted = new java.util.concurrent.CountDownLatch(1)
+        def mpopThrown = null
+        mpopLoop1.execute({
+            try {
+                mpopReplies << mpopGroup.execute("blmpop 0 2 ${mpopKey1} ${mpopKey2} left count 2")
+            } catch (Throwable e) {
+                mpopThrown = e
+            } finally {
+                mpopExecuted.countDown()
+            }
+        })
+        mpopExecuted.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        then:
+        mpopThrown == null
+        mpopReplies[0] instanceof AsyncReply
+        !(mpopReplies[0] as AsyncReply).settablePromise.isComplete()
+
+        when: 'a push to the key owned by worker-2 wakes the blocked client up'
+        def mpopPushed = []
+        def mpopPushDone = new java.util.concurrent.CountDownLatch(1)
+        mpopLoop2.execute({
+            def values = new byte[1][]
+            values[0] = 'mpop-value'.bytes
+            mpopPushed << BlockingList.setReplyLPushIfBlockingListExist(mpopKey2, values)
+            mpopPushDone.countDown()
+        })
+        mpopPushDone.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        def mpopResultHolder = new Reply[1]
+        (mpopReplies[0] as AsyncReply).settablePromise.whenComplete({ Reply r, Exception e -> mpopResultHolder[0] = r })
+        for (int i = 0; i < 100 && mpopResultHolder[0] == null; i++) {
+            Thread.sleep(50)
+        }
+        then:
+        (mpopPushed[0] as byte[][]).length == 0
+        mpopResultHolder[0] instanceof MultiBulkReply
+        ((mpopResultHolder[0] as MultiBulkReply).replies[0] as BulkReply).raw == mpopKey2.bytes
+        ((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies.length == 1
+        ((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] instanceof BulkReply
+        (((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'mpop-value'.bytes
+
         cleanup:
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        BlockingList.initBySlotWorkerEventloopArray([Eventloop.builder().withCurrentThread().build()] as Eventloop[])
+        workersMpop?.each { w ->
+            try {
+                w[0].breakEventloop()
+                w[2].join(3000)
+            } catch (Throwable ignored) {
+            }
+        }
         localPersist.cleanUp()
     }
 }

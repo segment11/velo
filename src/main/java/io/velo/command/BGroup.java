@@ -11,7 +11,9 @@ import io.velo.CompressedValue;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.DictMap;
+import io.velo.TypeMismatchException;
 import io.velo.type.RedisBF;
+import io.velo.type.RedisList;
 import io.velo.type.RedisBitSet;
 
 import java.nio.ByteBuffer;
@@ -1281,59 +1283,175 @@ public class BGroup extends BaseCommand {
             keys.add(Wal.keyString(data[3 + i]));
         }
 
-        // try immediate pop from first non-empty list
-        for (int i = 0; i < numKeys; i++) {
-            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
-            var cv = getCv(slotWithKeyHash);
-            if (cv == null) {
-                continue;
-            }
-            if (!cv.isList()) {
+        // the first key is owned by the worker running this command, check it inline
+        var firstSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var firstCv = getCv(firstSlotWithKeyHash);
+        if (firstCv != null) {
+            if (!firstCv.isList()) {
                 return ErrorReply.WRONG_TYPE;
             }
-            var rl = LGroup.getRedisList(slotWithKeyHash, this);
-            if (rl == null || rl.size() == 0) {
-                continue;
+            var firstRl = LGroup.getRedisList(firstSlotWithKeyHash, this);
+            if (firstRl != null && firstRl.size() > 0) {
+                return popMpopReply(firstSlotWithKeyHash, data[3], firstRl, isLeft, count);
             }
-
-            var keyBytes = data[3 + i];
-
-            int min = Math.min(count, rl.size());
-            var valueReplies = new Reply[min];
-            for (int j = 0; j < min; j++) {
-                valueReplies[j] = new BulkReply(isLeft ? rl.removeFirst() : rl.removeLast());
-            }
-            LGroup.saveRedisList(rl, slotWithKeyHash, this, dictMap);
-
-            var keyReply = new BulkReply(keyBytes);
-            var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
-            return new MultiBulkReply(arr);
         }
 
         // all lists empty or missing — block
-        boolean isBlockIndefinitely = timeoutSeconds == 0.0;
+        final boolean isBlockIndefinitely = timeoutSeconds == 0.0;
+        final int popCount = count;
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null, count);
-        for (var key : keys) {
-            BlockingList.addOne(key, one);
-        }
+        // the remaining keys are checked on the worker owning them, without blocking this one
+        popOtherKeyMpopAsync(1, keys, isLeft, popCount).whenComplete((r, e) -> {
+            if (e != null) {
+                finalPromise.setException(e);
+                return;
+            }
 
-        if (!isBlockIndefinitely) {
-            long timeoutMillis = (long) (timeoutSeconds * 1000);
-            var reactor = Reactor.getCurrentReactor();
-            reactor.delay(timeoutMillis, () -> {
-                if (!finalPromise.isComplete()) {
-                    finalPromise.set(NilReply.INSTANCE);
-                    for (var key : keys) {
-                        BlockingList.removeOne(key, one);
+            if (r != null) {
+                finalPromise.set(r);
+                return;
+            }
+
+            var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null, popCount);
+            var waiter = one;
+            // register the waiter on every key owning worker, so a push to any of them can wake it up
+            addBlockingWaiter(keys, waiter);
+            // close the check then register window, a push may land between both steps
+            recheckBlockingListMpop(keys, waiter, isLeft, popCount);
+
+            if (!isBlockIndefinitely) {
+                long timeoutMillis = (long) (timeoutSeconds * 1000);
+                var reactor = Reactor.getCurrentReactor();
+                reactor.delay(timeoutMillis, () -> {
+                    if (!finalPromise.isComplete()) {
+                        finalPromise.set(NilReply.INSTANCE);
+                        removeBlockingWaiter(keys, one);
                     }
-                }
-            });
+                });
+            }
+        });
+
+        if (finalPromise.isComplete()) {
+            var exception = finalPromise.getException();
+            if (exception != null) {
+                return exception instanceof TypeMismatchException ? ErrorReply.WRONG_TYPE :
+                        new ErrorReply(exception.getMessage());
+            }
+            // all the keys are owned by this worker, the reply is already known
+            return finalPromise.getResult();
         }
 
         return asyncReply;
+    }
+
+    /**
+     * Pop up to {@code count} values from the first non-empty key, starting at {@code fromIndex}.
+     * Every key is read and written on the worker owning it, chained without blocking the current worker.
+     *
+     * @param fromIndex index of the first key to check
+     * @param keys      all blocking keys
+     * @param isLeft    take from the head when true, from the tail otherwise
+     * @param count     maximum number of values to pop
+     * @return promise of the reply, null when all the checked keys are empty
+     */
+    private Promise<Reply> popOtherKeyMpopAsync(int fromIndex, ArrayList<String> keys, boolean isLeft, int count) {
+        if (fromIndex >= keys.size()) {
+            return Promise.of(null);
+        }
+
+        var keyBytes = Wal.keyBytes(keys.get(fromIndex));
+        var slotWithKeyHash = slotWithKeyHashListParsed.get(fromIndex);
+        return localPersist.oneSlot(slotWithKeyHash.slot()).asyncCall(() -> {
+            var rl = LGroup.getRedisList(slotWithKeyHash, this);
+            if (rl == null || rl.size() == 0) {
+                return (Reply) null;
+            }
+
+            return popMpopReply(slotWithKeyHash, keyBytes, rl, isLeft, count);
+        }).then(reply -> reply != null ? Promise.of(reply) : popOtherKeyMpopAsync(fromIndex + 1, keys, isLeft, count));
+    }
+
+    /**
+     * Pop up to {@code count} values from a list and build the BLMPOP reply.
+     *
+     * @param slotWithKeyHash slot and key hash of the popped key
+     * @param keyBytes        the popped key
+     * @param rl              the list to pop from
+     * @param isLeft          take from the head when true, from the tail otherwise
+     * @param count           maximum number of values to pop
+     * @return the BLMPOP reply
+     */
+    private Reply popMpopReply(BaseCommand.SlotWithKeyHash slotWithKeyHash, byte[] keyBytes, RedisList rl,
+                               boolean isLeft, int count) {
+        return popMpopReply(this, dictMap, slotWithKeyHash, keyBytes, rl, isLeft, count);
+    }
+
+    private static Reply popMpopReply(BaseCommand baseCommand, DictMap dictMap,
+                                      BaseCommand.SlotWithKeyHash slotWithKeyHash, byte[] keyBytes, RedisList rl,
+                                      boolean isLeft, int count) {
+        int min = Math.min(count, rl.size());
+        var valueReplies = new Reply[min];
+        for (int j = 0; j < min; j++) {
+            valueReplies[j] = new BulkReply(isLeft ? rl.removeFirst() : rl.removeLast());
+        }
+        LGroup.saveRedisList(rl, slotWithKeyHash, baseCommand, dictMap);
+
+        var arr = new Reply[]{new BulkReply(keyBytes), new MultiBulkReply(valueReplies)};
+        return new MultiBulkReply(arr);
+    }
+
+    /**
+     * Complete the BLMPOP reply when a push landed between the emptiness check and the waiter
+     * registration, the list is re-read on its owning worker.
+     *
+     * @param keys  the blocking keys
+     * @param one   the promise wrapper
+     * @param isLeft take from the head when true, from the tail otherwise
+     * @param count maximum number of values to pop
+     */
+    private void recheckBlockingListMpop(ArrayList<String> keys, BlockingList.PromiseWithLeftOrRightAndCreatedTime one,
+                                         boolean isLeft, int count) {
+        for (int i = 0; i < keys.size(); i++) {
+            var keyBytes = Wal.keyBytes(keys.get(i));
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            localPersist.oneSlot(slotWithKeyHash.slot()).asyncExecute(() -> {
+                completeMpopIfListNotEmpty(slotWithKeyHash, keyBytes, this, dictMap, one, isLeft, count);
+            });
+        }
+    }
+
+    /**
+     * Complete a pending BLMPOP reply when the list is not empty, used to close the window between
+     * the emptiness check and the waiter registration.
+     *
+     * @param slotWithKeyHash slot and key hash of the blocking key
+     * @param keyBytes        the blocking key
+     * @param baseCommand     the command owning the storage access
+     * @param dictMap         dictionary map used when the list is saved back
+     * @param one             the promise wrapper
+     * @param isLeft          take from the head when true, from the tail otherwise
+     * @param count           maximum number of values to pop
+     * @return true when the promise was completed
+     */
+    @VisibleForTesting
+    static boolean completeMpopIfListNotEmpty(BaseCommand.SlotWithKeyHash slotWithKeyHash, byte[] keyBytes,
+                                              BaseCommand baseCommand, DictMap dictMap,
+                                              BlockingList.PromiseWithLeftOrRightAndCreatedTime one,
+                                              boolean isLeft, int count) {
+        if (one.settablePromise().isComplete()) {
+            return false;
+        }
+
+        var rl = LGroup.getRedisList(slotWithKeyHash, baseCommand);
+        if (rl == null || rl.size() == 0) {
+            return false;
+        }
+
+        BlockingList.removeOne(Wal.keyString(keyBytes), one);
+        one.settablePromise().set(popMpopReply(baseCommand, dictMap, slotWithKeyHash, keyBytes, rl, isLeft, count));
+        return true;
     }
 }
