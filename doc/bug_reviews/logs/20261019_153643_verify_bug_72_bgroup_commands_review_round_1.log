@@ -1,0 +1,298 @@
+> Task :segment_common:compileJava NO-SOURCE
+> Task :segment_common:compileGroovy UP-TO-DATE
+> Task :segment_common:processResources UP-TO-DATE
+> Task :segment_common:classes UP-TO-DATE
+> Task :segment_common:jar UP-TO-DATE
+> Task :segmentweb:compileJava NO-SOURCE
+> Task :segmentweb:compileGroovy UP-TO-DATE
+> Task :segmentweb:processResources NO-SOURCE
+> Task :segmentweb:classes UP-TO-DATE
+> Task :segmentweb:jar UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :compileGroovy UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :compileTestGroovy
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+
+> Task :test
+
+Bug72ReviewTempSpec > verify 72.1 bitop and bitfield reply STANDARD_OUT
+    SnowFlake config:
+    START_STAMP=1701354128058
+    SEQUENCE_BIT=12
+    MACHINE_BIT=5
+    DATACENTER_BIT=5
+    MAX_DATACENTER_NUM=31
+    MAX_MACHINE_NUM=31
+    MAX_SEQUENCE=4095
+    MACHINE_LEFT=12
+    DATACENTER_LEFT=17
+    TIMESTAMP_LEFT=22
+    72.1 bitop reply = NilReply : io.velo.reply.NilReply@2c731a16
+    72.1 bitfield reply = NilReply
+    72.1 bitfield_ro reply = io.velo.reply.NilReply@2c731a16
+    72.1 registered arity bitfield_ro = null
+
+Bug72ReviewTempSpec > verify 72.2 bf loadchunk trusts client length prefix STANDARD_OUT
+    72.2 declared length=100000000 (95.367431640625MB)
+    72.2 thrown=com.github.luben.zstd.ZstdException: Unknown frame descriptor
+    72.2 reply=null
+    72.2 heap delta during call = 98MB, heap max=8192MB
+    72.2 negative length thrown=java.lang.NegativeArraySizeException: -1, reply=null
+    72.2 zero length thrown=com.github.luben.zstd.ZstdException: Src size is incorrect, reply=null
+
+Bug72ReviewTempSpec > verify 72.6 detail STANDARD_OUT
+    72.6 bitcount a 0 0 bit -> 0 (redis 1)
+    72.6 bitcount a 1 1 bit -> 0 (redis 0)
+    72.6 bitcount a 7 7 bit -> 1 (redis 1)
+    72.6 bitpos a 1 0 7 bit -> 0 (redis 0, MSB-first)
+    72.6 bitcount a (byte mode) -> 1 (redis 1)
+
+Bug72ReviewTempSpec > verify 72.7 bitpos missing key STANDARD_OUT
+    72.7 bitpos missing 0 -> -1 (redis 0)
+    72.7 bitpos missing 1 -> -1 (redis -1)
+
+Bug72ReviewTempSpec > verify 72.8 bitpos all ones STANDARD_OUT
+    72.8 bitpos a 0        -> -1 (redis 24)
+    72.8 bitpos a 0 0      -> -1 (redis 24)
+    72.8 bitpos a 0 0 2    -> -1 (redis -1)
+    72.8 bitpos a 0 0 5 bit-> -1 (redis -1)
+
+Bug72ReviewTempSpec > verify 72.9 bf reserve capacity zero STANDARD_OUT
+    72.9 bf.reserve a 0.01 0 -> thrown=null: null reply=io.velo.reply.OKReply@533e8807
+    72.9 bf.reserve b 0.01 -5 -> thrown=java.lang.IllegalArgumentException: Expected insertions (-5) must be >= 0 reply=null
+    72.9 bf.insert c capacity 0 items item0 -> thrown=null: null reply=io.velo.reply.MultiBulkReply@322eb1a
+    72.9 bf.insert d capacity -1 items item0 -> thrown=java.lang.IllegalArgumentException: Expected insertions (-1) must be >= 0 reply=null
+
+Bug72ReviewTempSpec > verify 72.10 registry arity STANDARD_OUT
+    72.10 bf.loadchunk arity=3
+    72.10 bf.reserve arity=-3
+    72.10 bf.insert arity=-2
+    72.10 bitop arity=-4
+    72.10 bitfield arity=-2
+    72.10 bitcount arity=-2
+    72.10 bitpos arity=-3
+    72.10 bf.scandump arity=3
+
+Bug72ReviewTempSpec > verify 72.5 blmpop cross slot thread STANDARD_OUT
+    15:37:03.978 [Test worker] [1;33mWARN [m [io.velo.repl.cluster.MultiShard] - Repl clusterx meta loaded, shards size=1
+    15:37:03.989 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU max size for big string=1000, maybe one big string bytes length is 4096B, memory require=3MB, slot=0
+    15:37:03.990 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU prepare, type=big_string, MB=3, slot=0
+    15:37:04.017 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Init dyn config, data={binlogOn=false, masterUuid=381842694814699520}, slot=0
+    15:37:04.026 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=binlogOn, value=false, slot=0
+    15:37:04.026 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Binlog on=false
+    15:37:04.026 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - One slot wal group number=2048, slot=0
+    15:37:04.026 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, MB=0, slot=0
+    15:37:04.026 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, short value, MB=0, slot=0
+    15:37:04.027 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - Static memory init, type=wal_cache_init, MB=0, slot=0
+    15:37:04.027 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU max size for each wal group=48, all wal group number=2048, maybe one compressed value encoded length is 200B, memory require=19MB, slot=0
+    15:37:04.027 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_read_group_by_wal_group, MB=19, slot=0
+    15:37:04.039 [Test worker] [1;33mWARN [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Read meta chunk segment flag seq file success, file=/tmp/velo-data/test-persist/slot-0/meta_chunk_segment_flag_seq.dat, slot=0, all capacity=3328KB
+    15:37:04.056 [Test worker] [1;32mINFO [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Static memory init, type=meta_chunk_segment_flag_seq, MB=3, slot=0
+    15:37:04.057 [Test worker] [1;33mWARN [m [io.velo.persist.MetaChunkSegmentIndex] - Read meta chunk segment index file success, file=/tmp/velo-data/test-persist/slot-0/meta_chunk_segment_index.dat, slot=0, segment index=0, master binlog file index=0, master binlog offset=0
+    15:37:04.060 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - Meta key bucket initial split number=1
+    15:37:04.061 [Test worker] [1;33mWARN [m [io.velo.persist.MetaKeyBucketSplitNumber] - Read meta key bucket split number file success, file=/tmp/velo-data/test-persist/slot-0/meta_key_bucket_split_number.dat, slot=0, all capacity=64KB
+    15:37:04.061 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - For debug: first 10 key bucket split number: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ]
+    15:37:04.062 [Test worker] [1;33mWARN [m [io.velo.persist.StatKeyCountInBuckets] - Read stat key count in buckets file success, file=/tmp/velo-data/test-persist/slot-0/stat_key_count_in_buckets.dat, slot=0, all capacity=128KB
+    15:37:04.065 [Test worker] [1;32mINFO [m [io.velo.persist.StatKeyCountInBuckets] - Key count in buckets=0, slot=0
+    15:37:04.069 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=key_bucket_split_0_slot_0, file length=0MB
+    15:37:04.069 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Key bucket lru max size for one key bucket fd=0, one inner length=4096， compress ratio maybe=0.25, memory require=0.0MB, name=key_bucket_split_0_slot_0
+    15:37:04.069 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_key_bucket, MB=0.0, fd=key_bucket_split_0_slot_0, key buckets
+    15:37:04.072 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=key_bucket_split_0_slot_0
+    15:37:04.072 [Test worker] [1;32mINFO [m [io.velo.persist.KeyLoader] - Persist key bucket files fd opened, split number=1, slot=0
+    15:37:04.072 [Test worker] [1;32mINFO [m [io.velo.persist.Chunk] - Chunk init slot=0, segment number per fd=262144, fd per chunk=1, max segment index=262143, half segment number=131072
+    15:37:04.074 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=chunk_data_index_0_slot_0, file length=0MB
+    15:37:04.075 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Chunk lru max size for one chunk fd=0, one inner length=4096, memory require=0MB, name=chunk_data_index_0_slot_0
+    15:37:04.075 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_chunk_data, MB=0, fd=chunk_data_index_0_slot_0, chunk
+    15:37:04.075 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=chunk_data_index_0_slot_0
+    15:37:04.075 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU max size for big string=1000, maybe one big string bytes length is 4096B, memory require=3MB, slot=1
+    15:37:04.075 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU prepare, type=big_string, MB=3, slot=1
+    15:37:04.076 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Init dyn config, data={binlogOn=false, masterUuid=381842695074877440}, slot=1
+    15:37:04.076 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=binlogOn, value=false, slot=1
+    15:37:04.076 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Binlog on=false
+    15:37:04.076 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - One slot wal group number=2048, slot=1
+    15:37:04.076 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, MB=0, slot=1
+    15:37:04.076 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, short value, MB=0, slot=1
+    15:37:04.077 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - Static memory init, type=wal_cache_init, MB=0, slot=1
+    15:37:04.077 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU max size for each wal group=48, all wal group number=2048, maybe one compressed value encoded length is 200B, memory require=19MB, slot=1
+    15:37:04.077 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_read_group_by_wal_group, MB=19, slot=1
+    15:37:04.080 [Test worker] [1;33mWARN [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Read meta chunk segment flag seq file success, file=/tmp/velo-data/test-persist/slot-1/meta_chunk_segment_flag_seq.dat, slot=1, all capacity=3328KB
+    15:37:04.081 [Test worker] [1;32mINFO [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Static memory init, type=meta_chunk_segment_flag_seq, MB=3, slot=1
+    15:37:04.082 [Test worker] [1;33mWARN [m [io.velo.persist.MetaChunkSegmentIndex] - Read meta chunk segment index file success, file=/tmp/velo-data/test-persist/slot-1/meta_chunk_segment_index.dat, slot=1, segment index=0, master binlog file index=0, master binlog offset=0
+    15:37:04.082 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - Meta key bucket initial split number=1
+    15:37:04.082 [Test worker] [1;33mWARN [m [io.velo.persist.MetaKeyBucketSplitNumber] - Read meta key bucket split number file success, file=/tmp/velo-data/test-persist/slot-1/meta_key_bucket_split_number.dat, slot=1, all capacity=64KB
+    15:37:04.082 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - For debug: first 10 key bucket split number: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ]
+    15:37:04.082 [Test worker] [1;33mWARN [m [io.velo.persist.StatKeyCountInBuckets] - Read stat key count in buckets file success, file=/tmp/velo-data/test-persist/slot-1/stat_key_count_in_buckets.dat, slot=1, all capacity=128KB
+    15:37:04.082 [Test worker] [1;32mINFO [m [io.velo.persist.StatKeyCountInBuckets] - Key count in buckets=0, slot=1
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=key_bucket_split_0_slot_1, file length=0MB
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Key bucket lru max size for one key bucket fd=0, one inner length=4096， compress ratio maybe=0.25, memory require=0.0MB, name=key_bucket_split_0_slot_1
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_key_bucket, MB=0.0, fd=key_bucket_split_0_slot_1, key buckets
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=key_bucket_split_0_slot_1
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.KeyLoader] - Persist key bucket files fd opened, split number=1, slot=1
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.Chunk] - Chunk init slot=1, segment number per fd=262144, fd per chunk=1, max segment index=262143, half segment number=131072
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=chunk_data_index_0_slot_1, file length=0MB
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Chunk lru max size for one chunk fd=0, one inner length=4096, memory require=0MB, name=chunk_data_index_0_slot_1
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_chunk_data, MB=0, fd=chunk_data_index_0_slot_1, chunk
+    15:37:04.083 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=chunk_data_index_0_slot_1
+    15:37:04.084 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Init global metrics collect, slot=0
+    15:37:04.087 [Test worker] [1;33mWARN [m [io.velo.persist.LocalPersist] - Fix slot thread id, s=0, tid=1
+    15:37:04.088 [Test worker] [1;33mWARN [m [io.velo.persist.LocalPersist] - Fix slot thread id, s=1, tid=100001
+    72.5 keyA=kA1 -> slot 0, keyB=kB1 -> slot 1
+    72.5 blmpop thrown=java.lang.IllegalStateException: Thread id not match, thread id=1, thread id protected for safe=100001
+    72.5 blmpop reply=null
+    Close wal raf success, slot=0
+    Close wal short value raf success, slot=0
+    Meta chunk segment flag seq file closed.
+    Meta chunk segment index file closed
+    Clean up fd read, name=chunk_data_index_0_slot_0, one inner address=139321217138688
+    Clean up fd write, name=chunk_data_index_0_slot_0, write segment batch address=139321214009344
+    Clean up fd read, name=chunk_data_index_0_slot_0, for repl address=139320484921344
+    Clean up fd read, name=chunk_data_index_0_slot_0, read for merge batch address=139321088290816
+    Closed raf, name=chunk_data_index_0_slot_0
+    Clean up fd read, name=key_bucket_split_0_slot_0, one inner address=139321217142784
+    Clean up fd read, name=key_bucket_split_0_slot_0, for one wal group address=139321088421888
+    Closed raf, name=key_bucket_split_0_slot_0
+    Meta key bucket split number file closed
+    Stat key count in buckets file closed
+    Repl close binlog current raf success, slot=0
+    Close wal raf success, slot=1
+    Close wal short value raf success, slot=1
+    Meta chunk segment flag seq file closed.
+    Meta chunk segment index file closed
+    Clean up fd read, name=chunk_data_index_0_slot_1, one inner address=139321216675840
+    Clean up fd write, name=chunk_data_index_0_slot_1, write segment batch address=139321155874816
+    Clean up fd read, name=chunk_data_index_0_slot_1, for repl address=139319056261120
+    Clean up fd read, name=chunk_data_index_0_slot_1, read for merge batch address=139319056130048
+    Closed raf, name=chunk_data_index_0_slot_1
+    Clean up fd read, name=key_bucket_split_0_slot_1, one inner address=139321217134592
+    Clean up fd read, name=key_bucket_split_0_slot_1, for one wal group address=139320484790272
+    Closed raf, name=key_bucket_split_0_slot_1
+    Meta key bucket split number file closed
+    Stat key count in buckets file closed
+    Repl close binlog current raf success, slot=1
+
+Bug72ReviewTempSpec > verify 72.3 blocking waiters are per worker thread STANDARD_OUT
+    72.3 worker-1 tid=53 (current test tid=1), worker-2 tid=54
+    15:37:04.135 [Test worker] [1;32mINFO [m [io.velo.command.BlockingList] - Blocking list init by slot worker eventloop array
+    72.3 blockingClientCount after register = 1
+    72.3 cross-worker push: executed=true, returned=[null] (null = no waiter found)
+    72.3 cross-worker push: blocking promise complete = true
+    72.3 same-worker push returned [[]] (empty array = value delivered to waiter)
+    15:37:04.478 [Thread-4] [1;32mINFO [m [io.activej.eventloop.Eventloop] - Eventloop{loop=20} finished
+    15:37:04.479 [Thread-5] [1;32mINFO [m [io.activej.eventloop.Eventloop] - Eventloop{loop=19} finished
+
+Bug72ReviewTempSpec > verify 72.4 cross worker asyncCall plus getResult deadlocks both workers STANDARD_OUT
+    15:37:04.497 [Test worker] [1;33mWARN [m [io.velo.repl.cluster.MultiShard] - Repl clusterx meta loaded, shards size=1
+    15:37:04.497 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU max size for big string=1000, maybe one big string bytes length is 4096B, memory require=3MB, slot=0
+    15:37:04.497 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU prepare, type=big_string, MB=3, slot=0
+    15:37:04.498 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Init dyn config, data={binlogOn=false, masterUuid=381842694814699520}, slot=0
+    15:37:04.500 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=binlogOn, value=false, slot=0
+    15:37:04.500 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Binlog on=false
+    15:37:04.500 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - One slot wal group number=2048, slot=0
+    15:37:04.500 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, MB=0, slot=0
+    15:37:04.501 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, short value, MB=0, slot=0
+    15:37:04.502 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - Static memory init, type=wal_cache_init, MB=0, slot=0
+    15:37:04.502 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU max size for each wal group=48, all wal group number=2048, maybe one compressed value encoded length is 200B, memory require=19MB, slot=0
+    15:37:04.502 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_read_group_by_wal_group, MB=19, slot=0
+    15:37:04.509 [Test worker] [1;33mWARN [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Read meta chunk segment flag seq file success, file=/tmp/velo-data/test-persist/slot-0/meta_chunk_segment_flag_seq.dat, slot=0, all capacity=3328KB
+    15:37:04.513 [Test worker] [1;32mINFO [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Static memory init, type=meta_chunk_segment_flag_seq, MB=3, slot=0
+    15:37:04.514 [Test worker] [1;33mWARN [m [io.velo.persist.MetaChunkSegmentIndex] - Read meta chunk segment index file success, file=/tmp/velo-data/test-persist/slot-0/meta_chunk_segment_index.dat, slot=0, segment index=0, master binlog file index=0, master binlog offset=0
+    15:37:04.514 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - Meta key bucket initial split number=1
+    15:37:04.514 [Test worker] [1;33mWARN [m [io.velo.persist.MetaKeyBucketSplitNumber] - Read meta key bucket split number file success, file=/tmp/velo-data/test-persist/slot-0/meta_key_bucket_split_number.dat, slot=0, all capacity=64KB
+    15:37:04.514 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - For debug: first 10 key bucket split number: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ]
+    15:37:04.514 [Test worker] [1;33mWARN [m [io.velo.persist.StatKeyCountInBuckets] - Read stat key count in buckets file success, file=/tmp/velo-data/test-persist/slot-0/stat_key_count_in_buckets.dat, slot=0, all capacity=128KB
+    15:37:04.514 [Test worker] [1;32mINFO [m [io.velo.persist.StatKeyCountInBuckets] - Key count in buckets=0, slot=0
+    15:37:04.515 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=key_bucket_split_0_slot_0, file length=0MB
+    15:37:04.515 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Key bucket lru max size for one key bucket fd=0, one inner length=4096， compress ratio maybe=0.25, memory require=0.0MB, name=key_bucket_split_0_slot_0
+    15:37:04.515 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_key_bucket, MB=0.0, fd=key_bucket_split_0_slot_0, key buckets
+    15:37:04.515 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=key_bucket_split_0_slot_0
+    15:37:04.516 [Test worker] [1;32mINFO [m [io.velo.persist.KeyLoader] - Persist key bucket files fd opened, split number=1, slot=0
+    15:37:04.516 [Test worker] [1;32mINFO [m [io.velo.persist.Chunk] - Chunk init slot=0, segment number per fd=262144, fd per chunk=1, max segment index=262143, half segment number=131072
+    15:37:04.516 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=chunk_data_index_0_slot_0, file length=0MB
+    15:37:04.516 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Chunk lru max size for one chunk fd=0, one inner length=4096, memory require=0MB, name=chunk_data_index_0_slot_0
+    15:37:04.517 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_chunk_data, MB=0, fd=chunk_data_index_0_slot_0, chunk
+    15:37:04.517 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=chunk_data_index_0_slot_0
+    15:37:04.518 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU max size for big string=1000, maybe one big string bytes length is 4096B, memory require=3MB, slot=1
+    15:37:04.518 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU prepare, type=big_string, MB=3, slot=1
+    15:37:04.520 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Init dyn config, data={binlogOn=false, masterUuid=381842695074877440}, slot=1
+    15:37:04.522 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=binlogOn, value=false, slot=1
+    15:37:04.522 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Binlog on=false
+    15:37:04.522 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - One slot wal group number=2048, slot=1
+    15:37:04.523 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, MB=0, slot=1
+    15:37:04.523 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, short value, MB=0, slot=1
+    15:37:04.524 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - Static memory init, type=wal_cache_init, MB=0, slot=1
+    15:37:04.524 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU max size for each wal group=48, all wal group number=2048, maybe one compressed value encoded length is 200B, memory require=19MB, slot=1
+    15:37:04.525 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_read_group_by_wal_group, MB=19, slot=1
+    15:37:04.536 [Test worker] [1;33mWARN [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Read meta chunk segment flag seq file success, file=/tmp/velo-data/test-persist/slot-1/meta_chunk_segment_flag_seq.dat, slot=1, all capacity=3328KB
+    15:37:04.540 [Test worker] [1;32mINFO [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Static memory init, type=meta_chunk_segment_flag_seq, MB=3, slot=1
+    15:37:04.540 [Test worker] [1;33mWARN [m [io.velo.persist.MetaChunkSegmentIndex] - Read meta chunk segment index file success, file=/tmp/velo-data/test-persist/slot-1/meta_chunk_segment_index.dat, slot=1, segment index=0, master binlog file index=0, master binlog offset=0
+    15:37:04.541 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - Meta key bucket initial split number=1
+    15:37:04.541 [Test worker] [1;33mWARN [m [io.velo.persist.MetaKeyBucketSplitNumber] - Read meta key bucket split number file success, file=/tmp/velo-data/test-persist/slot-1/meta_key_bucket_split_number.dat, slot=1, all capacity=64KB
+    15:37:04.542 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - For debug: first 10 key bucket split number: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ]
+    15:37:04.542 [Test worker] [1;33mWARN [m [io.velo.persist.StatKeyCountInBuckets] - Read stat key count in buckets file success, file=/tmp/velo-data/test-persist/slot-1/stat_key_count_in_buckets.dat, slot=1, all capacity=128KB
+    15:37:04.543 [Test worker] [1;32mINFO [m [io.velo.persist.StatKeyCountInBuckets] - Key count in buckets=0, slot=1
+    15:37:04.543 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=key_bucket_split_0_slot_1, file length=0MB
+    15:37:04.543 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Key bucket lru max size for one key bucket fd=0, one inner length=4096， compress ratio maybe=0.25, memory require=0.0MB, name=key_bucket_split_0_slot_1
+    15:37:04.544 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_key_bucket, MB=0.0, fd=key_bucket_split_0_slot_1, key buckets
+    15:37:04.544 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=key_bucket_split_0_slot_1
+    15:37:04.544 [Test worker] [1;32mINFO [m [io.velo.persist.KeyLoader] - Persist key bucket files fd opened, split number=1, slot=1
+    15:37:04.544 [Test worker] [1;32mINFO [m [io.velo.persist.Chunk] - Chunk init slot=1, segment number per fd=262144, fd per chunk=1, max segment index=262143, half segment number=131072
+    15:37:04.545 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=chunk_data_index_0_slot_1, file length=0MB
+    15:37:04.545 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Chunk lru max size for one chunk fd=0, one inner length=4096, memory require=0MB, name=chunk_data_index_0_slot_1
+    15:37:04.545 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_chunk_data, MB=0, fd=chunk_data_index_0_slot_1, chunk
+    15:37:04.546 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=chunk_data_index_0_slot_1
+    15:37:04.546 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Init global metrics collect, slot=0
+    72.4 slot0 thread=55 slot1 thread=56 (worker1 tid=55, worker2 tid=56)
+    72.4 control worker1 getResult() returned null immediately (remote value was 'checked-by-worker2')
+    72.4 control (one direction) completed = true
+    72.4 mutual cross-worker blpop completed within 5s = true (deadlock would be false)
+    72.4 worker-1 state=RUNNABLE, worker-2 state=RUNNABLE
+    72.4 worker-1 blocked at = null
+    15:37:04.578 [Thread-6] [1;32mINFO [m [io.activej.eventloop.Eventloop] - Eventloop{loop=10} finished
+    15:37:04.578 [Thread-7] [1;32mINFO [m [io.activej.eventloop.Eventloop] - Eventloop{loop=8} finished
+    Close wal raf success, slot=0
+    Close wal short value raf success, slot=0
+    Meta chunk segment flag seq file closed.
+    Meta chunk segment index file closed
+    Clean up fd read, name=chunk_data_index_0_slot_0, one inner address=139321217138688
+    Clean up fd write, name=chunk_data_index_0_slot_0, write segment batch address=139321214009344
+    Clean up fd read, name=chunk_data_index_0_slot_0, for repl address=139320484921344
+    Clean up fd read, name=chunk_data_index_0_slot_0, read for merge batch address=139321088290816
+    Closed raf, name=chunk_data_index_0_slot_0
+    Clean up fd read, name=key_bucket_split_0_slot_0, one inner address=139321217142784
+    Clean up fd read, name=key_bucket_split_0_slot_0, for one wal group address=139321088421888
+    Closed raf, name=key_bucket_split_0_slot_0
+    Meta key bucket split number file closed
+    Stat key count in buckets file closed
+    Repl close binlog current raf success, slot=0
+    Close wal raf success, slot=1
+    Close wal short value raf success, slot=1
+    Meta chunk segment flag seq file closed.
+    Meta chunk segment index file closed
+    Clean up fd read, name=chunk_data_index_0_slot_1, one inner address=139321216675840
+    Clean up fd write, name=chunk_data_index_0_slot_1, write segment batch address=139321155874816
+    Clean up fd read, name=chunk_data_index_0_slot_1, for repl address=139319056261120
+    Clean up fd read, name=chunk_data_index_0_slot_1, read for merge batch address=139319056130048
+    Closed raf, name=chunk_data_index_0_slot_1
+    Clean up fd read, name=key_bucket_split_0_slot_1, one inner address=139321217134592
+    Clean up fd read, name=key_bucket_split_0_slot_1, for one wal group address=139320484790272
+    Closed raf, name=key_bucket_split_0_slot_1
+    Meta key bucket split number file closed
+    Stat key count in buckets file closed
+    Repl close binlog current raf success, slot=1
+
+> Task :jacocoTestReport
+
+[Incubating] Problems report is available at: file:///home/kerry/ws/velo/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 11s
+13 actionable tasks: 3 executed, 10 up-to-date
