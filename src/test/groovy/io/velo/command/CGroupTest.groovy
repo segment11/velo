@@ -486,12 +486,12 @@ class CGroupTest extends Specification {
         inspector.socketMap.containsValue(socket)
 
         when: 'the reply write fires the inspector hook, the issuing socket is closed'
-        def skipMeWriteLatch = new java.util.concurrent.CountDownLatch(1)
+        def skipMeWriteLatch = new CountDownLatch(1)
         fixtureEventloop.execute {
-            inspector.onWrite(socket, io.activej.bytebuf.ByteBuf.empty(), 1)
+            inspector.onWrite(socket, ByteBuf.empty(), 1)
             skipMeWriteLatch.countDown()
         }
-        skipMeWriteLatch.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        skipMeWriteLatch.await(2, TimeUnit.SECONDS)
         def skipMeDeadline = System.currentTimeMillis() + 2000
         while (inspector.socketMap.containsValue(socket) && System.currentTimeMillis() < skipMeDeadline) {
             Thread.sleep(20)
@@ -663,12 +663,12 @@ class CGroupTest extends Specification {
      * returns when registration is done.
      */
     private static void registerSocketOnInspector(SocketInspector inspector, Eventloop eventloop, ITcpSocket socket) {
-        def latch = new java.util.concurrent.CountDownLatch(1)
+        def latch = new CountDownLatch(1)
         eventloop.execute {
             inspector.onConnect(socket)
             latch.countDown()
         }
-        latch.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        latch.await(2, TimeUnit.SECONDS)
     }
 
     /**
@@ -680,12 +680,12 @@ class CGroupTest extends Specification {
         if (socket == null || !inspector.socketMap.containsValue(socket)) {
             return
         }
-        def latch = new java.util.concurrent.CountDownLatch(1)
+        def latch = new CountDownLatch(1)
         eventloop.execute {
             inspector.onDisconnect(socket)
             latch.countDown()
         }
-        latch.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        latch.await(2, TimeUnit.SECONDS)
     }
 
     /**
