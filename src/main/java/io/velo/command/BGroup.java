@@ -13,7 +13,6 @@ import io.velo.type.RedisBitSet;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -392,17 +391,17 @@ public class BGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
-        var bitset = BitSet.valueOf(valueBytes);
+        var bs = new RedisBitSet(valueBytes);
         int count = 0;
         if (isIndexUseBit) {
             for (int i = startEndWith.start(); i <= startEndWith.end(); i++) {
-                if (bitset.get(i)) {
+                if (bs.get(i)) {
                     count++;
                 }
             }
         } else {
             for (int i = startEndWith.start() * 8; i <= (startEndWith.end() + 1) * 8 - 1; i++) {
-                if (bitset.get(i)) {
+                if (bs.get(i)) {
                     count++;
                 }
             }

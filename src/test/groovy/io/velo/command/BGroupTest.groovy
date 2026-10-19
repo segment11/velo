@@ -190,6 +190,41 @@ class BGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 17
 
+        when: 'BIT indexes the most significant bit of the first byte as position 0'
+        def cvAsymmetric = Mock.prepareCompressedValueList(1)[0]
+        cvAsymmetric.compressedData = [(byte) 0x80] as byte[]
+        inMemoryGetSet.put(slot, 'bitkey', 0, cvAsymmetric)
+        reply = bGroup.execute('bitcount bitkey 0 0 bit')
+        then:
+        (reply as IntegerReply).integer == 1
+
+        when:
+        reply = bGroup.execute('bitcount bitkey 1 1 bit')
+        then:
+        (reply as IntegerReply).integer == 0
+
+        when:
+        reply = bGroup.execute('bitcount bitkey 7 7 bit')
+        then:
+        (reply as IntegerReply).integer == 0
+
+        when: 'BIT counting agrees with BITPOS on the same key'
+        reply = bGroup.execute('bitpos bitkey 1 0 7 bit')
+        then:
+        (reply as IntegerReply).integer == 0
+
+        when: 'LSB first byte counts in BYTE mode are unaffected'
+        cvAsymmetric.compressedData = [(byte) 0x01] as byte[]
+        inMemoryGetSet.put(slot, 'bitkey', 0, cvAsymmetric)
+        reply = bGroup.execute('bitcount bitkey 0 0 bit')
+        then:
+        (reply as IntegerReply).integer == 0
+
+        when:
+        reply = bGroup.execute('bitcount bitkey 7 7 bit')
+        then:
+        (reply as IntegerReply).integer == 1
+
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'a', 0, cv)
