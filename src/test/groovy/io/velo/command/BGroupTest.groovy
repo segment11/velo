@@ -1,6 +1,8 @@
 package io.velo.command
 
 import io.activej.eventloop.Eventloop
+import com.github.luben.zstd.Zstd
+import com.github.luben.zstd.ZstdOutputStream
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.CompressedValue
@@ -9,9 +11,12 @@ import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.reply.*
+import io.velo.type.RedisBF
 import io.velo.type.RedisList
 import spock.lang.Specification
 
+import java.nio.ByteBuffer
+import java.io.ByteArrayOutputStream
 import java.time.Duration
 
 class BGroupTest extends Specification {
@@ -654,6 +659,57 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('bf.loadchunk a a xxx')
         then:
         reply == ErrorReply.NOT_INTEGER
+
+        when: 'chunk without any payload after the length prefix'
+        reply = loadchunk(bGroup, declaredLength(64, new byte[0]))
+        then:
+        reply == ErrorReply.BAD_DATA_FORMAT
+
+        when: 'client declared length far bigger than any allowed value'
+        reply = loadchunk(bGroup, declaredLength(100_000_000))
+        then:
+        // no allocation driven by client input, fixed error instead of zstd/OutOfMemory
+        reply == ErrorReply.BAD_DATA_FORMAT
+
+        when: 'client declared negative length'
+        reply = loadchunk(bGroup, declaredLength(-1))
+        then:
+        reply == ErrorReply.BAD_DATA_FORMAT
+
+        when: 'client declared zero length'
+        reply = loadchunk(bGroup, declaredLength(0))
+        then:
+        reply == ErrorReply.BAD_DATA_FORMAT
+
+        when: 'declared length does not match the real zstd frame content size'
+        def encodedReal = new RedisBF(100, 0.01, (byte) 2, false).encode()
+        reply = loadchunk(bGroup, declaredLength(encodedReal.length + 64, Zstd.compress(encodedReal)))
+        then:
+        reply == ErrorReply.BAD_DATA_FORMAT
+
+        when: 'valid frame that does not declare its content size'
+        reply = loadchunk(bGroup, declaredLength(encodedReal.length, compressWithoutContentSize(encodedReal)))
+        then:
+        reply == OKReply.INSTANCE
+        bGroup.execute('bf.exists a item0') == IntegerReply.REPLY_0
+    }
+
+    private static byte[] compressWithoutContentSize(byte[] raw) {
+        def baos = new ByteArrayOutputStream()
+        def zos = new ZstdOutputStream(baos)
+        zos.write(raw)
+        zos.close()
+        return baos.toByteArray()
+    }
+
+    private static byte[] declaredLength(int length, byte[] payload = 'junk-payload'.bytes) {
+        def bytes = new byte[4 + payload.length]
+        ByteBuffer.wrap(bytes).putInt(length).put(payload)
+        return bytes
+    }
+
+    private static Reply loadchunk(BGroup bGroup, byte[] dumpBytes) {
+        return bGroup.execute('bf.loadchunk a 0 x', { byte[][] data -> data[3] = dumpBytes } as BaseCommand.DataArrayReplacer)
     }
 
     def 'test bf reserve'() {

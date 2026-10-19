@@ -859,10 +859,21 @@ public class BGroup extends BaseCommand {
         }
 
         var dumpBytes = data[3];
+        if (dumpBytes.length <= 4) {
+            return ErrorReply.BAD_DATA_FORMAT;
+        }
         var buffer = ByteBuffer.wrap(dumpBytes);
         var encodedLength = buffer.getInt();
-        var encoded = new byte[encodedLength];
+        // the length prefix is client controlled, never allocate before it is bounded
+        if (encodedLength <= 0 || encodedLength > CompressedValue.VALUE_MAX_LENGTH) {
+            return ErrorReply.BAD_DATA_FORMAT;
+        }
+        var frameContentSize = Zstd.getFrameContentSize(dumpBytes, 4, dumpBytes.length - 4);
+        if (frameContentSize > 0 && frameContentSize != encodedLength) {
+            return ErrorReply.BAD_DATA_FORMAT;
+        }
 
+        var encoded = new byte[encodedLength];
         Zstd.decompressByteArray(encoded, 0, encodedLength, dumpBytes, 4, dumpBytes.length - 4);
         RedisBF.decode(encoded);
         set(encoded, slotWithKeyHash, CompressedValue.SP_TYPE_BLOOM_BITMAP);

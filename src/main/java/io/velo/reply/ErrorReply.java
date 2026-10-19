@@ -120,6 +120,9 @@ public class ErrorReply implements Reply {
     /** Error reply for unsupported operation. */
     public static final ErrorReply NOT_SUPPORT = new ErrorReply("not support");
 
+    /** Error reply for malformed binary payload, e.g. a BF.LOADCHUNK data chunk. */
+    public static final ErrorReply BAD_DATA_FORMAT = new ErrorReply("bad data format");
+
     /** Error reply for unsupported dump type. */
     public static final ErrorReply DUMP_TYPE_NOT_SUPPORT = new ErrorReply("dump type not support");
 
