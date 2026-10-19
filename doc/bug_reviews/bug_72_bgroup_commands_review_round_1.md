@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** fix phase complete (2026-10-19) — 9 findings fixed in 9 commits, 72.4 retracted (no code change)
+**Status:** fix phase complete (2026-10-19) — 9 findings fixed in 9 commits, 72.4 retracted (no code change); 72.11 opened by the `bc55bcad` interim re-review, still open
 **Review branch:** `review/bgroup`
 **Reviewed commit:** `330683c45009aec8bab0f626aff6b61b39ce9767`
 
@@ -403,6 +403,76 @@ RedisBloom grammar: `BF.LOADCHUNK key iterator data` = exactly 4 tokens (arity 4
 
 Correct the three CommandEntry arities (4 / -4 / -4); assert against `redis.io/commands/bf.*` syntax. Extend the existing registry metadata test (if any) or add one that compares CommandRegistry arity with a table for B commands.
 
+## Finding 11 (Bug 72.11): multi-key blocking pop can pop an element it never delivers — losing completer drops the value
+
+**Severity:** Medium
+**Class:** Concurrency
+**Status:** `CONFIRMED (inspection + runtime probe)` — opened 2026-10-19 from the `bc55bcad` interim re-review, **open**
+
+### Cited files / lines
+
+```java
+// BGroup.java:1204-1221 — completeIfListNotEmpty: check, pop, then set
+if (one.settablePromise().isComplete()) {
+    return false;
+}
+var rl = LGroup.getRedisList(slotWithKeyHash, baseCommand);
+if (rl == null || rl.size() == 0) {
+    return false;
+}
+BlockingList.removeOne(Wal.keyString(keyBytes), one);
+var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();
+LGroup.saveRedisList(rl, slotWithKeyHash, baseCommand, dictMap);   // element is gone from the list here
+var replies = new Reply[2];
+replies[0] = new BulkReply(keyBytes);
+replies[1] = new BulkReply(valueBytes);
+one.settablePromise().set(new MultiBulkReply(replies));             // may throw, the element is already gone
+```
+
+```java
+// BGroup.java:1409-1428 — completeMpopIfListNotEmpty has the same shape
+// BlockingList.java:243 -> 288 — setReplyIfBlockingListExist has the same shape (pre-existing)
+```
+
+### Root cause
+
+A multi-key `BLPOP`/`BRPOP`/`BLMPOP` registers one promise on every key's worker, so several threads can try to
+complete it: a push delivered by `BlockingList.setReplyIfBlockingListExist`, a sibling key's re-check, and the
+timeout callback. Each completer removes an element from its list **before** it knows it won the promise.
+
+Runtime probe of the ActiveJ version in use (6.0-beta2, `SettablePromise.set` on a completed promise):
+
+```
+TMP first=1 secondSetThrown=java.lang.IllegalStateException: Promise has already been completed resultAfter=1 complete=true
+```
+
+So the second `set()` throws rather than overwriting: the value is silently lost **and** the exception escapes
+into the worker eventloop task. `tryComplete` does not exist in this version; `SettablePromise.trySet(T)` does
+(`public boolean trySet(T)`), which is the primitive a fix needs.
+
+### Trigger / impact
+
+Two keys of one blocking command on different workers, both non-empty at the same moment (or a push racing a
+sibling re-check): one client receives one element while a second element that was popped from the other list is
+never stored back and never delivered. Under the previous single-threaded registration this was much harder to
+hit; `bc55bcad` widened the window by adding concurrent completers (per-worker re-checks).
+
+### Suggested fix direction
+
+Replace `isComplete()` + `set()` with `trySet()` in both `BGroup.completeIfListNotEmpty` and
+`BGroup.completeMpopIfListNotEmpty` (and in `BlockingList.setReplyIfBlockingListExist` for the push side), and on
+a lost race push the value back to the end it was taken from, then save the list:
+
+```java
+if (!one.settablePromise().trySet(new MultiBulkReply(replies))) {
+    if (isLeft) { rl.addFirst(valueBytes); } else { rl.addLast(valueBytes); }
+    LGroup.saveRedisList(rl, slotWithKeyHash, baseCommand, dictMap);
+}
+```
+
+TDD: a test that completes the promise from between the `isComplete()` check and the `set()`, asserting the
+popped value is still in the list afterwards.
+
 ## Notes / non-findings
 
 - **bgsave is a no-op returning OK** (BGroup.java:296-299): consistent with the continuous-persistence design; `save` (SGroup.java:398-401) is also a no-op; `lastBgSaveMillis` only feeds `lastsave`. Intentional — not reported.
@@ -599,6 +669,65 @@ run to see it fail for the expected reason, then the minimal production change w
 Not started yet. Commits to verify, in fix order: `8642442d`, `92718814`, `127ff5c4`, `33a698e0`,
 `4e09e22d`, `b11e003a`, `bc55bcad`, `4cffebaf`, `503930f4`.
 
+### Interim fix-commit review: `bc55bcad` (AI agent 1, user-requested 2026-10-19)
+
+**Verdict: approve with notes — the 72.3 fix is correct; one narrow follow-up race and one coverage gap to record.**
+
+Verified at HEAD: `./gradlew :test --tests "io.velo.command.BGroupTest" --tests "io.velo.command.BlockingListTest"` →
+BUILD SUCCESSFUL; JaCoCo (scripts/jacoco_cover.py, BGroup 1005-1210): all helper methods covered
+(`popOtherKeyAsync` 1087+, `addBlockingWaiter`/`removeBlockingWaiter`/`recheckBlockingList`, `completeIfListNotEmpty`).
+
+What is right:
+
+- Waiters are registered and removed on the worker owning each key (`addBlockingWaiter`/`removeBlockingWaiter`),
+  and the cross-worker pop chain is non-blocking (`Promise.then` recursion, first non-empty key in left-to-right
+  order wins) — this retires the 72.4 residue as planned.
+- The check-then-register window is closed by `recheckBlockingList`, whose per-key register→recheck ordering is
+  guaranteed by FIFO on each owning worker's eventloop; the helper is `@VisibleForTesting` and unit-tested for
+  every outcome (empty / completes / complete-twice / right-pop / existing-empty-list).
+- The two-eventloop regression test reproduces the exact 72.3 scenario (push to worker-2's key delivers to the
+  waiter registered from worker-1) and cleans up BlockingList re-binding.
+
+Notes for the re-review / next round:
+
+1. **Double-completion race → element loss (narrow window, Low–Medium).** `completeIfListNotEmpty` does
+   isComplete-check → pop → set; the promise can be completed concurrently from another key's worker (push
+   delivery, sibling recheck) or by the timeout callback. `AbstractPromise.complete(T)` bytecode shows the
+   "Promise has already been completed" guard is `CHECKS`-conditional — with checks off the second `set()`
+   silently overwrites and re-fires callbacks, with checks on it throws inside the eventloop task. Either way
+   the element popped here is lost (one BLPOP, two popped elements, one delivered). Recommend `tryComplete`
+   semantics + push-the-value-back on losing the race. Same race shape pre-exists in
+   `BlockingList.setReplyIfBlockingListExist` (isComplete at 243 → set at 288) vs the timeout callback; this
+   commit adds more concurrent completers, widening it. Candidate follow-up finding 72.11.
+2. **Uncovered changed branch:** the multi-key error path `BGroup.java:1015-1018`
+   (`finalPromise.setException(e)` — e.g. later key holds a WRONGTYPE value) has no test; the fix-log range
+   "1110-1230" (numbering at that commit) excluded the whenComplete callback block. Add a case with a string cv
+   on key 2.
+3. **Benign oddity:** the whenComplete continuation (waiter registration + `reactor.delay` timeout scheduling)
+   runs on the last checked key's worker, so the timeout is scheduled on a reactor that may not own the client
+   connection. Functionally fine; worth a comment.
+4. **Stale-waiter leak on early completion (pre-existing class):** when delivery completes the promise, waiters
+   on the other keys linger until a push or timeout touches them (timeout skips removal when complete). Bounded;
+   add to Residual Risk alongside the slot-migration note.
+
+### Author response to the `bc55bcad` interim review (AI agent 1, 2026-10-19)
+
+- **Note 1 — accepted and refined.** The reviewer is right that the promise can be completed concurrently and the
+  popped element lost. Refinement after a runtime probe: `SettablePromise.set()` **throws**
+  `IllegalStateException: Promise has already been completed` (it does not overwrite, and `tryComplete` does not
+  exist in ActiveJ 6.0-beta2; `trySet(T)` does). So the failure mode is "value dropped **and** an exception
+  escapes into the worker eventloop", which is slightly worse than described. Recorded as **Finding 11 (72.11)**
+  with the `trySet` + push-back fix shape. Left **open** on purpose — it needs its own TDD commit, not a
+  rushed amendment to `bc55bcad`.
+- **Note 2 — fixed** in `ac7e21b6`: `test blpop` now drives `blpop`/`brpop` with a WRONGTYPE value on the second
+  key and asserts `TypeMismatchException` on the reply promise. JaCoCo `BGroup` 1005-1030: **15/15 lines, all
+  branch lines fully covered** (the earlier "49/49" range indeed excluded the `whenComplete` callback block).
+- **Note 3 — fixed** in `850bdbe9`: comment added above `popOtherKeyAsync(...).whenComplete(...)` stating that
+  the continuation runs on the last checked key's worker, which is also the reactor used to schedule the
+  timeout, and that the reply itself is delivered through the promise.
+- **Note 4 — already recorded** in Residual Risk (waiters on non-delivering keys linger until a push or timeout
+  touches them; bounded memory, pre-existing).
+
 ## Residual Risk
 
 - `LGroupTest > test lpush` and the `Bug71ReviewTempSpec` cases fail on `main` @ `330683c4` as well; they are
@@ -610,6 +739,11 @@ Not started yet. Commits to verify, in fix order: `8642442d`, `92718814`, `127ff
 - Multi-key BLPOP/BRPOP/BLMPOP now register their waiters per owning worker, but `BlockingList` still stores
   the waiter maps per worker thread; a key that moves slots at runtime (cluster rebalance) is not
   re-registered. That is beyond this round.
+- Waiter completion race (from the `bc55bcad` interim review): the promise backing a multi-key blocking pop can
+  be completed concurrently from different workers (push delivery / sibling recheck / timeout); the losing
+  completer's popped element is dropped. Narrow window; `tryComplete` + value push-back is the follow-up shape
+  (candidate 72.11). Also, waiters on non-delivering keys linger until a push or timeout touches them — bounded
+  memory, pre-existing class.
 - `BITOP`/`BITFIELD` remain unimplemented, they are now honestly reported as unknown commands. Implementing
   them is a separate feature, not a bug fix.
 
@@ -627,3 +761,4 @@ Not started yet. Commits to verify, in fix order: `8642442d`, `92718814`, `127ff
 | 72.8 | BITPOS all-ones + bit=0 → -1 (Redis: first bit past string) | Low | Redis protocol compatibility | `CONFIRMED (reproduced)` | fixed (`127ff5c4`) |
 | 72.9 | bf.reserve/insert capacity<=0 → Guava message leak | Low | Correctness | `REFINED` (capacity 0 silently OK; negative leaks Guava text) | fixed (`4e09e22d`) |
 | 72.10 | bf.loadchunk/reserve/insert registry arity wrong | Low | Redis protocol compatibility | `CONFIRMED (inspection)` | fixed (`b11e003a`) |
+| 72.11 | Multi-key blocking pop drops the value of the losing completer | Medium | Concurrency | `CONFIRMED (inspection + runtime probe)` | open — opened from the `bc55bcad` interim review |
