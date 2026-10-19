@@ -19,6 +19,9 @@ import spock.lang.Specification
 import java.nio.ByteBuffer
 import java.io.ByteArrayOutputStream
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 
 class BGroupTest extends Specification {
     def _BGroup = new BGroup(null, null, null)
@@ -1317,23 +1320,23 @@ class BGroupTest extends Specification {
 
         and: 'blpop on worker-1 for one key on worker-1 and one key on worker-2'
         def asyncReplyCross = []
-        def registered = new java.util.concurrent.CountDownLatch(1)
+        def registered = new CountDownLatch(1)
         loop1.execute({
             asyncReplyCross << bGroupWorkers.execute("blpop ${keyOnWorker1} ${keyOnWorker2} 0")
             registered.countDown()
         })
-        registered.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        registered.await(5, TimeUnit.SECONDS)
         Thread.sleep(300)
         and: 'push to the key owned by worker-2'
         def pushedOnWorker2 = []
-        def pushDone = new java.util.concurrent.CountDownLatch(1)
+        def pushDone = new CountDownLatch(1)
         loop2.execute({
             def values = new byte[1][]
             values[0] = 'from-worker-2'.bytes
             pushedOnWorker2 << BlockingList.setReplyLPushIfBlockingListExist(keyOnWorker2, values)
             pushDone.countDown()
         })
-        pushDone.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        pushDone.await(5, TimeUnit.SECONDS)
         and: 'the blocking reply is completed'
         def crossPromise = (asyncReplyCross[0] as AsyncReply).settablePromise
         def crossReply = null
@@ -1363,7 +1366,7 @@ class BGroupTest extends Specification {
     }
 
     private static List startWorkerThread(String name) {
-        var loopQ = new java.util.concurrent.LinkedBlockingQueue<Eventloop>()
+        var loopQ = new LinkedBlockingQueue<Eventloop>()
         def eventloop = Eventloop.builder().withIdleInterval(Duration.ofMillis(20)).build()
         eventloop.keepAlive(true)
         def thread = Thread.start {
@@ -1371,9 +1374,9 @@ class BGroupTest extends Specification {
             eventloop.run()
         }
         def loop = loopQ.take()
-        def ready = new java.util.concurrent.CountDownLatch(1)
+        def ready = new CountDownLatch(1)
         loop.execute { ready.countDown() }
-        ready.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        ready.await(5, TimeUnit.SECONDS)
         return [loop, loop.getEventloopThread().threadId(), thread]
     }
 
@@ -1718,7 +1721,7 @@ class BGroupTest extends Specification {
 
         and: 'blmpop runs on worker-1 and must not touch the slot of worker-2 directly'
         def mpopReplies = []
-        def mpopExecuted = new java.util.concurrent.CountDownLatch(1)
+        def mpopExecuted = new CountDownLatch(1)
         def mpopThrown = null
         mpopLoop1.execute({
             try {
@@ -1729,7 +1732,7 @@ class BGroupTest extends Specification {
                 mpopExecuted.countDown()
             }
         })
-        mpopExecuted.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        mpopExecuted.await(5, TimeUnit.SECONDS)
         then:
         mpopThrown == null
         mpopReplies[0] instanceof AsyncReply
@@ -1737,14 +1740,14 @@ class BGroupTest extends Specification {
 
         when: 'a push to the key owned by worker-2 wakes the blocked client up'
         def mpopPushed = []
-        def mpopPushDone = new java.util.concurrent.CountDownLatch(1)
+        def mpopPushDone = new CountDownLatch(1)
         mpopLoop2.execute({
             def values = new byte[1][]
             values[0] = 'mpop-value'.bytes
             mpopPushed << BlockingList.setReplyLPushIfBlockingListExist(mpopKey2, values)
             mpopPushDone.countDown()
         })
-        mpopPushDone.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        mpopPushDone.await(5, TimeUnit.SECONDS)
         def mpopResultHolder = new Reply[1]
         (mpopReplies[0] as AsyncReply).settablePromise.whenComplete({ Reply r, Exception e -> mpopResultHolder[0] = r })
         for (int i = 0; i < 100 && mpopResultHolder[0] == null; i++) {

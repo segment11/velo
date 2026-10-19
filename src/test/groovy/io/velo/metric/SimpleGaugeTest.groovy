@@ -3,6 +3,9 @@ package io.velo.metric
 
 import spock.lang.Specification
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
 class SimpleGaugeTest extends Specification {
     def 'concurrent collect and raw getter mutation does not throw'() {
         given:
@@ -10,7 +13,7 @@ class SimpleGaugeTest extends Specification {
         g.register()
 
         def errors = Collections.synchronizedList(new ArrayList<Throwable>())
-        def latch = new java.util.concurrent.CountDownLatch(2)
+        def latch = new CountDownLatch(2)
         def iterations = 500
 
         when:
@@ -43,7 +46,7 @@ class SimpleGaugeTest extends Specification {
             }
         }
 
-        latch.await(10, java.util.concurrent.TimeUnit.SECONDS)
+        latch.await(10, TimeUnit.SECONDS)
 
         then:
         errors.isEmpty()

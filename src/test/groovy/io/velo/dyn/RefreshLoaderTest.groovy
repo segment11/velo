@@ -3,11 +3,14 @@ package io.velo.dyn
 
 import spock.lang.Specification
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
 class RefreshLoaderTest extends Specification {
     def 'concurrent getScriptText does not throw ConcurrentModificationException'() {
         when:
         def errors = Collections.synchronizedList(new ArrayList<Throwable>())
-        def done = new java.util.concurrent.CountDownLatch(4)
+        def done = new CountDownLatch(4)
         def scriptPath = '/dyn/src/io/velo/script/ManageCommandParseSlots.groovy'
 
         4.times { idx ->
@@ -25,7 +28,7 @@ class RefreshLoaderTest extends Specification {
             }
         }
 
-        done.await(10, java.util.concurrent.TimeUnit.SECONDS)
+        done.await(10, TimeUnit.SECONDS)
 
         then:
         errors.isEmpty()
