@@ -147,6 +147,25 @@ class IGroupTest extends Specification {
         reply == ErrorReply.NOT_FLOAT
     }
 
+    def 'test incr'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def iGroup = new IGroup(null, null, null)
+        iGroup.byPassGetSet = inMemoryGetSet
+        iGroup.from(BaseCommand.mockAGroup())
+
+        when: 'incr a key with the max long value'
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_LONG
+        cv.compressedData = java.nio.ByteBuffer.allocate(8).putLong(Long.MAX_VALUE).array()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        def reply = iGroup.execute('incr a')
+        then: 'the overflow is reported, the value is not wrapped'
+        reply == ErrorReply.INCR_DECR_OVERFLOW
+        and: 'the value is not changed'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().longValue() == Long.MAX_VALUE
+    }
+
     def 'test incrby'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

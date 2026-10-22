@@ -372,6 +372,17 @@ class DGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
         and: 'the value is not changed'
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == Double.POSITIVE_INFINITY
+
+        when: 'decr a key with the min long value'
+        def longCv = new CompressedValue()
+        longCv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_LONG
+        longCv.compressedData = ByteBuffer.allocate(8).putLong(Long.MIN_VALUE).array()
+        inMemoryGetSet.put(slot, 'a', 0, longCv)
+        reply = dGroup.execute('decr a')
+        then: 'the overflow is reported, the value is not wrapped'
+        reply == ErrorReply.INCR_DECR_OVERFLOW
+        and: 'the value is not changed'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().longValue() == Long.MIN_VALUE
     }
 
     def 'test decrbyfloat'() {
@@ -424,6 +435,15 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('decrby a abc')
         then:
         reply == ErrorReply.NOT_INTEGER
+
+        when: 'decrby with a negative delta on the max long value'
+        cv.compressedData = ByteBuffer.allocate(8).putLong(Long.MAX_VALUE).array()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('decrby a -1')
+        then: 'the overflow is reported, the value is not wrapped'
+        reply == ErrorReply.INCR_DECR_OVERFLOW
+        and: 'the value is not changed'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().longValue() == Long.MAX_VALUE
     }
 
     def 'test decr by'() {

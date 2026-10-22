@@ -401,6 +401,17 @@ public class DGroup extends BaseCommand {
             setNumber(newValue.doubleValue(), slotWithKeyHash, expireAt);
             return new DoubleReply(newValue);
         } else {
+            if (by > 0) {
+                if (longValue < Long.MIN_VALUE + by) {
+                    // the result is less than the min long value
+                    return ErrorReply.INCR_DECR_OVERFLOW;
+                }
+            } else if (by < 0) {
+                if (longValue > Long.MAX_VALUE + by) {
+                    // the result is greater than the max long value
+                    return ErrorReply.INCR_DECR_OVERFLOW;
+                }
+            }
             long newValue = longValue - by;
             setNumber(newValue, slotWithKeyHash, expireAt);
             return new IntegerReply(newValue);
