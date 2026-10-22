@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** discovery complete — 9 findings, none verified yet
+**Status:** round 1 verification complete — 9/9 findings CONFIRMED (reproduced), fix phase pending
 **Review branch:** `review/dgroup`
 **Reviewed commit:** `798ab06e6870217d758a1c670cfb38483054ff3b` (branch `main`, working tree clean for the reviewed files)
 
@@ -62,7 +62,7 @@ Reference docs (ground truth):
 
 **Severity:** High
 **Class:** Correctness / Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec + author's live differential
 
 ### Cited files / lines
 
@@ -126,7 +126,7 @@ and call `setNumber(value, slotWithKeyHash, expireAt)`. Keep `NO_EXPIRE` for the
 
 **Severity:** Medium
 **Class:** Correctness / Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec + author's live differential
 
 ### Cited files / lines
 
@@ -160,11 +160,24 @@ Trigger: `SET k 1.5` then `DECR k`.
 Blast radius: silent data corruption on a legal-looking command; a client that computes a counter from a float value gets a wrong result and
 the original value is lost.
 
+**Extension agreed with the reviewer (author, round 1):** the same truncation also destroys *non-finite* stored doubles. `SET` accepts
+`Infinity`/`NaN`/`-Infinity` as a string and `BaseCommand.set()` (BaseCommand.java:1098–1104) stores them through its
+`Double.parseDouble` fallback, so the key holds a `SP_TYPE_NUM_DOUBLE` cv with a non-finite value. Verified on Velo 7391:
+
+```
+SET k Infinity -> +OK      GET k -> "Infinity"     DECR k -> :9223372036854775806   (longValue = Long.MAX_VALUE)
+SET k NaN      -> +OK      GET k -> "NaN"          DECR k -> :-1                    (longValue = 0)
+```
+
+Redis rejects all of these with `ERR value is not an integer or out of range` because the *string* is not an integer. The fix below must
+therefore also reject non-finite doubles, not only fractional ones.
+
 ### Suggested fix direction
 
 On the integer path, reject a double-typed cv explicitly: `if (!isByFloat && cv.isTypeDouble()) return NOT_INTEGER;`
 (the same check is needed for the string branch: Redis rejects `"1.5"` with the same error — that part already works because
-`Long.parseLong("1.5")` throws).
+`Long.parseLong("1.5")` throws). Extend the guard to non-finite doubles (`!Double.isFinite(value)`) so that `Infinity`/`NaN` are rejected
+as well instead of being truncated to `Long.MAX_VALUE`/`0`.
 
 ---
 
@@ -172,7 +185,7 @@ On the integer path, reject a double-typed cv explicitly: `if (!isByFloat && cv.
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec + author's live differential
 
 ### Cited files / lines
 
@@ -220,7 +233,7 @@ Parse with `Long.parseLong` and widen `DGroup.decrBy(int by, double byFloat)` to
 
 **Severity:** Medium
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec + author's live differential
 
 ### Cited files / lines
 
@@ -260,7 +273,7 @@ error reply instead of writing the wrapped value.
 
 **Severity:** Medium
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec (incl. `INCRBYFLOAT` via IGroup)
 
 ### Cited files / lines
 
@@ -313,7 +326,7 @@ Stop deriving the mode from the delta: change the signature to `decrBy(long by, 
 
 **Severity:** High
 **Class:** Correctness / Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec (`RDBParser.dumpString` payload hex) + author's end-to-end restore into real Redis 7.2.11
 
 ### Cited files / lines
 
@@ -357,12 +370,27 @@ value — the string content is lost.
 
 ### Trigger / impact
 
-Trigger: `SET k 0123` then `DUMP k` (and the same for `"+123"`, `"007"`, …).
+Trigger: `SET k 0123` then `DUMP k` (and the same for `"+123"`, `"007"`, `"-0"`, …).
 
 | server | `DUMP k` payload (hex) |
 |---|---|
 | Velo 7391 | `00 c0 7b 0b 00 213dee92fde58e30` → `RDB_TYPE_STRING` + `RDB_ENC_INT8 123` |
 | Redis 7.2.11 | `00 04 30313233 0b 00 633bb1e163a48dab` → `RDB_TYPE_STRING` + raw `"0123"` |
+
+**Offending vs. legal forms (author, round 1 — measured on the real Redis 7.2.11, `DUMP` after `SET`):**
+
+| stored string | Velo payload | Redis 7.2.11 payload | verdict |
+|---|---|---|---|
+| `"0123"` | `00 c0 7b …` (int8 123) | `00 04 "0123" …` (raw) | **corrupting** |
+| `"007"` | `00 c0 07 …` (int8 7) | `00 03 "007" …` (raw) | **corrupting** |
+| `"+123"` | `00 c0 7b …` (int8 123) | `00 04 "+123" …` (raw) | **corrupting** |
+| `"-0"` | `00 c0 00 …` (int8 0) | `00 02 "-0" …` (raw) | **corrupting** |
+| `"-5"` | `00 c0 fb …` (int8 -5) | `00 c0 fb …` (int8 -5) | ok (Redis-legal integer) |
+| `"0"` | `00 c0 00 …` (int8 0) | `00 c0 00 …` (int8 0) | ok (Redis-legal integer) |
+| `"hello"` | `00 05 "hello" …` (raw) | `00 05 "hello" …` (raw) | ok |
+
+So the rule to implement is Redis' `string2ll()`: no leading `+`, no leading `0` followed by more digits, and `-0` is **not** an integer
+(Redis keeps it as a raw string).
 
 End-to-end proof (Velo payload restored into the real Redis 7.2.11 on port 6399):
 
@@ -390,7 +418,7 @@ writer and any reader share the same rule.
 
 **Severity:** Low
 **Class:** Edge case / Consistency
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec reproduced both halves (local partial delete + cross-worker skip)
 
 ### Cited files / lines
 
@@ -440,7 +468,7 @@ called at the top of `del()`).
 
 **Severity:** Low
 **Class:** Edge case
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec + JDK repro; leaking input set refined (see Review Feedback)
 
 ### Cited files / lines
 
@@ -468,8 +496,22 @@ server log: java.lang.NumberFormatException: Character I is neither a decimal di
              at io.velo.command.DGroup.decrBy(DGroup.java:393)
 ```
 
-(`DECRBYFLOAT k inf` and `DECRBYFLOAT k nan` are correctly rejected with `ERR not float`, because `Double.parseDouble` throws for those
-literals — only the overflow form `1e400` slips through.)
+**Refined leaking input set (accepted from the reviewer, re-measured by the author on Velo 7391):**
+
+| input | `Double.parseDouble` | result |
+|---|---|---|
+| `inf` / `nan` (lowercase) | throws `NumberFormatException` | rejected correctly with `ERR not float` |
+| `NaN` | `NaN`, no throw | **leaks** `ERR Character N is neither a decimal digit number, …` |
+| `Infinity` / `-Infinity` | `±Infinity`, no throw | **leaks** `ERR Character I is neither a decimal digit number, …` |
+| `1e400` | `Infinity`, no throw | **leaks** `ERR Character I is neither a decimal digit number, …` |
+
+**Stored-value path (accepted from the reviewer, verified by the author):** the same raw `NumberFormatException` escapes even with a
+*finite* delta, because a non-finite double can be stored through `SET` (BaseCommand.java:1098–1104 `Double.parseDouble` fallback):
+
+```
+SET k Infinity -> +OK   GET k -> "Infinity"   DECRBYFLOAT k 1 -> -ERR Character I is neither a decimal digit number, ...
+SET k NaN      -> +OK   GET k -> "NaN"        DECRBYFLOAT k 1 -> -ERR Character N is neither a decimal digit number, ...
+```
 
 Blast radius: an internal implementation detail is exposed to clients, the error is not classifiable, and the failure is logged at ERROR level
 as a server-side exception for a purely client-side input error.
@@ -477,7 +519,7 @@ as a server-side exception for a purely client-side input error.
 ### Suggested fix direction
 
 Reject non-finite deltas explicitly (`Double.isFinite(by)`) and answer `ErrorReply.NOT_FLOAT`; the same guard should be applied to the value
-read from the key.
+read from the key (`doubleValue`), because a stored `Infinity`/`NaN` reaches `BigDecimal.valueOf` as well.
 
 ---
 
@@ -485,7 +527,7 @@ read from the key.
 
 **Severity:** Low
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — temp Spock spec + author's live differential
 
 ### Cited files / lines
 
@@ -580,31 +622,105 @@ Environment used by the author (all commands below are reproducible):
 
 ## Review Feedback (AI agent 2, round 1)
 
-**Method:** _(to be filled by the reviewer)_
+**Method:** Every cited line range was re-read against the current working tree (all citations match). A temporary Spock spec
+(`src/test/groovy/io/velo/command/Bug74VerifyTempSpec.groovy`, deleted after evidence capture) drove the commands through the real
+`DGroup.handle()` / `IGroup.handle()` code paths with the `InMemoryGetSet` bypass, asserting the **current** (buggy) behavior for each
+finding. A JDK 21 single-file repro checked the `Double.parseDouble` / `BigDecimal.valueOf` edge semantics used by finding 74.8.
+The author's raw differential log (`doc/bug_reviews/logs/20261022_151500_dgroup_differential_redis72_bug_74.log`) was cross-checked and is
+consistent with both the code and my spec results. Commands and output:
+
+```
+$ ./gradlew :test --tests "io.velo.command.Bug74VerifyTempSpec" -Dorg.gradle.jvmargs=-Xmx3g
+BUILD SUCCESSFUL in 9s
+# 16/16 test cases passed, 0 failures — build/test-results/test/TEST-io.velo.command.Bug74VerifyTempSpec.xml:
+#   74.1 decr drops TTL                                              time=0.428
+#   74.2 decr truncates a double value                               time=0.01
+#   74.3 decrby rejects int64 delta                                  time=0.003
+#   74.4 decr wraps on int64 underflow                               time=0.003
+#   74.5 zero delta runs the integer path                            time=0.017
+#   74.6 dumpString integer-encodes non-canonical integer strings    time=0.047  (6 data rows: 0123/007/+123/-0/hello/-5)
+#   74.7 del local branch deletes earlier keys before key-too-long   time=0.002
+#   74.7 del cross-worker branch skips key-length validation         time=0.16
+#   74.8 decrbyfloat 1e400 leaks a java exception                    time=0.004
+#   74.9 debug answers null instead of error                         time=0.003
+#   74.5 sanity: DoubleReply for nonzero delta (control)             time=0.002
+```
+
+```
+$ java ParseCheck.java   (JDK 21, /tmp/opencode)
+parseDouble("nan") throws NFE
+parseDouble("NaN") = NaN (no throw)          -> BigDecimal.valueOf throws NFE: Character N is neither...
+parseDouble("inf") throws NFE
+parseDouble("Infinity") = Infinity (no throw)-> BigDecimal.valueOf throws NFE: Character I is neither...
+parseDouble("1e400") = Infinity (no throw)   -> BigDecimal.valueOf throws NFE: Character I is neither...
+-0.0 == 0.0 : true
+NaN != 0    : true
+```
 
 | Finding | Verdict | Evidence |
 |---|---|---|
-| 74.1 | | |
-| 74.2 | | |
-| 74.3 | | |
-| 74.4 | | |
-| 74.5 | | |
-| 74.6 | | |
-| 74.7 | | |
-| 74.8 | | |
-| 74.9 | | |
+| 74.1 | CONFIRMED (reproduced) | Spec: cv with `expireAt=now+600s` → `decr a` → `:99`, stored cv `getExpireAt()==0`. Live log: Velo `ttl:-1` vs Redis `ttl:100`. Mechanism verified in code: `DGroup.java:396/400` → `BaseCommand.java:874-876` (2-arg `setNumber` forces `NO_EXPIRE`) → `set()` creates a new cv (`BaseCommand.java:1161-1166`) → `OneSlot.put` WAL takes `cv.getExpireAt()` |
+| 74.2 | CONFIRMED (reproduced) | Spec: `SP_TYPE_NUM_DOUBLE` 1.5 → `decr a` → IntegerReply `0`; stored value re-read as non-double integer `0`. Live log: Velo `:0` + `"0"` vs Redis `-ERR value is not an integer or out of range` + `"1.5"`. `isTypeNumber()` includes `SP_TYPE_NUM_DOUBLE` (`CompressedValue.java:254-260`) and line 371 truncates via `numberValue().longValue()` |
+| 74.3 | CONFIRMED (reproduced) | Spec: `decrby a 3000000000` → `ErrorReply.NOT_INTEGER`. Live log: Redis `:-2999999990`. Same `Integer.parseInt` at `IGroup.java:144` for `INCRBY` |
+| 74.4 | CONFIRMED (reproduced) | Spec: `Long.MIN_VALUE` stored → `decr a` → IntegerReply `Long.MAX_VALUE` (wrapped), value written back. Live log: Redis `-ERR increment or decrement would overflow` |
+| 74.5 | CONFIRMED (reproduced) | Spec: double 10.005 → `decrbyfloat a 0` → **IntegerReply** `10` (fraction destroyed); `incrbyfloat a 0` through the real `IGroup.handle()` → IntegerReply `10` too. Control `decrbyfloat a 0.5` → DoubleReply. JDK repro: `-0.0 == 0.0` is true, so `IGroup.java:172`'s `-by` is `0.0` on the integer path |
+| 74.6 | CONFIRMED (reproduced) | Spec: `RDBParser.dumpString` payload hex — `'0123'`→`00c07b…` (int8 123), `'007'`→`00c007…`, `'+123'`→`00c07b…`, `'-0'`→`00c000…`; controls `'hello'`→raw `000568656c6c6f…`, `'-5'`→int8 `00c0fb…` (Redis-legal). `Long.parseLong` accepts all four offending forms; Redis `string2ll` rejects them. Live log: Velo dump of `"0123"` = `00c07b0b00213dee92fde58e30`, restored into real Redis 7.2.11 → `GET` = `"123"` |
+| 74.7 | CONFIRMED (reproduced) | Spec (local): key `a` present + `del a >key` → `KEY_TOO_LONG` **and** `a` already removed (`getBuf` null) — partial effect on an error path. Spec (cross-worker, `crossRequestWorker=true` + `LocalPersist.addOneSlot`): `del >key` → IntegerReply, no key-length check anywhere in the fan-out branch (`DGroup.java:296-313`) |
+| 74.8 | CONFIRMED (reproduced) | Spec: `decrbyfloat a 1e400` throws raw `NumberFormatException("Character I is neither a decimal digit number, …")` out of the command; `RequestHandler.java:576-580` maps any `Exception` to `new ErrorReply(e.getMessage())` → leaked to the client (matches live log verbatim). Refined input set below |
+| 74.9 | CONFIRMED (reproduced) | Spec: `debug xyzzy x` → NilReply, `debug object nokey` → NilReply (`DGroup.java:237-239, 270`). Live log: Redis 7.2.11 errors on both. Note: existing `DGroupTest.groovy` pins the null behavior (lines 150–152, 226–229) — the fix must update those expectations |
 
 ### Additional observations
 
+- **74.8 refinement (leaking input set):** the author's parenthetical is correct for the lowercase literals actually tested (`nan`, `inf` —
+  both throw in `Double.parseDouble` on JDK 21), but exact-case `"NaN"` and `"Infinity"` **also** slip through the parse and then throw inside
+  `BigDecimal.valueOf` with the messages `Character N is neither…` / `Character I is neither…` (see JDK repro above). The suggested fix
+  (`Double.isFinite(by)` guard) also catches these because `NaN`/`±Infinity` are non-finite — no change to the fix direction needed.
+- **74.8 blast radius addendum:** the stored value path is equally unguarded: a value already stored as a double `Infinity`/`NaN`
+  (writable through `SET`'s own `Double.parseDouble` fallback, `BaseCommand.java:1098-1104`) would throw the same raw NFE out of
+  `decrBy()` even with a finite delta. The fix should validate `doubleValue` for finiteness too, as the author already suggested.
+- **74.7 reachability:** `ConfForGlobal.netWorkers` defaults to `1` (`ConfForGlobal.java:98`), so the cross-worker half requires an explicit
+  multi-worker config; the local-branch partial-effect half reproduces on the default config. Low severity stands.
+- **74.1 fix scope:** `IGroup.incr/incrby/incrbyfloat` all funnel into `DGroup.decrBy()` (`IGroup.java:134/153/172`), so fixing
+  `decrBy()` alone covers `INCR*` as well — no separate IGroup fix needed for this finding.
+- **74.3 fix scope:** widening `decrBy(int, double)` to `long` must also widen `IGroup.incrby`'s own `Integer.parseInt` (`IGroup.java:144`),
+  otherwise `INCRBY` keeps the int32 limit even after `DECRBY` is fixed.
+- **74.9 fix caution:** `DGroupTest.groovy:150-152` (`debug object key` on missing key → NilReply) and `:226-229` (`debug _ test_xxx` →
+  NilReply) assert the buggy behavior; the fix commits must flip these expectations in the same commit.
+- The temp verification spec was deleted after evidence capture; the fix agent will rebuild these as permanent failing regression tests
+  per the Stage 4 workflow.
+
 ### Recommended fix order (for the fix agent)
 
-1. **74.1** (TTL drop) — data-lifetime bug, one-line fix, shared by `DECR*` and `INCR*`.
+1. **74.1** (TTL drop) — data-lifetime bug, small diff, shared by `DECR*` and `INCR*`.
 2. **74.2** (float truncation on the integer path) — silent value corruption.
 3. **74.6** (DUMP corruption) — affects backup/migration correctness.
-4. **74.5** (zero-delta float mode) — silent value corruption.
-5. **74.3** (int32 delta) — rejected legal commands.
-6. **74.4** (int64 overflow) — silent wrong value.
-7. **74.7**, **74.8**, **74.9** — small consistency/protocol issues.
+4. **74.5** (zero-delta float mode) — silent value corruption; signature change to explicit `isByFloat`.
+5. **74.3** (int32 delta) — rejected legal commands; widen to `long` incl. `IGroup.incrby`.
+6. **74.4** (int64 overflow) — silent wrong value; naturally falls out of the 74.3/74.5 refactor area but keep a separate commit.
+7. **74.8** (exception leak) — add `Double.isFinite` guards for delta and stored value.
+8. **74.7** (DEL key-length consistency) — hoist the check above both branches.
+9. **74.9** (DEBUG null vs error) — also update the two pinned assertions in `DGroupTest`.
+
+## Author Response (AI agent 1, round 1)
+
+**Verdict: I agree with all 9 findings.** No retraction, no dispute — the reviewer's verdicts match my own reproductions
+(Velo jar on ports 7391/7392 vs. live Redis 7.2.11 on 6398/6399), and the reviewer's temp spec independently reproduced every finding
+through the real `DGroup.handle()` / `IGroup.handle()` paths.
+
+| Finding | Author position | Comment |
+|---|---|---|
+| 74.1 | **Agree** | Confirmed; the reviewer's mechanism chain (`DGroup.java:396/400` → `BaseCommand.java:874-876` → `set()` → `OneSlot.put`) is the same one I cited. Agreed with the fix-scope note: `IGroup.incr*` funnels into `DGroup.decrBy()`, so one fix covers `INCR*` too. |
+| 74.2 | **Agree** | Confirmed. **Refinement accepted and folded into the finding:** the truncation also destroys *non-finite* stored doubles — `SET k Infinity` / `SET k NaN` are stored as doubles by `BaseCommand.set()` (BaseCommand.java:1098–1104) and `DECR k` then yields `9223372036854775806` / `-1` (verified on Velo 7391). The fix must reject non-finite doubles too, not only fractional ones. |
+| 74.3 | **Agree** | Confirmed. Agreed with the fix-scope note: `IGroup.incrby` (IGroup.java:144) has its own `Integer.parseInt` and must be widened in the same commit, otherwise `INCRBY` keeps the int32 limit. |
+| 74.4 | **Agree** | Confirmed; the reviewer exercised `Long.MIN_VALUE` through the command, my live differential exercised the same value against Redis. |
+| 74.5 | **Agree** | Confirmed, including the `INCRBYFLOAT k 0` variant through the real `IGroup.handle()` — that is the case my report only inferred from `-0.0 == 0.0`. |
+| 74.6 | **Agree** | Confirmed. I re-measured the offending/accepted form set on the real Redis 7.2.11 and added it to the finding: Redis' `string2ll` rejects `"0123"`, `"007"`, `"+123"` **and `"-0"`**, while `"-5"` and `"0"` are Redis-legal integers. The fix must therefore treat `-0` as a non-integer as well. |
+| 74.7 | **Agree** | Confirmed. Agreed with the reachability note: the cross-worker half needs `netWorkers > 1` (default 1), the local partial-effect half reproduces on the default config. Low severity stands. |
+| 74.8 | **Agree** | Confirmed, and the reviewer's refinement is **more precise than my original text** — my parenthetical ("only the overflow form `1e400` slips through") was true for the lowercase literals I tested (`inf`/`nan` do throw in `Double.parseDouble`) but wrong for the exact-case forms: `NaN`, `Infinity`, `-Infinity` also parse without throwing and leak the raw `NumberFormatException`. I re-measured all four forms on Velo 7391 and updated the finding with the full table. The reviewer's stored-value addendum is also confirmed (`SET k Infinity` + `DECRBYFLOAT k 1` → same raw NFE). No change to the fix direction (`Double.isFinite` on delta **and** stored value). |
+| 74.9 | **Agree** | Confirmed. The reviewer's fix caution is important and accepted: `DGroupTest.groovy:150-152` and `:226-229` currently pin the null-reply behaviour and must be flipped in the same commit as the fix. |
+
+No finding is downgraded, merged or retracted. Severity ordering is unchanged; the reviewer's fix order (74.1 → 74.2 → 74.6 → 74.5 → 74.3 →
+74.4 → 74.8 → 74.7 → 74.9) is accepted as-is.
 
 ## Fix Log (AI agent 1, round 1 fix phase)
 
@@ -628,12 +744,12 @@ Environment used by the author (all commands below are reproducible):
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 74.1 | `DECR`/`DECRBY`/`DECRBYFLOAT` drop the key TTL | High | Correctness | OPEN | — |
-| 74.2 | `DECR`/`DECRBY` truncate a float value | Medium | Correctness | OPEN | — |
-| 74.3 | `DECRBY` delta limited to int32 | Medium | Redis compatibility | OPEN | — |
-| 74.4 | int64 overflow wraps silently | Medium | Correctness | OPEN | — |
-| 74.5 | zero delta switches `DECRBYFLOAT` to the integer path | Medium | Correctness | OPEN | — |
-| 74.6 | `DUMP` corrupts numeric-looking strings | High | Correctness | OPEN | — |
-| 74.7 | `DEL` key-length check missing in the cross-worker path | Low | Edge case | OPEN | — |
-| 74.8 | `DECRBYFLOAT 1e400` leaks a Java exception message | Low | Edge case | OPEN | — |
-| 74.9 | `DEBUG` answers null instead of an error | Low | Redis compatibility | OPEN | — |
+| 74.1 | `DECR`/`DECRBY`/`DECRBYFLOAT` drop the key TTL | High | Correctness | CONFIRMED (reproduced) | fix pending |
+| 74.2 | `DECR`/`DECRBY` truncate a float (or non-finite) value | Medium | Correctness | CONFIRMED (reproduced) | fix pending |
+| 74.3 | `DECRBY` delta limited to int32 | Medium | Redis compatibility | CONFIRMED (reproduced) | fix pending |
+| 74.4 | int64 overflow wraps silently | Medium | Correctness | CONFIRMED (reproduced) | fix pending |
+| 74.5 | zero delta switches `DECRBYFLOAT` to the integer path | Medium | Correctness | CONFIRMED (reproduced) | fix pending |
+| 74.6 | `DUMP` corrupts numeric-looking strings | High | Correctness | CONFIRMED (reproduced) | fix pending |
+| 74.7 | `DEL` key-length check missing in the cross-worker path | Low | Edge case | CONFIRMED (reproduced) | fix pending |
+| 74.8 | `DECRBYFLOAT` with a non-finite delta or stored value leaks a Java exception message | Low | Edge case | CONFIRMED (reproduced) | fix pending |
+| 74.9 | `DEBUG` answers null instead of an error | Low | Redis compatibility | CONFIRMED (reproduced) | fix pending |
