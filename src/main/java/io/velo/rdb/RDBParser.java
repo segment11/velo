@@ -517,26 +517,59 @@ public class RDBParser {
         return writeVersionAndCrc(slice);
     }
 
+    /**
+     * Checks whether the bytes are a canonical decimal integer, the same rule as redis string2ll().
+     * A leading '+', leading zeros and '-0' are not integers for redis, so they must not use the
+     * rdb integer encoding, or restore would decode a different value.
+     *
+     * @param data the string bytes
+     * @return true if the bytes are a canonical integer
+     */
+    private static boolean isRedisIntegerString(byte[] data) {
+        if (data.length == 0) {
+            return false;
+        }
+
+        int index = 0;
+        boolean negative = false;
+        if (data[0] == '-') {
+            negative = true;
+            index = 1;
+        }
+        if (index >= data.length) {
+            return false;
+        }
+
+        if (data[index] == '0') {
+            // only '0' itself is an integer, '00' and '-0' are not
+            return !negative && index == data.length - 1;
+        }
+        if (data[index] < '1' || data[index] > '9') {
+            return false;
+        }
+        for (int i = index + 1; i < data.length; i++) {
+            if (data[i] < '0' || data[i] > '9') {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static void writeRdbString(Slice slice, byte[] data) {
-        if (data.length <= 11) {
-            try {
-                var str = new String(data);
-                var value = Long.parseLong(str);
-                if (value >= -(1 << 7) && value <= (1 << 7) - 1) {
-                    slice.writeByte((byte) (0xC0));
-                    slice.writeByte((byte) value);
-                    return;
-                } else if (value >= -(1 << 15) && value <= (1 << 15) - 1) {
-                    slice.writeByte((byte) (0xC0 | 1));
-                    slice.writeShortLE((short) value);
-                    return;
-                } else if (value >= -((long) 1 << 31) && value <= ((long) 1 << 31) - 1) {
-                    slice.writeByte((byte) (0xC0 | 2));
-                    slice.writeIntLE((int) value);
-                    return;
-                }
-            } catch (NumberFormatException e) {
-                // Not a number, continue with normal string encoding
+        if (data.length <= 11 && isRedisIntegerString(data)) {
+            var value = Long.parseLong(new String(data));
+            if (value >= -(1 << 7) && value <= (1 << 7) - 1) {
+                slice.writeByte((byte) (0xC0));
+                slice.writeByte((byte) value);
+                return;
+            } else if (value >= -(1 << 15) && value <= (1 << 15) - 1) {
+                slice.writeByte((byte) (0xC0 | 1));
+                slice.writeShortLE((short) value);
+                return;
+            } else if (value >= -((long) 1 << 31) && value <= ((long) 1 << 31) - 1) {
+                slice.writeByte((byte) (0xC0 | 2));
+                slice.writeIntLE((int) value);
+                return;
             }
         }
 

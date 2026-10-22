@@ -587,5 +587,96 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'dump a string that is not a canonical integer'
+        // the expected bytes are the same as redis 7.2.11 dump output
+        def stringCv = new CompressedValue()
+        stringCv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        stringCv.compressedData = '0123'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then: 'the string is dumped as a raw string, not as an integer'
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '0004303132330b00633bb1e163a48dab'
+
+        when:
+        stringCv.compressedData = '007'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00033030370b001b875f08b1f65350'
+
+        when:
+        stringCv.compressedData = '+123'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00042b3132330b004c29d361e52083db'
+
+        when:
+        stringCv.compressedData = '-0'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00022d300b00bc9ea2aa2b4fb945'
+
+        when: 'dump a string that is a canonical integer'
+        stringCv.compressedData = '-5'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then: 'the integer encoding is used'
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00c0fb0b00201b7b872ab9d6e1'
+
+        when:
+        stringCv.compressedData = '0'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00c0000b00f19f1a0b05cfea81'
+
+        when:
+        stringCv.compressedData = new byte[0]
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00000b003444e133f2e04b53'
+
+        when:
+        stringCv.compressedData = '-'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00012d0b00c7118ce794402b1d'
+
+        when:
+        stringCv.compressedData = '1a'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '000231610b0074404f6b25f34fbc'
+
+        when: 'dump an integer that does not fit in one byte'
+        stringCv.compressedData = '300'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00c12c010b00fc9ddc81981db599'
+
+        when: 'dump an integer that does not fit in two bytes'
+        stringCv.compressedData = '70000'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, stringCv)
+        reply = dGroup.execute('dump a')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).getRaw().encodeHex().toString() == '00c2701101000b00687bb58d68af7c2c'
     }
 }
