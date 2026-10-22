@@ -235,7 +235,7 @@ public class DGroup extends BaseCommand {
             var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
             var cv = getCv(slotWithKeyHash);
             if (cv == null) {
-                return NilReply.INSTANCE;
+                return ErrorReply.NO_SUCH_KEY;
             }
 
             if (cv.isTypeNumber()) {
@@ -267,7 +267,7 @@ public class DGroup extends BaseCommand {
             return OKReply.INSTANCE;
         }
 
-        return NilReply.INSTANCE;
+        return ErrorReply.DEBUG_SUB_COMMAND_NOT_SUPPORT;
     }
 
     private Reply del() {

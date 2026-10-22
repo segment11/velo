@@ -132,6 +132,9 @@ public class ErrorReply implements Reply {
     /** Error reply for an integer overflow when increment or decrement a value. */
     public static final ErrorReply INCR_DECR_OVERFLOW = new ErrorReply("increment or decrement would overflow");
 
+    /** Error reply for a debug sub command that is not supported. */
+    public static final ErrorReply DEBUG_SUB_COMMAND_NOT_SUPPORT = new ErrorReply("debug subcommand not support");
+
     /** Error reply for cluster slot crossing shards. */
     public static final ErrorReply CLUSTER_SLOT_CROSS_SHARDS = new ErrorReply("cluster slot cross shards");
 

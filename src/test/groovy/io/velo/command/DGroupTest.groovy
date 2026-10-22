@@ -148,8 +148,8 @@ class DGroupTest extends Specification {
 
         when:
         def reply = dGroup.execute('debug object key')
-        then:
-        reply == NilReply.INSTANCE
+        then: 'the key does not exist'
+        reply == ErrorReply.NO_SUCH_KEY
 
         when:
         def cv = new CompressedValue()
@@ -225,8 +225,8 @@ class DGroupTest extends Specification {
 
         when:
         reply = dGroup.execute('debug _ test_xxx')
-        then:
-        reply == NilReply.INSTANCE
+        then: 'the sub command is not supported'
+        reply == ErrorReply.DEBUG_SUB_COMMAND_NOT_SUPPORT
     }
 
     def 'test del'() {
