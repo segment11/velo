@@ -184,7 +184,7 @@ public class DGroup extends BaseCommand {
             }
 
             try {
-                int by = Integer.parseInt(new String(data[2]));
+                long by = Long.parseLong(new String(data[2]));
                 return decrBy(by, 0, false);
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
@@ -349,7 +349,7 @@ public class DGroup extends BaseCommand {
         });
     }
 
-    Reply decrBy(int by, double byFloat, boolean isByFloat) {
+    Reply decrBy(long by, double byFloat, boolean isByFloat) {
         var keyBytes = data[1];
         if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
             return ErrorReply.KEY_TOO_LONG;

@@ -147,6 +147,29 @@ class IGroupTest extends Specification {
         reply == ErrorReply.NOT_FLOAT
     }
 
+    def 'test incrby'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def iGroup = new IGroup(null, null, null)
+        iGroup.byPassGetSet = inMemoryGetSet
+        iGroup.from(BaseCommand.mockAGroup())
+
+        when: 'incrby with an int64 delta'
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_LONG
+        cv.compressedData = java.nio.ByteBuffer.allocate(8).putLong(10L).array()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        def reply = iGroup.execute('incrby a 3000000000')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 3000000010L
+
+        when: 'incrby with a not integer delta'
+        reply = iGroup.execute('incrby a abc')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+    }
+
     def 'test incrbyfloat'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

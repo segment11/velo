@@ -402,6 +402,30 @@ class DGroupTest extends Specification {
         (reply as DoubleReply).doubleValue() == 10.4d
     }
 
+    def 'test decrby'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def dGroup = new DGroup(null, null, null)
+        dGroup.byPassGetSet = inMemoryGetSet
+        dGroup.from(BaseCommand.mockAGroup())
+
+        when: 'decrby with an int64 delta'
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_LONG
+        cv.compressedData = ByteBuffer.allocate(8).putLong(10L).array()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        def reply = dGroup.execute('decrby a 3000000000')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == -2999999990L
+
+        when: 'decrby with a not integer delta'
+        reply = dGroup.execute('decrby a abc')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+    }
+
     def 'test decr by'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

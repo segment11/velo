@@ -139,9 +139,9 @@ public class IGroup extends BaseCommand {
                 return ErrorReply.FORMAT;
             }
 
-            int by;
+            long by;
             try {
-                by = Integer.parseInt(new String(data[2]));
+                by = Long.parseLong(new String(data[2]));
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
