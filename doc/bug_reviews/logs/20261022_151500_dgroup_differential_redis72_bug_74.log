@@ -1,0 +1,91 @@
+=== probe_velo.py (Velo 7391 vs Redis 6399) ===
+========== VELO (port 7391) ==========
+set: b'+OK\r\n'
+decr: b':99\r\n'
+ttl: b':-1\r\n'
+set 1.5: b'+OK\r\n'
+decr float: b':0\r\n'
+get: b'$1\r\n0\r\n'
+set 10: b'+OK\r\n'
+decrby 3000000000: b'-ERR not integer\r\n'
+set 0123: b'+OK\r\n'
+dump 0123: b'$13\r\n\x00\xc0{\x0b\x00!=\xee\x92\xfd\xe5\x8e0\r\n'
+set +123: b'+OK\r\n'
+dump +123: b'$13\r\n\x00\xc0{\x0b\x00!=\xee\x92\xfd\xe5\x8e0\r\n'
+del: b':5\r\n'
+========== REDIS (port 6399) ==========
+set: b'+OK\r\n'
+decr: b':99\r\n'
+ttl: b':100\r\n'
+set 1.5: b'+OK\r\n'
+decr float: b'-ERR value is not an integer or out of range\r\n'
+get: b'$3\r\n1.5\r\n'
+set 10: b'+OK\r\n'
+decrby 3000000000: b':-2999999990\r\n'
+set 0123: b'+OK\r\n'
+dump 0123: b'$16\r\n\x00\x040123\x0b\x00c;\xb1\xe1c\xa4\x8d\xab\r\n'
+set +123: b'+OK\r\n'
+dump +123: b'$16\r\n\x00\x04+123\x0b\x00L)\xd3a\xe5 \x83\xdb\r\n'
+del: b':5\r\n'
+
+=== probe_overflow2.py ===
+==== VELO ====
+ set min: b'+OK\r\n'
+ decr: b':9223372036854775807\r\n'
+ get: b'$19\r\n9223372036854775807\r\n'
+ set 2147483648: b'+OK\r\n'
+ decrby 1: b':2147483647\r\n'
+ get: b'$10\r\n2147483647\r\n'
+ del: b':2\r\n'
+==== REDIS ====
+ set min: b'+OK\r\n'
+ decr: b'-ERR increment or decrement would overflow\r\n'
+ get: b'$20\r\n-9223372036854775808\r\n'
+ set 2147483648: b'+OK\r\n'
+ decrby 1: b':2147483647\r\n'
+ get: b'$10\r\n2147483647\r\n'
+ del: b':2\r\n'
+
+=== probe_float.py ===
+set 10.005: b'+OK\r\n'
+decrbyfloat 0: b':10\r\n'
+get: b'$2\r\n10\r\n'
+set 10.5: b'+OK\r\n'
+decrbyfloat 0.1: b'$5\r\n10.40\r\n'
+get: b'$4\r\n10.4\r\n'
+set 1: b'+OK\r\n'
+decrbyfloat inf: b'-ERR not float\r\n'
+decrbyfloat nan: b'-ERR not float\r\n'
+decrbyfloat 1e400: b'-ERR Character I is neither a decimal digit number, decimal point, nor "e" notation exponential mark.\r\n'
+get k3: b'$1\r\n1\r\n'
+del: b':3\r\n'
+
+=== probe_dump.py ===
+--- string "hello" ---
+   velo dump: 000568656c6c6f0b000aad620598abc983
+   restore -> b'+OK\r\n'
+   read   -> b'$5\r\nhello\r\n'
+--- string "0123" ---
+   velo dump: 00c07b0b00213dee92fde58e30
+   restore -> b'+OK\r\n'
+   read   -> b'$3\r\n123\r\n'
+--- list ---
+   velo dump: 01060161016201630161016201630b00e6af2c7f04d8bfe4
+   restore -> b'+OK\r\n'
+   read   -> b'*6\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n'
+--- set ---
+   velo dump: 0202016101620b0097bb9c56169cd484
+   restore -> b'+OK\r\n'
+   read   -> b'*2\r\n$1\r\na\r\n$1\r\nb\r\n'
+--- zset ---
+   velo dump: 0501026d31000000000000f83f0b00a56d00d494bd2ddc
+   restore -> b'+OK\r\n'
+   read   -> b'*2\r\n$2\r\nm1\r\n$3\r\n1.5\r\n'
+--- hash (HH mode) ---
+   velo dump: 04020266310276310266320276320b00770c6b3630258c57
+   restore -> b'+OK\r\n'
+   read   -> b'*4\r\n$2\r\nf1\r\n$2\r\nv1\r\n$2\r\nf2\r\n$2\r\nv2\r\n'
+--- hash with expired field (HH mode) ---
+   velo dump: 04010266320276320b00abd12d10020e72a4
+   restore -> b'+OK\r\n'
+   read   -> b'*2\r\n$2\r\nf2\r\n$2\r\nv2\r\n'

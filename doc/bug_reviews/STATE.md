@@ -5,7 +5,7 @@ Single source of truth for report id allocation and module coverage.
 
 ## next_bug_id
 
-74
+75
 
 ## Allocated
 
@@ -16,6 +16,7 @@ Single source of truth for report id allocation and module coverage.
 | 71 | hscan/sscan (HGroup/SGroup) | 1 | 71.3 fixed (ebbc7a2c), 71.4 fixed (78aca093); 71.1 REFUTED no action; 71.2/71.5 open, need product decision |
 | 72 | BGroup commands | 1 | all findings fixed: 72.1–72.3 + 72.5–72.10 in 9 commits, 72.11 fixed (`b00a7354`), 72.4 retracted; full re-review pending |
 | 73 | CGroup commands | 1 | 7 findings fixed + accepted; follow-ups A1 `94db1fa4` and R1 hardened by `00cbbc54`/`fbf3e06c`/`d0e37a45`/`31c3abc6`; verified e2e against a 2-slot/2-net worker server (all 5 cases pass, leak case red on the pre-fix jar); open: pipelined self-kill replies, PING/ECHO bypass CLIENT REPLY OFF |
+| 74 | DGroup commands (dbsize/debug/decr/decrby/decrbyfloat/del/dump) | 1 | discovery complete (9 findings), not yet verified |
 
 ## Module coverage (latest round per module)
 
@@ -28,6 +29,7 @@ Single source of truth for report id allocation and module coverage.
 | hscan/sscan | bug_71 round 1 | 71.3/71.4 fixed; 71.2 + 71.5 open (design decision pending) |
 | BGroup (bitmap/bloom/blocking-list B commands) | bug_72 round 1 | everything disposed (72.11 fixed in `b00a7354`, 72.4 retracted); re-review pending |
 | CGroup (client/command/config/copy C commands) | bug_73 round 1 | fixed + re-reviewed (3 rounds) + R1 hardened (4 commits); all accepted; open: pipelined self-kill replies, `handleFast` ignoring CLIENT REPLY OFF, gradle daemon heap |
+| DGroup (dbsize/debug/decr/decrby/decrbyfloat/del/dump) | bug_74 round 1 | discovery complete (9 findings), awaiting verification |
 | types / config / metrics / cluster / net / compression / commands (string/hash/list/set/zset/geo/hll) | see doc/bug_reviews/ | check reports |
 
 ## Known id collisions (historical, do not propagate)
