@@ -319,6 +319,40 @@ class DGroupTest extends Specification {
         eventloop.breakEventloop()
     }
 
+    def 'test decr'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def dGroup = new DGroup(null, null, null)
+        dGroup.byPassGetSet = inMemoryGetSet
+        dGroup.from(BaseCommand.mockAGroup())
+
+        when: 'decr a key with a ttl keeps the ttl'
+        def expireAt = System.currentTimeMillis() + 60_000
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_INT
+        cv.compressedData = ByteBuffer.allocate(4).putInt(100).array()
+        cv.setExpireAt(expireAt)
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        def reply = dGroup.execute('decr a')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 99
+        and: 'the ttl of the key is preserved'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().getExpireAt() == expireAt
+
+        when: 'decr a key without a ttl'
+        inMemoryGetSet.remove(slot, 'a')
+        cv.setExpireAt(CompressedValue.NO_EXPIRE)
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('decr a')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 99
+        and:
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().getExpireAt() == CompressedValue.NO_EXPIRE
+    }
+
     def 'test decr by'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

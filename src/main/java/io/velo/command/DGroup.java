@@ -363,6 +363,8 @@ public class DGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var cv = getCv(slotWithKeyHash);
+        // keep the ttl of the key, like redis does
+        final long expireAt = cv != null ? cv.getExpireAt() : CompressedValue.NO_EXPIRE;
 
         if (cv != null && cv.isTypeNumber()) {
             if (isByFloat) {
@@ -393,11 +395,11 @@ public class DGroup extends BaseCommand {
             var newValue = BigDecimal.valueOf(doubleValue).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP)
                     .subtract(BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP));
 
-            setNumber(newValue.doubleValue(), slotWithKeyHash);
+            setNumber(newValue.doubleValue(), slotWithKeyHash, expireAt);
             return new DoubleReply(newValue);
         } else {
             long newValue = longValue - by;
-            setNumber(newValue, slotWithKeyHash);
+            setNumber(newValue, slotWithKeyHash, expireAt);
             return new IntegerReply(newValue);
         }
     }
