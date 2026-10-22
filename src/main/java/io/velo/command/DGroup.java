@@ -175,7 +175,7 @@ public class DGroup extends BaseCommand {
                 return ErrorReply.FORMAT;
             }
 
-            return decrBy(1, 0);
+            return decrBy(1, 0, false);
         }
 
         if ("decrby".equals(cmd)) {
@@ -185,7 +185,7 @@ public class DGroup extends BaseCommand {
 
             try {
                 int by = Integer.parseInt(new String(data[2]));
-                return decrBy(by, 0);
+                return decrBy(by, 0, false);
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
@@ -203,7 +203,7 @@ public class DGroup extends BaseCommand {
                 return ErrorReply.NOT_FLOAT;
             }
 
-            return decrBy(0, by);
+            return decrBy(0, by, true);
         }
 
         if ("del".equals(cmd)) {
@@ -349,13 +349,12 @@ public class DGroup extends BaseCommand {
         });
     }
 
-    Reply decrBy(int by, double byFloat) {
+    Reply decrBy(int by, double byFloat, boolean isByFloat) {
         var keyBytes = data[1];
         if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
             return ErrorReply.KEY_TOO_LONG;
         }
 
-        boolean isByFloat = byFloat != 0;
         final var NOT_NUMBER_REPLY = isByFloat ? ErrorReply.NOT_FLOAT : ErrorReply.NOT_INTEGER;
 
         long longValue = 0;

@@ -131,7 +131,7 @@ public class IGroup extends BaseCommand {
             dGroup.from(this);
             dGroup.setSlotWithKeyHashListParsed(this.slotWithKeyHashListParsed);
 
-            return dGroup.decrBy(-1, 0);
+            return dGroup.decrBy(-1, 0, false);
         }
 
         if ("incrby".equals(cmd)) {
@@ -150,7 +150,7 @@ public class IGroup extends BaseCommand {
             dGroup.from(this);
             dGroup.setSlotWithKeyHashListParsed(this.slotWithKeyHashListParsed);
 
-            return dGroup.decrBy(-by, 0);
+            return dGroup.decrBy(-by, 0, false);
         }
 
         if ("incrbyfloat".equals(cmd)) {
@@ -169,7 +169,7 @@ public class IGroup extends BaseCommand {
             dGroup.from(this);
             dGroup.setSlotWithKeyHashListParsed(this.slotWithKeyHashListParsed);
 
-            return dGroup.decrBy(0, -by);
+            return dGroup.decrBy(0, -by, true);
         }
 
         if ("info".equals(cmd)) {

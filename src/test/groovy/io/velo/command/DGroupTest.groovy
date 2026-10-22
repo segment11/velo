@@ -374,6 +374,34 @@ class DGroupTest extends Specification {
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == Double.POSITIVE_INFINITY
     }
 
+    def 'test decrbyfloat'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def dGroup = new DGroup(null, null, null)
+        dGroup.byPassGetSet = inMemoryGetSet
+        dGroup.from(BaseCommand.mockAGroup())
+
+        when: 'decrbyfloat with a zero delta'
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
+        cv.compressedData = ByteBuffer.allocate(8).putDouble(10.5d).array()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        def reply = dGroup.execute('decrbyfloat a 0')
+        then: 'the float path is used, the value is not truncated'
+        reply instanceof DoubleReply
+        (reply as DoubleReply).doubleValue() == 10.5d
+        and: 'the value is still a double'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().dictSeqOrSpType == CompressedValue.SP_TYPE_NUM_DOUBLE
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == 10.5d
+
+        when: 'decrbyfloat with a not zero delta'
+        reply = dGroup.execute('decrbyfloat a 0.1')
+        then:
+        reply instanceof DoubleReply
+        (reply as DoubleReply).doubleValue() == 10.4d
+    }
+
     def 'test decr by'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

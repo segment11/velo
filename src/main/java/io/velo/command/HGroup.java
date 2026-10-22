@@ -1472,9 +1472,9 @@ public class HGroup extends BaseCommand {
 
         Reply reply;
         if (isFloat) {
-            reply = dGroup.decrBy(0, -byFloat);
+            reply = dGroup.decrBy(0, -byFloat, true);
         } else {
-            reply = dGroup.decrBy(-by, 0);
+            reply = dGroup.decrBy(-by, 0, false);
         }
 
         if (reply instanceof IntegerReply || reply instanceof DoubleReply) {
