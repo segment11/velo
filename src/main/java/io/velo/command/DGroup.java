@@ -395,6 +395,10 @@ public class DGroup extends BaseCommand {
         }
 
         if (isByFloat) {
+            if (!Double.isFinite(byFloat) || !Double.isFinite(doubleValue)) {
+                // infinity and nan are not valid float values
+                return NOT_NUMBER_REPLY;
+            }
             var newValue = BigDecimal.valueOf(doubleValue).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP)
                     .subtract(BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP));
 

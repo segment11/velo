@@ -411,6 +411,30 @@ class DGroupTest extends Specification {
         then:
         reply instanceof DoubleReply
         (reply as DoubleReply).doubleValue() == 10.4d
+
+        when: 'decrbyfloat with a not finite delta'
+        reply = dGroup.execute('decrbyfloat a 1e400')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = dGroup.execute('decrbyfloat a NaN')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = dGroup.execute('decrbyfloat a Infinity')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when: 'decrbyfloat a key with a not finite value'
+        cv.compressedData = ByteBuffer.allocate(8).putDouble(Double.POSITIVE_INFINITY).array()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('decrbyfloat a 1')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+        and: 'the value is not changed'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == Double.POSITIVE_INFINITY
     }
 
     def 'test decrby'() {
