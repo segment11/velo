@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** round 1 complete — 9/9 findings CONFIRMED (reproduced) and fixed (9 commits), re-review pending
+**Status:** round 1 complete — 9/9 findings CONFIRMED, fixed (9 commits) and re-reviewed ACCEPTED; residual follow-ups tracked in Residual Risk
 **Review branch:** `review/dgroup`
 **Reviewed commit:** `798ab06e6870217d758a1c670cfb38483054ff3b` (branch `main`, working tree clean for the reviewed files)
 
@@ -804,12 +804,76 @@ Live differential after the fixes (Velo jar rebuilt from HEAD, port 7391; Redis 
 
 ## Re-review (AI agent 2)
 
+**Method:** reviewed all 9 fix commits (`fe48c5f1`…`39f4dd60`) diff by diff, then independently re-ran the whole red/green differential and
+JaCoCo on this machine (not trusting the author's captured output). One correction to the Fix Log's recipe: restoring `ErrorReply.java`
+from `798ab06e` cannot compile — the new regression tests reference `ErrorReply.INCR_DECR_OVERFLOW` / `DEBUG_SUB_COMMAND_NOT_SUPPORT`,
+which exist only in HEAD. My differential restored only `DGroup.java`/`IGroup.java`/`HGroup.java`/`RDBParser.java` (keeping HEAD
+`ErrorReply.java`) and reproduced the author's numbers exactly:
+
+```
+# green phase (HEAD sources), focused suite:
+$ ./gradlew -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g" cleanTest :test \
+    --tests "io.velo.command.DGroupTest" --tests "io.velo.command.IGroupTest" \
+    --tests "io.velo.command.HGroupTest" --tests "io.velo.command.RGroupTest" \
+    --tests "io.velo.command.VeloRDBImporterTest"
+BUILD SUCCESSFUL — 126 tests, 0 failures  (23+18+56+28+1, XML: failures="0" errors="0" for all 5 classes)
+
+# red phase (git checkout 798ab06e -- DGroup/IGroup/HGroup/RDBParser.java), same command:
+DGroupTest > test debug FAILED        (74.9)
+DGroupTest > test del FAILED          (74.7)
+DGroupTest > test decr FAILED         (74.1, 74.4)
+DGroupTest > test decrbyfloat FAILED  (74.5, 74.8)
+DGroupTest > test decrby FAILED       (74.3, 74.4)
+DGroupTest > test dump FAILED         (74.6)
+IGroupTest > test incr FAILED         (74.4)
+IGroupTest > test incrby FAILED       (74.3)
+IGroupTest > test incrbyfloat FAILED  (74.5)
+126 tests completed, 9 failed
+# sources restored to HEAD, suite re-run: BUILD SUCCESSFUL
+```
+
+(One transient `compileTestGroovy FAILED` occurred on a re-run — the known Gradle daemon heap flakiness from bug 73, not a code issue;
+the identical re-run was green.)
+
+Per-commit verdicts (diff correctness + red/green + JaCoCo, all independently executed):
+
+| Bug | Commit | Diff review | Red/green | JaCoCo (changed lines) | Verdict |
+|---|---|---|---|---|---|
+| 74.1 | `fe48c5f1` | captures `cv != null ? cv.getExpireAt() : NO_EXPIRE`, both writes go through 3-arg `setNumber` | `test decr` red→green | DGroup 368 (2/2 branches), 407 covered | **ACCEPTED** |
+| 74.2 | `b7baeb52` | `isTypeDouble()` guard before `longValue()` truncation → `NOT_INTEGER`; also covers non-finite stored doubles (author's refinement) | `test decr` red→green | DGroup 374 (2/2), 376 covered | **ACCEPTED** |
+| 74.6 | `6abee041` | `isRedisIntegerString` checked against Redis `string2ll` case by case: `""`, `"-"`, `"0"`, `"-0"`, `"00"`, `"0123"`, `"+123"`, `"-5"` all behave like Redis; `Long.parseLong` after the guard can no longer throw (≤11 digits < 2^63) | `test dump` red→green | RDBParser 529–555 all lines covered (partials on 551 are short-circuit artifacts) | **ACCEPTED** |
+| 74.5 | `3185ee13` | explicit `isByFloat` parameter replaces value-derived mode; all 8 call sites updated (DGroup×3, IGroup×3, HGroup×2) | `test decrbyfloat` + IGroup `test incrbyfloat` red→green | DGroup 360 both values covered | **ACCEPTED** |
+| 74.3 | `ad698642` | `Long.parseLong` + `decrBy(long,…)` in both `DGroup.decrby` and `IGroup.incrby` (the reviewer's fix-scope note honored) | `test decrby` + `test incrby` red→green | DGroup 187, IGroup 144 covered | **ACCEPTED** |
+| 74.4 | `648be980` | guard math verified incl. edge `by = Long.MIN_VALUE` (`Long.MAX_VALUE + by` cannot wrap); value untouched on error (asserted by tests) | `test decr`/`test decrby`/`test incr` red→green | DGroup 410–418 covered; line 415 partial (`by == 0` boundary, see follow-up) | **ACCEPTED** |
+| 74.8 | `ecfa7921` | `!Double.isFinite(byFloat) || !Double.isFinite(doubleValue)` → `NOT_FLOAT`; covers `1e400`/`NaN`/`Infinity` deltas and the stored-non-finite addendum | `test decrbyfloat` red→green | DGroup 400 (4/4 branches) | **ACCEPTED** |
+| 74.7 | `f6b15320` | single hoisted length loop before the branch split — both paths now validated before any removal; test asserts both halves (local: earlier key **not** removed; cross-worker: `KEY_TOO_LONG` with `crossRequestWorker=true`) | `test del` red→green | DGroup 278–281 (2/2) covered | **ACCEPTED** |
+| 74.9 | `39f4dd60` | `NO_SUCH_KEY` for missing key, `DEBUG_SUB_COMMAND_NOT_SUPPORT` for unknown subcommand; the two pinned null-expectations in `DGroupTest` flipped in the same commit | `test debug` red→green | DGroup 238, 270 covered | **ACCEPTED** |
+
+Post-fix notes verified in the current tree: note 1 (`BaseCommand.set()` normalises numeric-looking strings — `BaseCommand.java:1086-1105`
+still parses without the canonical-literal rule), note 2 (`HGroup.hincrby2()` still computes `BigDecimal.valueOf(byFloat)` unguarded —
+`HGroup.java:1502, 1532-1533`), note 3 (`HGroup.hincrby()` delta still `Integer.parseInt` — `HGroup.java:1447`). All three are outside the
+DGroup scope of this round and correctly deferred.
+
+Minor follow-ups found during re-review (non-blocking):
+
+1. `DGroup.java:415` `else if (by < 0)` — the `by == 0` boundary (e.g. `DECRBY k 0`) is never exercised by any test. The path is trivially
+   safe (skips both guards), but a one-line data row would close the last partial branch of the 74.4 guard.
+2. Fix Log accuracy: the recorded pre-fix restore list includes `ErrorReply.java`, which cannot have compiled with the HEAD tests (see
+   Method). The substance of the evidence is unaffected — my corrected differential reproduces the exact `126 tests, 9 failed` result.
+3. The Fix Log's "RDBParser 529–555 (isRedisIntegerString, all branches)" is slightly generous: line 551 has a short-circuit partial.
+   Cosmetic only; every decision outcome of the helper is exercised.
+
+**Re-review verdict: all 9 fixes ACCEPTED.** Red/green differential, focused green runs, and JaCoCo on the changed lines are independently
+reproduced; commits are one-bug-one-commit with the regression test in the same commit.
+
 ## Residual Risk
 
 - `BaseCommand.set()` still normalises non-canonical numeric strings to numbers (see post-fix note 1) — data fidelity issue in the
-  string module, not fixed in this round.
-- `HGroup.hincrby2()` (HH mode) still leaks a raw `NumberFormatException` for a non-finite `HINCRBYFLOAT` delta (post-fix note 2).
-- `HGroup.hincrby()` still parses the `HINCRBY` delta as int32 (post-fix note 3).
+  string module, not fixed in this round; follow-up candidate for the string module round.
+- `HGroup.hincrby2()` (HH mode) still leaks a raw `NumberFormatException` for a non-finite `HINCRBYFLOAT` delta (post-fix note 2);
+  hash-module follow-up.
+- `HGroup.hincrby()` still parses the `HINCRBY` delta as int32 (post-fix note 3); hash-module follow-up.
+- `DGroup.java:415`: the `by == 0` boundary of the new overflow guard is untested (re-review follow-up 1) — safe path, cosmetic.
 - `DECR`/`DECRBY` on a key holding a non-string type answer `ERR not integer` where Redis answers `WRONGTYPE …` (error-string
   difference only, recorded as a non-finding).
 - The `DEBUG` error strings (`not such key`, `debug subcommand not support`) do not match Redis' wording verbatim.
