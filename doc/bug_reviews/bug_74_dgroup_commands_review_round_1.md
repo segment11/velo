@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** round 1 verification complete — 9/9 findings CONFIRMED (reproduced), fix phase pending
+**Status:** round 1 complete — 9/9 findings CONFIRMED (reproduced) and fixed (9 commits), re-review pending
 **Review branch:** `review/dgroup`
 **Reviewed commit:** `798ab06e6870217d758a1c670cfb38483054ff3b` (branch `main`, working tree clean for the reviewed files)
 
@@ -724,32 +724,107 @@ No finding is downgraded, merged or retracted. Severity ordering is unchanged; t
 
 ## Fix Log (AI agent 1, round 1 fix phase)
 
+All fixes follow red-green: a permanent regression test was added first, watched failing for the expected reason, then the minimal
+production change was made. Focused test command used for the green phase:
+
+```
+./gradlew -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g" cleanTest :test \
+  --tests "io.velo.command.DGroupTest" --tests "io.velo.command.IGroupTest" \
+  --tests "io.velo.command.HGroupTest" --tests "io.velo.command.RGroupTest" \
+  --tests "io.velo.command.VeloRDBImporterTest"
+```
+
+(The `-Xmx6g` is needed because the Groovy test compilation runs out of heap with the default daemon size — a pre-existing
+infrastructure issue, already noted as an open item in bug 73.)
+
 | Bug | Failing test evidence | Fix commit | Focused test | JaCoCo |
 |---|---|---|---|---|
-| 74.1 | | | | |
-| 74.2 | | | | |
-| 74.3 | | | | |
-| 74.4 | | | | |
-| 74.5 | | | | |
-| 74.6 | | | | |
-| 74.7 | | | | |
-| 74.8 | | | | |
-| 74.9 | | | | |
+| 74.1 | `DGroupTest.test decr` — red: `inMemoryGetSet.getBuf(slot,'a',0,0L).cv().getExpireAt() == expireAt` → `0 == 1792655698691` (the stored cv had `expireAt=0`) | `fe48c5f1` `fix: keep the key ttl when decr by` | green (DGroupTest, IGroupTest) | `DGroup` 368 (`expireAt` capture, 2/2 branches), 399 + 402 (`setNumber(..., expireAt)`) covered |
+| 74.2 | `DGroupTest.test decr` — red: `reply == ErrorReply.NOT_INTEGER` → `<IntegerReply integer=0>` (the double 1.5 was truncated) | `b7baeb52` `fix: do not truncate a double value when decr by` | green (DGroupTest, IGroupTest, HGroupTest) | `DGroup` 373–377 (the `isTypeDouble` guard, 2/2 branches) covered |
+| 74.6 | `DGroupTest.test dump` — red: the payload was `00c07b0b00213dee92fde58e30` (int8 123) instead of the expected `0004303132330b00633bb1e163a48dab` (raw `"0123"`, the exact bytes Redis 7.2.11 produces) | `6abee041` `fix: dump only canonical integers with the rdb int encoding` | green (DGroupTest, RGroupTest, VeloRDBImporterTest) | `RDBParser` 529–555 (`isRedisIntegerString`, all branches) + 559–572 (int8/int16/int32 encodings) covered |
+| 74.5 | `DGroupTest.test decrbyfloat` — red: `reply instanceof DoubleReply` → `ErrorReply{message='not integer'}`; `IGroupTest.test incrbyfloat` — red with the pre-fix sources stashed: same `ErrorReply{message='not integer'}` | `3185ee13` `fix: use the float path for decrbyfloat with a zero delta` | green (DGroupTest, IGroupTest, HGroupTest) | `DGroup` 358–374 (the explicit `isByFloat` flag) covered |
+| 74.3 | `DGroupTest.test decrby` + `IGroupTest.test incrby` — red: `reply instanceof IntegerReply` → `ErrorReply{message='not integer'}` for the delta `3000000000` | `ad698642` `fix: support int64 delta for decrby and incrby` | green (DGroupTest, IGroupTest, HGroupTest) | `DGroup` 187–190, `IGroup` 144–153 covered |
+| 74.4 | `DGroupTest.test decr` / `test decrby` + `IGroupTest.test incr` — red: `reply instanceof ErrorReply` → `<IntegerReply integer=9223372036854775807>` / `-9223372036854775808` (the wrapped values) | `648be980` `fix: report overflow when decr by a value out of the long range` | green (DGroupTest, IGroupTest, HGroupTest) | `DGroup` 404–415 (both overflow branches, 4/4 branches) covered |
+| 74.8 | `DGroupTest.test decrbyfloat` — red: `java.lang.NumberFormatException: Character I is neither a decimal digit number, …` escaped the command (also for `NaN`, `Infinity` and a stored `Infinity` value) | `ecfa7921` `fix: reject not finite float for decrbyfloat` | green (DGroupTest, IGroupTest, HGroupTest) | `DGroup` 398–400 (`Double.isFinite` guard, 4/4 branches) covered |
+| 74.7 | `DGroupTest.test del` — red: `inMemoryGetSet.getBuf(slot,'a',0,0L) != null` → `null` (the key was removed before the `KEY_TOO_LONG` error). Cross-worker half: a temporary spec (`Bug74CrossWorkerDelTempSpec`, deleted afterwards) run against the pre-fix sources never reached the length check — it went on to `DGroup.del():303` and failed with an NPE in `LocalPersist.oneSlot` | `f6b15320` `fix: check the key length before remove in del` | green (DGroupTest) | `DGroup` 279–281 (the hoisted check, 2/2 branches) covered |
+| 74.9 | `DGroupTest.test debug` — red: `reply == ErrorReply.NO_SUCH_KEY` → `<NilReply>`; the two expectations that pinned the old behaviour (`DGroupTest:150-152`, `:226-229`) were flipped in the same commit | `39f4dd60` `fix: answer an error for an unsupported debug sub command` | green (DGroupTest) | `DGroup` 237–238 (`NO_SUCH_KEY`) and 270 (`DEBUG_SUB_COMMAND_NOT_SUPPORT`) covered |
+
+Full-suite evidence for the whole fix set: with the nine regression tests in place and the **pre-fix** production sources restored
+(`git checkout 798ab06e -- src/main/java/io/velo/command/{DGroup,IGroup,HGroup}.java src/main/java/io/velo/rdb/RDBParser.java
+src/main/java/io/velo/reply/ErrorReply.java`), the focused run reported `126 tests completed, 9 failed` — exactly the nine new/updated
+regression tests, i.e. every fix is guarded by a test that fails without it. With the fixes in place the same run is
+`BUILD SUCCESSFUL` (126 tests, 0 failures).
+
+Live differential after the fixes (Velo jar rebuilt from HEAD, port 7391; Redis 7.2.11, port 6399):
+
+| case | Velo (after) | Redis 7.2.11 |
+|---|---|---|
+| `SET k 100 EX 100` + `DECR k` + `TTL k` | `:99` / `:99` (TTL kept) | `:99` / `:100` |
+| `SET kf 1.5` + `DECR kf` + `GET kf` | `-ERR not integer` / `"1.5"` | `-ERR value is not an integer or out of range` / `"1.5"` |
+| `SET kb 10` + `DECRBY kb 3000000000` | `:-2999999990` | `:-2999999990` |
+| `SET k2 -9223372036854775808` + `DECR k2` | `-ERR increment or decrement would overflow` (value unchanged) | identical |
+| `SET k 10.005` + `DECRBYFLOAT k 0` | double reply `10.01` (fraction kept) | n/a (no such command in Redis 7.2) |
+| `DECRBYFLOAT k 1e400` / `NaN` / `Infinity` | `-ERR not float` | n/a |
+| `DUMP` of string/list/set/zset/hash | byte-identical to Redis 7.2.11 | — |
+
+### Post-fix notes found during the fix phase
+
+1. **74.6 — the end-to-end symptom has a second root cause outside `DGroup`.** The fix above corrects the RDB writer
+   (`RDBParser.writeRdbString`), which is where the finding was verified (the reviewer's spec asserted the `RDBParser.dumpString`
+   payload bytes, the new regression test drives the same level through `DUMP`). But the *user visible* difference observed in the
+   discovery phase (`SET k 0123` → `DUMP k` → int-encoded payload) is actually caused one step earlier: Velo's `SET` normalises a
+   numeric-looking string to a number, because `BaseCommand.set()` (BaseCommand.java:1086–1105) uses `Long.parseLong` without
+   Redis' canonical-literal rule. Measured on the fixed build:
+
+   ```
+   VELO : set 0123 -> get "123"    set +123 -> get "123"    set -0 -> get "0"    set 007 -> get "7"
+   REDIS: set 0123 -> get "0123"  set +123 -> get "+123"  set -0 -> get "-0"  set 007 -> get "007"
+   ```
+
+   So a Velo key can currently never hold the string `"0123"`, and the `DUMP` payload difference is a *consequence* of that
+   `SET`-time normalisation, not of the RDB writer. The RDB-writer fix is still required (it removes the latent corruption for any
+   value that reaches `DUMP` as a string — e.g. data written by another node/version or by the RDB import path — and it makes the
+   writer obey Redis' `string2ll` rule), but the **remaining** data-fidelity defect is the lossy `SET` normalisation, which lives in
+   `BaseCommand.set()` (string module, not `DGroup`). It is filed here as a follow-up candidate for the next round and was **not**
+   fixed in this round, to keep the fix phase scoped to the confirmed `DGroup` findings:
+
+   > **Follow-up candidate (not part of round 1):** `BaseCommand.set()` converts any string that `Long.parseLong`/`Double.parseDouble`
+   > accepts into a number, so `SET k 0123` stores `123` and `GET k` returns `"123"`. Redis keeps the exact string. Fix direction: use
+   > the same canonical-literal test as the RDB writer before the number conversion.
+
+2. **74.8 — one sibling path is still unguarded (out of scope for this round).** The fix in `DGroup.decrBy()` covers `DECRBYFLOAT`,
+   `INCRBYFLOAT` and the *split-storage* `HINCRBYFLOAT` (which delegates to `decrBy`). The **HH-mode** `HINCRBYFLOAT`
+   (`HGroup.hincrby2()`, HGroup.java:1490–1545) computes `BigDecimal.valueOf(byFloat)` itself and still leaks the raw
+   `NumberFormatException` for a non-finite delta. It is a hash-module defect, tracked as a follow-up for the hash module round, not
+   fixed here.
+
+3. **74.3 — `HINCRBY`'s own delta is still int32.** `HGroup.hincrby()` parses the delta with `Integer.parseInt`
+   (HGroup.java:1439) and therefore still rejects an int64 delta, although `DGroup.decrBy()` now accepts one. Also a hash-module item
+   (follow-up), out of the `DGroup` scope of this round.
 
 ## Re-review (AI agent 2)
 
 ## Residual Risk
 
+- `BaseCommand.set()` still normalises non-canonical numeric strings to numbers (see post-fix note 1) — data fidelity issue in the
+  string module, not fixed in this round.
+- `HGroup.hincrby2()` (HH mode) still leaks a raw `NumberFormatException` for a non-finite `HINCRBYFLOAT` delta (post-fix note 2).
+- `HGroup.hincrby()` still parses the `HINCRBY` delta as int32 (post-fix note 3).
+- `DECR`/`DECRBY` on a key holding a non-string type answer `ERR not integer` where Redis answers `WRONGTYPE …` (error-string
+  difference only, recorded as a non-finding).
+- The `DEBUG` error strings (`not such key`, `debug subcommand not support`) do not match Redis' wording verbatim.
+
 ## Summary
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 74.1 | `DECR`/`DECRBY`/`DECRBYFLOAT` drop the key TTL | High | Correctness | CONFIRMED (reproduced) | fix pending |
-| 74.2 | `DECR`/`DECRBY` truncate a float (or non-finite) value | Medium | Correctness | CONFIRMED (reproduced) | fix pending |
-| 74.3 | `DECRBY` delta limited to int32 | Medium | Redis compatibility | CONFIRMED (reproduced) | fix pending |
-| 74.4 | int64 overflow wraps silently | Medium | Correctness | CONFIRMED (reproduced) | fix pending |
-| 74.5 | zero delta switches `DECRBYFLOAT` to the integer path | Medium | Correctness | CONFIRMED (reproduced) | fix pending |
-| 74.6 | `DUMP` corrupts numeric-looking strings | High | Correctness | CONFIRMED (reproduced) | fix pending |
-| 74.7 | `DEL` key-length check missing in the cross-worker path | Low | Edge case | CONFIRMED (reproduced) | fix pending |
-| 74.8 | `DECRBYFLOAT` with a non-finite delta or stored value leaks a Java exception message | Low | Edge case | CONFIRMED (reproduced) | fix pending |
-| 74.9 | `DEBUG` answers null instead of an error | Low | Redis compatibility | CONFIRMED (reproduced) | fix pending |
+| 74.1 | `DECR`/`DECRBY`/`DECRBYFLOAT` drop the key TTL | High | Correctness | CONFIRMED (reproduced) | fixed `fe48c5f1` |
+| 74.2 | `DECR`/`DECRBY` truncate a float (or non-finite) value | Medium | Correctness | CONFIRMED (reproduced) | fixed `b7baeb52` |
+| 74.3 | `DECRBY` delta limited to int32 | Medium | Redis compatibility | CONFIRMED (reproduced) | fixed `ad698642` |
+| 74.4 | int64 overflow wraps silently | Medium | Correctness | CONFIRMED (reproduced) | fixed `648be980` |
+| 74.5 | zero delta switches `DECRBYFLOAT` to the integer path | Medium | Correctness | CONFIRMED (reproduced) | fixed `3185ee13` |
+| 74.6 | `DUMP` corrupts numeric-looking strings | High | Correctness | CONFIRMED (reproduced) | fixed `6abee041` (see post-fix note 1) |
+| 74.7 | `DEL` key-length check missing in the cross-worker path | Low | Edge case | CONFIRMED (reproduced) | fixed `f6b15320` |
+| 74.8 | `DECRBYFLOAT` with a non-finite delta or stored value leaks a Java exception message | Low | Edge case | CONFIRMED (reproduced) | fixed `ecfa7921` (see post-fix note 2) |
+| 74.9 | `DEBUG` answers null instead of an error | Low | Redis compatibility | CONFIRMED (reproduced) | fixed `39f4dd60` |
+
