@@ -261,6 +261,14 @@ class DGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 0
 
+        when: 'del with a too long key after a normal key'
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = dGroup.execute('del a >key')
+        then: 'the key length is checked before any remove'
+        reply == ErrorReply.KEY_TOO_LONG
+        and: 'the normal key is not removed'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L) != null
+
         when:
         def eventloop = Eventloop.builder()
                 .withIdleInterval(Duration.ofMillis(100))
@@ -284,6 +292,11 @@ class DGroupTest extends Specification {
         (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof IntegerReply && (result as IntegerReply).integer == 1
         }.result
+
+        when: 'del with a too long key in the cross worker mode'
+        reply = dGroup.execute('del >key')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
 
         cleanup:
         eventloop.breakEventloop()

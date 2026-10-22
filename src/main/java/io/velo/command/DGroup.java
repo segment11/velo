@@ -275,14 +275,16 @@ public class DGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
+        // check the key length before any remove, in all modes
+        for (int i = 1; i < data.length; i++) {
+            if (data[i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+        }
+
         if (!isCrossRequestWorker) {
             int n = 0;
             for (int i = 1, j = 0; i < data.length; i++, j++) {
-                var keyBytes = data[i];
-                if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
-                    return ErrorReply.KEY_TOO_LONG;
-                }
-
                 var slotWithKeyHash = slotWithKeyHashListParsed.get(j);
                 // remove delay, perf better
                 var isRemoved = remove(slotWithKeyHash);
