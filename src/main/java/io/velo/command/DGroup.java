@@ -370,6 +370,10 @@ public class DGroup extends BaseCommand {
             if (isByFloat) {
                 doubleValue = cv.numberValue().doubleValue();
             } else {
+                if (cv.isTypeDouble()) {
+                    // a double value is not an integer, do not truncate it
+                    return NOT_NUMBER_REPLY;
+                }
                 longValue = cv.numberValue().longValue();
             }
         } else {

@@ -351,6 +351,27 @@ class DGroupTest extends Specification {
         (reply as IntegerReply).integer == 99
         and:
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().getExpireAt() == CompressedValue.NO_EXPIRE
+
+        when: 'decr a key with a double value'
+        def doubleCv = new CompressedValue()
+        doubleCv.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
+        doubleCv.compressedData = ByteBuffer.allocate(8).putDouble(1.5).array()
+        inMemoryGetSet.put(slot, 'a', 0, doubleCv)
+        reply = dGroup.execute('decr a')
+        then: 'a double value is not an integer'
+        reply == ErrorReply.NOT_INTEGER
+        and: 'the value is not changed'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().dictSeqOrSpType == CompressedValue.SP_TYPE_NUM_DOUBLE
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == 1.5d
+
+        when: 'decr a key with an infinity value'
+        doubleCv.compressedData = ByteBuffer.allocate(8).putDouble(Double.POSITIVE_INFINITY).array()
+        inMemoryGetSet.put(slot, 'a', 0, doubleCv)
+        reply = dGroup.execute('decr a')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+        and: 'the value is not changed'
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == Double.POSITIVE_INFINITY
     }
 
     def 'test decr by'() {
