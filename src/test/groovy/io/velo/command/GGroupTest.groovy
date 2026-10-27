@@ -602,6 +602,28 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('geodist xxx m0 m1 XX XX')
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        // Bug 77.5: same member distance uses fixed 4 decimals like redis
+        reply = gGroup.execute('geodist xxx m0 m0')
+        then:
+        reply instanceof BulkReply
+        new String((reply as BulkReply).raw) == '0.0000'
+
+        when:
+        // Bug 77.5: km distance keeps 4 fixed decimals
+        reply = gGroup.execute('geodist xxx m0 m1 km')
+        then:
+        new String((reply as BulkReply).raw) == '166.2743'
+
+        when:
+        // Bug 77.5: a large distance in meters never uses scientific notation
+        gGroup.execute('geoadd faraway 0 85 fa 0 -85 fb')
+        reply = gGroup.execute('geodist faraway fa fb m')
+        then:
+        def farStr = new String((reply as BulkReply).raw)
+        farStr ==~ /\d+\.\d{4}/
+        farStr.toDouble() > 18800000 && farStr.toDouble() < 19000000
     }
 
     def 'test geohash and geopos'() {
@@ -647,6 +669,16 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('geohash xxx')
         then:
         reply == ErrorReply.FORMAT
+
+        when:
+        // Bug 77.5: geopos never uses scientific notation and keeps the shortest plain form
+        gGroup.execute('geoadd small 0.0001 15.0 s0')
+        reply = gGroup.execute('geopos small s0')
+        then:
+        reply instanceof MultiBulkReply
+        def pos = (reply as MultiBulkReply).replies[0] as MultiBulkReply
+        new String((pos.replies[0] as BulkReply).raw) == '0.0001'
+        new String((pos.replies[1] as BulkReply).raw) == '15'
     }
 
     def 'test geosearch and geosearchstore'() {
@@ -929,6 +961,18 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('geosearch nosuchsrc frommember mmm byradius 100 km')
         then:
         reply == MultiBulkReply.EMPTY
+
+        when:
+        // Bug 77.5: withdist uses fixed 4 decimals, withcoord never uses scientific notation
+        reply = gGroup.execute('geosearch xxx frommember m0 byradius 0.0001 m withdist withcoord')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        def row = (reply as MultiBulkReply).replies[0] as MultiBulkReply
+        new String((row.replies[1] as BulkReply).raw) == '0.0000'
+        def coordRow = row.replies[2] as MultiBulkReply
+        new String((coordRow.replies[0] as BulkReply).raw) == '13.361389'
+        new String((coordRow.replies[1] as BulkReply).raw) == '38.115556'
 
         when:
         // read mode with an empty result replies an empty array

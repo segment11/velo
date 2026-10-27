@@ -11,6 +11,8 @@ import io.velo.type.RedisGeo;
 import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -516,6 +518,22 @@ public class GGroup extends BaseCommand {
     private record GeoItem(double lon, double lat, String member) {
     }
 
+    /**
+     * Formats a geo distance reply with fixed 4 decimals, mirroring redis
+     * geo.c addReplyDoubleDistance() = fixedpoint_d2string(distance, 4).
+     */
+    private static BulkReply distanceReply(double distance) {
+        return new BulkReply(BigDecimal.valueOf(distance).setScale(4, RoundingMode.HALF_UP).toPlainString());
+    }
+
+    /**
+     * Formats a geo coordinate as a plain decimal string, java Double.toString
+     * switches to scientific notation for values like 1.0E-4 which redis never sends.
+     */
+    private static String coordinate(double d) {
+        return BigDecimal.valueOf(d).stripTrailingZeros().toPlainString();
+    }
+
     private RedisGeo getRedisGeo(SlotWithKeyHash slotWithKeyHash) {
         var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_GEO);
         if (encodedBytes == null) {
@@ -657,7 +675,7 @@ public class GGroup extends BaseCommand {
         }
 
         var distance = RedisGeo.distance(p0, p1);
-        return new BulkReply(unit.fromMeters(distance));
+        return distanceReply(unit.fromMeters(distance));
     }
 
     private Reply geohash(boolean isGeopos) {
@@ -680,8 +698,8 @@ public class GGroup extends BaseCommand {
                 } else {
                     if (isGeopos) {
                         var subReplies = new Reply[]{
-                                new BulkReply(p.lon()),
-                                new BulkReply(p.lat())
+                                new BulkReply(coordinate(p.lon())),
+                                new BulkReply(coordinate(p.lat()))
                         };
                         replies[i - 2] = new MultiBulkReply(subReplies);
                     } else {
@@ -1059,7 +1077,7 @@ public class GGroup extends BaseCommand {
 
             var ii = 1;
             if (isWithDist) {
-                subReplies[ii] = new BulkReply(outputUnit.fromMeters(result.distance()));
+                subReplies[ii] = distanceReply(outputUnit.fromMeters(result.distance()));
                 ii++;
             }
             if (isWithHash) {
@@ -1068,8 +1086,8 @@ public class GGroup extends BaseCommand {
             }
             if (isWithCoord) {
                 subReplies[ii] = new MultiBulkReply(new Reply[]{
-                        new BulkReply(result.p.lon()),
-                        new BulkReply(result.p.lat())
+                        new BulkReply(coordinate(result.p.lon())),
+                        new BulkReply(coordinate(result.p.lat()))
                 });
             }
 
