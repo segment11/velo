@@ -281,6 +281,10 @@ public class GGroup extends BaseCommand {
         }
     }
 
+    private static ErrorReply invalidExpireTime() {
+        return new ErrorReply("invalid expire time in 'getex' command");
+    }
+
     private Reply getex() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
@@ -347,13 +351,26 @@ public class GGroup extends BaseCommand {
 
         long expireAt = cv.getExpireAt();
         long expireAtOld = expireAt;
+        final long now = System.currentTimeMillis();
         if (isPersist) {
             expireAt = NO_EXPIRE;
         } else if (ex > -1) {
-            expireAt = System.currentTimeMillis() + ex * 1000;
+            // seconds to milliseconds, check the overflow before the multiply and before the add
+            if (ex > Long.MAX_VALUE / 1000 || ex > (Long.MAX_VALUE - now) / 1000) {
+                return invalidExpireTime();
+            }
+            expireAt = now + ex * 1000;
         } else if (px > -1) {
-            expireAt = System.currentTimeMillis() + px;
+            // check the overflow before the add
+            if (px > Long.MAX_VALUE - now) {
+                return invalidExpireTime();
+            }
+            expireAt = now + px;
         } else if (exAt > -1) {
+            // seconds to milliseconds, check the overflow before the multiply
+            if (exAt > Long.MAX_VALUE / 1000) {
+                return invalidExpireTime();
+            }
             expireAt = exAt * 1000;
         } else if (pxAt > -1) {
             expireAt = pxAt;

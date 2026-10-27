@@ -269,6 +269,35 @@ class GGroupTest extends Specification {
         then:
         reply == ErrorReply.FORMAT
 
+        when: 'expire seconds overflow'
+        reply = gGroup.execute('getex a ex 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'getex' command"
+
+        when: 'expire milliseconds overflow'
+        reply = gGroup.execute('getex a px 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'getex' command"
+
+        when: 'expire at seconds overflow'
+        reply = gGroup.execute('getex a exat 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'getex' command"
+
+        when: 'expire seconds passes the multiply check but overflows the add'
+        reply = gGroup.execute('getex a ex ' + (Long.MAX_VALUE.intdiv(1000)).toString())
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'getex' command"
+
+        when: 'expire at milliseconds does not overflow, value is used as is'
+        reply = gGroup.execute('getex a pxat 9223372036854775807')
+        then:
+        reply instanceof BulkReply
+
         when: 'key holds a list type value'
         def listCv = Mock.prepareCompressedValueList(1)[0]
         listCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
