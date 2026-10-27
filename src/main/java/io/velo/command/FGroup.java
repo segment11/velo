@@ -95,9 +95,10 @@ public class FGroup extends BaseCommand {
 
     @VisibleForTesting
     Reply failover() {
-        // skip for test
-        if (data.length == 2) {
-            return OKReply.INSTANCE;
+        // FAILOVER [TO host port [FORCE]] [ABORT] [TIMEOUT milliseconds]
+        // this failover is synchronous, there is no ongoing failover state to abort
+        if (data.length == 2 && "abort".equalsIgnoreCase(new String(data[1]))) {
+            return new ErrorReply("No failover in progress.");
         }
 
         // iterate a captured slot list so per-slot results stay index-aligned with the rollback below
@@ -207,9 +208,12 @@ public class FGroup extends BaseCommand {
             }
         }
 
-        // skip for test
+        // FLUSHDB [ASYNC | SYNC] — both map to the same per-slot implementation; other tokens are syntax errors
         if (data.length == 2) {
-            return OKReply.INSTANCE;
+            var flushType = new String(data[1]);
+            if (!"async".equalsIgnoreCase(flushType) && !"sync".equalsIgnoreCase(flushType)) {
+                return ErrorReply.SYNTAX;
+            }
         }
 
         return localPersist.doSthInSlots(oneSlot -> {

@@ -24,18 +24,30 @@ class FGroupTest extends Specification {
         given:
         def data2 = new byte[2][]
         data2[1] = 'a'.bytes
-        def fGroup = new FGroup(cmd, data2, null)
+
+        when: 'unknown flushdb token is a syntax error'
+        def fGroup = new FGroup('flushdb', data2, null)
         fGroup.from(BaseCommand.mockAGroup())
+        def reply = fGroup.handle()
+        then:
+        reply == ErrorReply.SYNTAX
 
-        expect:
-        fGroup.handle() == expected
+        when: 'failover abort is answered'
+        def abortData = new byte[2][]
+        abortData[1] = 'abort'.bytes
+        def fGroup2 = new FGroup('failover', abortData, null)
+        fGroup2.from(BaseCommand.mockAGroup())
+        reply = fGroup2.handle()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'No failover in progress.'
 
-        where:
-        cmd        | expected
-        'failover' | OKReply.INSTANCE
-        'flushall' | OKReply.INSTANCE
-        'flushdb'  | OKReply.INSTANCE
-        'zzz'      | NilReply.INSTANCE
+        when: 'unknown command falls through to nil'
+        def fGroup3 = new FGroup('zzz', data2, null)
+        fGroup3.from(BaseCommand.mockAGroup())
+        reply = fGroup3.handle()
+        then:
+        reply == NilReply.INSTANCE
     }
 
     final short slot = 0
@@ -67,6 +79,26 @@ class FGroupTest extends Specification {
 
         when: 'no slave on the first slot'
         def reply = fGroup.failover()
+        then:
+        resolveReply(reply) instanceof ErrorReply
+        (resolveReply(reply) as ErrorReply).message == 'no slave'
+
+        when: '76.1: FAILOVER ABORT is answered, no failover state exists to abort'
+        def abortData = new byte[2][]
+        abortData[1] = 'abort'.bytes
+        def fGroupAbort = new FGroup('failover', abortData, null)
+        fGroupAbort.from(BaseCommand.mockAGroup())
+        reply = fGroupAbort.handle()
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'No failover in progress.'
+
+        when: '76.1: an unknown failover token still reaches the real failover path'
+        def unknownData = new byte[2][]
+        unknownData[1] = 'nonsense'.bytes
+        def fGroupUnknown = new FGroup('failover', unknownData, null)
+        fGroupUnknown.from(BaseCommand.mockAGroup())
+        reply = fGroupUnknown.handle()
         then:
         resolveReply(reply) instanceof ErrorReply
         (resolveReply(reply) as ErrorReply).message == 'no slave'
@@ -148,6 +180,33 @@ class FGroupTest extends Specification {
         LocalPersistTest.prepareLocalPersist()
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
+
+        when: '76.1: FLUSHDB ASYNC must actually flush'
+        def sGroup = new SGroup(null, null, null)
+        sGroup.from(BaseCommand.mockAGroup())
+        sGroup.execute('set fgroupk value')
+        (sGroup.execute('strlen fgroupk') as IntegerReply).integer == 6
+        reply = fGroup.execute('flushdb async')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result -> result == OKReply.INSTANCE }.result
+        sGroup.execute('strlen fgroupk') == IntegerReply.REPLY_0
+
+        when: '76.1: FLUSHDB SYNC also flushes'
+        sGroup.execute('set fgroupk2 value2')
+        (sGroup.execute('strlen fgroupk2') as IntegerReply).integer == 7
+        reply = fGroup.execute('flushdb sync')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result -> result == OKReply.INSTANCE }.result
+        sGroup.execute('strlen fgroupk2') == IntegerReply.REPLY_0
+
+        when: '76.1: unknown token is a syntax error and keeps the data'
+        sGroup.execute('set fgroupk3 value3')
+        reply = fGroup.execute('flushdb nonsense')
+        then:
+        reply == ErrorReply.SYNTAX
+        (sGroup.execute('strlen fgroupk3') as IntegerReply).integer == 6
 
         when: '76.3: readonly slot (e.g. replica) must refuse the flush'
         oneSlot.setReadonly(true)
