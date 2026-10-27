@@ -277,8 +277,11 @@ public class EGroup extends BaseCommand {
         if (isXx && expireAtExist == CompressedValue.NO_EXPIRE) {
             return IntegerReply.REPLY_0;
         }
-        if (isGt && expireAtExist != CompressedValue.NO_EXPIRE && expireAtExist >= expireAt) {
-            return IntegerReply.REPLY_0;
+        if (isGt) {
+            // a key without TTL has an infinite TTL, so the GT option always fails
+            if (expireAtExist == CompressedValue.NO_EXPIRE || expireAtExist >= expireAt) {
+                return IntegerReply.REPLY_0;
+            }
         }
         if (isLt && expireAtExist != CompressedValue.NO_EXPIRE && expireAtExist <= expireAt) {
             return IntegerReply.REPLY_0;

@@ -263,11 +263,13 @@ class EGroupTest extends Specification {
         reply == IntegerReply.REPLY_0
 
         when:
+        // GT on a key without TTL, the key has an infinite TTL, so GT always fails
         cv.expireAt = CompressedValue.NO_EXPIRE
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = eGroup.expire(true, true)
         then:
-        reply == IntegerReply.REPLY_1
+        reply == IntegerReply.REPLY_0
+        cv.expireAt == CompressedValue.NO_EXPIRE
 
         when:
         data4[2] = (System.currentTimeMillis() + 1000 * 60 - 1000).toString().bytes
