@@ -1,8 +1,12 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.promise.Promise;
+import io.activej.promise.Promises;
+import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.repl.LeaderSelector;
+import io.velo.reply.AsyncReply;
 import io.velo.reply.ErrorReply;
 import io.velo.reply.NilReply;
 import io.velo.reply.OKReply;
@@ -86,6 +90,9 @@ public class FGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
+    /** Per-slot failover outcome: the readonly state before this command fenced the slot, and the first error (null when ok). */
+    private record FailoverSlotResult(boolean wasReadonly, String error) {}
+
     @VisibleForTesting
     Reply failover() {
         // skip for test
@@ -93,52 +100,98 @@ public class FGroup extends BaseCommand {
             return OKReply.INSTANCE;
         }
 
-//        var leaderSelector = LeaderSelector.getInstance();
-//        if (!leaderSelector.hasLeadership()) {
-//            return new ErrorReply("not leader");
-//        }
+        // iterate a captured slot list so per-slot results stay index-aligned with the rollback below
+        var slots = localPersist.initializedOneSlots();
+        // per slot, on the slot's own eventloop: fence first so no new write can advance the binlog,
+        // then validate this slot's slaves catch-up, only then demote it (close slave sockets, binlog off)
+        Promise<FailoverSlotResult>[] promises = new Promise[slots.size()];
+        for (int i = 0; i < slots.size(); i++) {
+            var oneSlot = slots.get(i);
+            promises[i] = oneSlot.asyncCall(() -> {
+                try {
+                    var wasReadonly = oneSlot.isReadonly();
+                    oneSlot.setReadonly(true);
 
-        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
-        var asMasterList = firstOneSlot.getReplPairAsMasterList();
-        if (asMasterList.isEmpty()) {
-            return new ErrorReply("no slave");
-        }
+                    var asMasterList = oneSlot.getReplPairAsMasterList();
+                    if (asMasterList.isEmpty()) {
+                        return new FailoverSlotResult(wasReadonly, "no slave");
+                    }
 
-        // check slave catch up offset, if not catch up, can not do failover
-        var currentFo = firstOneSlot.getBinlog().currentFileIndexAndOffset();
-        for (var replPairAsMaster : asMasterList) {
-            var slaveFo = replPairAsMaster.getSlaveLastCatchUpBinlogFileIndexAndOffset();
-            if (slaveFo == null) {
-                return new ErrorReply("slave not catch up=" + replPairAsMaster.getHostAndPort());
-            }
+                    // must be equal or slave can less than a little, change here if you need
+                    var currentFo = oneSlot.getBinlog().currentFileIndexAndOffset();
+                    for (var replPairAsMaster : asMasterList) {
+                        var slaveFo = replPairAsMaster.getSlaveLastCatchUpBinlogFileIndexAndOffset();
+                        if (slaveFo == null) {
+                            return new FailoverSlotResult(wasReadonly, "slave not catch up=" + replPairAsMaster.getHostAndPort());
+                        }
+                        if (currentFo.fileIndex() != slaveFo.fileIndex() || currentFo.offset() != slaveFo.offset()) {
+                            return new FailoverSlotResult(wasReadonly, "slave not catch up=" + replPairAsMaster.getHostAndPort() + ", current=" + currentFo + ", slave=" + slaveFo);
+                        }
+                    }
 
-            // must be equal or slave can less than a little, change here if you need
-            if (currentFo.fileIndex() != slaveFo.fileIndex() || currentFo.offset() != slaveFo.offset()) {
-                return new ErrorReply("slave not catch up=" + replPairAsMaster.getHostAndPort() + ", current=" + currentFo + ", slave=" + slaveFo);
-            }
-        }
-
-        return localPersist.doSthInSlots(oneSlot -> {
-            try {
-                oneSlot.setReadonly(true);
-                oneSlot.getDynConfig().setBinlogOn(false);
-
-                var replPairAsMasterList = oneSlot.getReplPairAsMasterList();
-                for (var replPairAsMaster : replPairAsMasterList) {
-                    replPairAsMaster.closeSlaveConnectSocket();
+                    oneSlot.getDynConfig().setBinlogOn(false);
+                    for (var replPairAsMaster : asMasterList) {
+                        replPairAsMaster.closeSlaveConnectSocket();
+                    }
+                    return new FailoverSlotResult(wasReadonly, null);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
-                return true;
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            });
+        }
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        Promises.all(promises).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("async all error={}", e.getMessage());
+                finalPromise.setException(e);
+                return;
             }
-        }, resultList -> {
+
+            String firstError = null;
+            for (var result : promises) {
+                if (result.getResult().error() != null) {
+                    firstError = result.getResult().error();
+                    break;
+                }
+            }
+
+            if (firstError != null) {
+                log.warn("Failover aborted, error={}", firstError);
+                // best effort rollback: un-fence the slots this command fenced, binlog back on for demoted ones
+                for (int i = 0; i < slots.size(); i++) {
+                    var result = promises[i].getResult();
+                    if (result.wasReadonly()) {
+                        continue;
+                    }
+
+                    var oneSlot = slots.get(i);
+                    oneSlot.asyncExecute(() -> {
+                        try {
+                            oneSlot.setReadonly(false);
+                            if (result.error() == null) {
+                                // this slot was demoted (its slaves were caught up), restore the binlog
+                                oneSlot.getDynConfig().setBinlogOn(true);
+                            }
+                        } catch (IOException io) {
+                            log.error("Failover rollback error, slot={}, error={}", oneSlot.slot(), io.getMessage());
+                        }
+                    });
+                }
+
+                finalPromise.set(new ErrorReply(firstError));
+                return;
+            }
+
             var leaderSelector = LeaderSelector.getInstance();
             leaderSelector.stopLeaderLatch();
             log.warn("Repl leader latch stopped");
             // later self will start leader latch again and make self as slave
 
-            return OKReply.INSTANCE;
+            finalPromise.set(OKReply.INSTANCE);
         });
+
+        return new AsyncReply(finalPromise);
     }
 
     private Reply flushdb() {
