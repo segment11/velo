@@ -93,15 +93,41 @@ class FGroupTest extends Specification {
         reply instanceof ErrorReply
         (reply as ErrorReply).message == 'No failover in progress.'
 
-        when: '76.1: an unknown failover token still reaches the real failover path'
+        when: '76.1: an unknown failover token is a syntax error'
         def unknownData = new byte[2][]
         unknownData[1] = 'nonsense'.bytes
         def fGroupUnknown = new FGroup('failover', unknownData, null)
         fGroupUnknown.from(BaseCommand.mockAGroup())
         reply = fGroupUnknown.handle()
         then:
-        resolveReply(reply) instanceof ErrorReply
-        (resolveReply(reply) as ErrorReply).message == 'no slave'
+        reply == ErrorReply.SYNTAX
+
+        when: '76.2: FAILOVER TO targeting is not supported'
+        def fGroupArgs = new FGroup(null, null, null)
+        fGroupArgs.from(BaseCommand.mockAGroup())
+        reply = fGroupArgs.execute('failover to localhost 6380')
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+
+        when: '76.2: FAILOVER TIMEOUT is not supported'
+        reply = fGroupArgs.execute('failover timeout 1000')
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+
+        when: '76.2: FAILOVER ABORT combined with other options is rejected'
+        reply = fGroupArgs.execute('failover abort timeout 1000')
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+
+        when: '76.2: FAILOVER FORCE is not supported'
+        reply = fGroupArgs.execute('failover force')
+        then:
+        reply == ErrorReply.NOT_SUPPORT
+
+        when: '76.2: unknown failover options are a syntax error'
+        reply = fGroupArgs.execute('failover nonsense x')
+        then:
+        reply == ErrorReply.SYNTAX
 
         when: '76.4: first slot caught up but second slot lagging must abort the failover'
         def rp1 = oneSlot0.createIfNotExistReplPairAsMaster(11L, 'localhost', 6380)
@@ -207,6 +233,13 @@ class FGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
         (sGroup.execute('strlen fgroupk3') as IntegerReply).integer == 6
+
+        when: '76.2: extra tokens are a syntax error and keep the data'
+        sGroup.execute('set fgroupk4 value4')
+        reply = fGroup.execute('flushdb async extra')
+        then:
+        reply == ErrorReply.SYNTAX
+        (sGroup.execute('strlen fgroupk4') as IntegerReply).integer == 6
 
         when: '76.3: readonly slot (e.g. replica) must refuse the flush'
         oneSlot.setReadonly(true)

@@ -101,6 +101,15 @@ public class FGroup extends BaseCommand {
             return new ErrorReply("No failover in progress.");
         }
 
+        // only the no-argument form is supported; TO/TIMEOUT/FORCE targeting is not implemented, unknown options are syntax errors
+        if (data.length > 1) {
+            var arg = new String(data[1]).toLowerCase();
+            if ("abort".equals(arg) || "to".equals(arg) || "timeout".equals(arg) || "force".equals(arg)) {
+                return ErrorReply.NOT_SUPPORT;
+            }
+            return ErrorReply.SYNTAX;
+        }
+
         // iterate a captured slot list so per-slot results stay index-aligned with the rollback below
         var slots = localPersist.initializedOneSlots();
         // per slot, on the slot's own eventloop: fence first so no new write can advance the binlog,
@@ -208,8 +217,11 @@ public class FGroup extends BaseCommand {
             }
         }
 
-        // FLUSHDB [ASYNC | SYNC] — both map to the same per-slot implementation; other tokens are syntax errors
-        if (data.length == 2) {
+        // FLUSHDB [ASYNC | SYNC] — both map to the same per-slot implementation; anything else is a syntax error
+        if (data.length >= 2) {
+            if (data.length > 2) {
+                return ErrorReply.SYNTAX;
+            }
             var flushType = new String(data[1]);
             if (!"async".equalsIgnoreCase(flushType) && !"sync".equalsIgnoreCase(flushType)) {
                 return ErrorReply.SYNTAX;
