@@ -994,6 +994,21 @@ class GGroupTest extends Specification {
         new String((coordRow.replies[1] as BulkReply).raw) == '38.115556'
 
         when:
+        // Bug 77.9: existing source key with a missing frommember member is an error like redis
+        reply = gGroup.execute('geosearch xxx frommember nosuchmember byradius 100 km')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'could not decode requested zset member'
+
+        when:
+        // Bug 77.9: store mode errors too and does not create the destination key
+        reply = gGroup.execute('geosearchstore dst77c xxx frommember nosuchmember byradius 100 km')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'could not decode requested zset member'
+        inMemoryGetSet.getBuf(slot, 'dst77c', 0, 0L) == null
+
+        when:
         // read mode with an empty result replies an empty array
         reply = gGroup.execute('geosearch xxx fromlonlat 0 0 byradius 1 m')
         then:

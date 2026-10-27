@@ -947,7 +947,8 @@ public class GGroup extends BaseCommand {
         if (fromMember != null) {
             var p = rg.get(fromMember);
             if (p == null) {
-                return isNeedStoreToDstKey ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+                // the source key exists but the member does not, redis replies an error here
+                return new ErrorReply("could not decode requested zset member");
             }
             fromLon = p.lon();
             fromLat = p.lat();
