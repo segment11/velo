@@ -293,6 +293,19 @@ class EGroupTest extends Specification {
         reply = eGroup.expire(true, true)
         then:
         reply == IntegerReply.REPLY_1
+
+        when:
+        // expire must not destroy the type marker of a structured value
+        def hashCv = Mock.prepareCompressedValueList(1)[0]
+        hashCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        hashCv.compressedData = 'hash-payload'.bytes
+        hashCv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, hashCv)
+        data3[2] = (System.currentTimeMillis() + 1000 * 60).toString().bytes
+        reply = eGroup.expire(true, true)
+        then:
+        reply == IntegerReply.REPLY_1
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0).cv().dictSeqOrSpType == CompressedValue.SP_TYPE_HH
     }
 
     def 'test expiretime'() {

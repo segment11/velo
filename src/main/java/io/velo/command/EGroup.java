@@ -285,9 +285,12 @@ public class EGroup extends BaseCommand {
         }
 
         cv.setSeq(snowFlake.nextId());
+        cv.setKeyHash(slotWithKeyHash.keyHash());
         cv.setExpireAt(expireAt);
 
-        setCv(cv, slotWithKeyHash);
+        // write the value back as it is, only the expire time changes,
+        // do not use setCv() here, it re-encodes the value and drops the type marker
+        putToOneSlot(slotWithKeyHash.slot(), slotWithKeyHash, cv);
         return IntegerReply.REPLY_1;
     }
 
