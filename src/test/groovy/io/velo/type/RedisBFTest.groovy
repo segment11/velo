@@ -104,7 +104,7 @@ class RedisBFTest extends Specification {
 
         then:
         noExceptionThrown()
-        one.isFull() == true
+        one.isFull()
     }
 
     def 'test capacity expansion overflow detection'() {

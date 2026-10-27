@@ -713,6 +713,11 @@ public class LocalPersist implements NeedCleanUp {
 
     private IndexHandlerPool indexHandlerPool;
 
+    @TestOnly
+    public void setIndexHandlerPool(IndexHandlerPool indexHandlerPool) {
+        this.indexHandlerPool = indexHandlerPool;
+    }
+
     /**
      * @return the IndexHandlerPool instance
      */
