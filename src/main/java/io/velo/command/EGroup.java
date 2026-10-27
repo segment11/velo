@@ -20,6 +20,14 @@ import java.util.stream.Collectors;
  * This includes commands like ECHO, EVAL, EXISTS, EXPIRE, EXPIREAT, EXPIRETIME, etc.
  */
 public class EGroup extends BaseCommand {
+    private static ErrorReply invalidExpireTime(String cmd) {
+        return new ErrorReply("invalid expire time in '" + cmd + "' command");
+    }
+
+    private static ErrorReply unsupportedOption(String opt) {
+        return new ErrorReply("Unsupported option " + opt);
+    }
+
     static {
         CommandRegistry.register(new CommandEntry(
                 "echo", 2,
@@ -248,7 +256,7 @@ public class EGroup extends BaseCommand {
             isGt = "gt".equalsIgnoreCase(type);
             isLt = "lt".equalsIgnoreCase(type);
             if (!isNx && !isXx && !isGt && !isLt) {
-                return ErrorReply.UNSUPPORTED_OPTION(type);
+                return unsupportedOption(type);
             }
         }
 
@@ -270,13 +278,13 @@ public class EGroup extends BaseCommand {
         } else {
             // seconds to milliseconds, check the overflow before the multiply
             if (seconds > Long.MAX_VALUE / 1000 || seconds < Long.MIN_VALUE / 1000) {
-                return ErrorReply.INVALID_EXPIRE_TIME(cmd);
+                return invalidExpireTime(cmd);
             }
             when = seconds * 1000;
         }
         // the base time is added to the expire time, check the overflow before the add
         if (when > Long.MAX_VALUE - basetime) {
-            return ErrorReply.INVALID_EXPIRE_TIME(cmd);
+            return invalidExpireTime(cmd);
         }
         final long expireAt = when + basetime;
 
