@@ -299,6 +299,12 @@ public class EGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
+        if (expireAt <= now) {
+            // the expire time is in the past, delete the key like redis does
+            remove(slotWithKeyHash);
+            return IntegerReply.REPLY_1;
+        }
+
         cv.setSeq(snowFlake.nextId());
         cv.setKeyHash(slotWithKeyHash.keyHash());
         cv.setExpireAt(expireAt);

@@ -223,6 +223,15 @@ class PGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
         cv.expireAt == 9223372036854775807L
+
+        when:
+        // an expire time in the past deletes the key, redis 7.2 does the same
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = pGroup.execute('pexpireat a 0')
+        then:
+        reply == IntegerReply.REPLY_1
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0) == null
     }
 
     def 'test persist'() {

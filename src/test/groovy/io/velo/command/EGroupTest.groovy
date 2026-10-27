@@ -340,6 +340,33 @@ class EGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
         cv.expireAt > System.currentTimeMillis()
+
+        when:
+        // an expire time in the past deletes the key, redis 7.2 does the same
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = eGroup.execute('expireat a 0')
+        then:
+        reply == IntegerReply.REPLY_1
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0) == null
+        (eGroup.execute('expiretime a') as IntegerReply).getInteger() == -2
+
+        when:
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = eGroup.execute('expireat a 1')
+        then:
+        reply == IntegerReply.REPLY_1
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0) == null
+
+        when:
+        // a negative ttl deletes the key too
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = eGroup.execute('expire a -1')
+        then:
+        reply == IntegerReply.REPLY_1
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0) == null
     }
 
     def 'test expiretime'() {
