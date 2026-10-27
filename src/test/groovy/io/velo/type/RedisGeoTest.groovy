@@ -201,9 +201,7 @@ class RedisGeoTest extends Specification {
     def 'test encode throws when entry count exceeds Short.MAX_VALUE'() {
         given:
         def rg = new RedisGeo()
-        def mapField = RedisGeo.class.getDeclaredField('map')
-        mapField.setAccessible(true)
-        def map = (Map) mapField.get(rg)
+        def map = rg.getMap()
         (Short.MAX_VALUE + 1).times { i ->
             map.put('m_' + i, new RedisGeo.P(0, 0))
         }

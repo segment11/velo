@@ -347,8 +347,6 @@ class DictMapTest extends Specification {
         dictMap.initDictMap(Consts.testDir)
 
         and: 'replace fos with a FileOutputStream whose close() throws IOException'
-        def fosField = DictMap.class.getDeclaredField('fos')
-        fosField.setAccessible(true)
         def tempFile = new File(Consts.testDir, 'cleanUp-fail-test.dat')
         FileUtils.touch(tempFile)
         def throwingFos = new FileOutputStream(tempFile) {
@@ -357,16 +355,15 @@ class DictMapTest extends Specification {
                 throw new IOException("Simulated close failure")
             }
         }
-        fosField.set(dictMap, throwingFos)
+        dictMap.setFos(throwingFos)
 
         when:
         dictMap.cleanUp()
 
         then: 'fos is null even though close() threw — finally block must always null it'
-        fosField.get(dictMap) == null
+        dictMap.getFos() == null
 
         cleanup:
-        fosField.setAccessible(false)
         Consts.persistDir.deleteDir()
     }
 }

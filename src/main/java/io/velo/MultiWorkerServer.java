@@ -165,6 +165,27 @@ public class MultiWorkerServer extends Launcher {
     private static File pidFile;
     private static FileLock pidFileLock;
     private static FileChannel pidFileChannel;
+
+    /**
+     * Returns the lock held on the pid file (test only).
+     *
+     * @return the lock, or null if not held
+     */
+    @TestOnly
+    public static FileLock getPidFileLock() {
+        return pidFileLock;
+    }
+
+    /**
+     * Returns the channel opened for the pid file (test only).
+     *
+     * @return the channel, or null if not opened
+     */
+    @TestOnly
+    public static FileChannel getPidFileChannel() {
+        return pidFileChannel;
+    }
+
     private static final String PID_FILE_NAME = "velo.pid";
 
     /**

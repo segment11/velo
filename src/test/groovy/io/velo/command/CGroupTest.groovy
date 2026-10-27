@@ -157,9 +157,7 @@ class CGroupTest extends Specification {
         reply == ErrorReply.SYNTAX
         // the rejected call must not change the stored reply mode (still off from the
         // previous valid case — the pre-73.6 bug folded unknown modes into ON)
-        def replyModeField = VeloUserDataInSocket.class.getDeclaredField('replyMode')
-        replyModeField.setAccessible(true)
-        replyModeField.get(SocketInspector.createUserDataIfNotSet(socket)) == VeloUserDataInSocket.ReplyMode.off
+        SocketInspector.createUserDataIfNotSet(socket).getReplyMode() == VeloUserDataInSocket.ReplyMode.off
 
         when: 'CLIENT REPLY skip returns EmptyReply'
         reply = cGroup.execute('client reply skip')

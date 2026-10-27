@@ -3,6 +3,7 @@ package io.velo.type;
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnel;
 import com.google.common.hash.Funnels;
+import org.jetbrains.annotations.TestOnly;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +25,26 @@ public class RedisBF {
 
         /** Capacity of the Bloom Filter. */
         int capacity;
+
+        /**
+         * Sets the item count (test only).
+         *
+         * @param itemInserted the new item count
+         */
+        @TestOnly
+        public void setItemInserted(int itemInserted) {
+            this.itemInserted = itemInserted;
+        }
+
+        /**
+         * Sets the capacity (test only).
+         *
+         * @param capacity the new capacity
+         */
+        @TestOnly
+        public void setCapacity(int capacity) {
+            this.capacity = capacity;
+        }
 
         /**
          * @return true if more than 90% of capacity is used
@@ -71,6 +92,16 @@ public class RedisBF {
     private static final byte MAX_LIST_SIZE = 4;
 
     private final ArrayList<One> list = new ArrayList<>();
+
+    /**
+     * Returns the internal Bloom Filter list (test only).
+     *
+     * @return the list of Bloom Filters
+     */
+    @TestOnly
+    public ArrayList<One> getList() {
+        return list;
+    }
 
     private RedisBF() {
     }

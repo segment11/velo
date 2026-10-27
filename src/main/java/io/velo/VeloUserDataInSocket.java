@@ -2,6 +2,7 @@ package io.velo;
 
 import io.activej.eventloop.Eventloop;
 import io.velo.repl.ReplPair;
+import org.jetbrains.annotations.TestOnly;
 
 /**
  * A class to store user-specific data for a socket connection in the Velo system.
@@ -196,6 +197,16 @@ public class VeloUserDataInSocket {
      */
     public void setReplyMode(ReplyMode replyMode) {
         this.replyMode = replyMode;
+    }
+
+    /**
+     * Returns the current reply mode (test only).
+     *
+     * @return the reply mode
+     */
+    @TestOnly
+    public ReplyMode getReplyMode() {
+        return replyMode;
     }
 
     /**

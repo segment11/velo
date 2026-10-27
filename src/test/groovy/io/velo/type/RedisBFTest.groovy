@@ -97,17 +97,10 @@ class RedisBFTest extends Specification {
         decodedBF.listSize() == 1
 
         when:
-        def field = RedisBF.getDeclaredField('list')
-        field.setAccessible(true)
-        def list = field.get(decodedBF)
-        def oneClass = Class.forName('io.velo.type.RedisBF$One')
-        def capacityField = oneClass.getDeclaredField('capacity')
-        capacityField.setAccessible(true)
-        def itemInsertedField = oneClass.getDeclaredField('itemInserted')
-        itemInsertedField.setAccessible(true)
+        def list = decodedBF.getList()
         def one = list[0]
-        capacityField.set(one, 0)
-        itemInsertedField.set(one, 0)
+        one.setCapacity(0)
+        one.setItemInserted(0)
 
         then:
         noExceptionThrown()
@@ -126,18 +119,11 @@ class RedisBFTest extends Specification {
         decodedBF.listSize() == 1
 
         when:
-        def field = RedisBF.getDeclaredField('list')
-        field.setAccessible(true)
-        def list = field.get(decodedBF)
-        def oneClass = Class.forName('io.velo.type.RedisBF$One')
-        def capacityField = oneClass.getDeclaredField('capacity')
-        capacityField.setAccessible(true)
-        def itemInsertedField = oneClass.getDeclaredField('itemInserted')
-        itemInsertedField.setAccessible(true)
+        def list = decodedBF.getList()
         def one = list[0]
         def largeCapacity = (int) (Integer.MAX_VALUE / 2.0) + 1
-        capacityField.set(one, largeCapacity)
-        itemInsertedField.set(one, (int) (largeCapacity * 0.91))
+        one.setCapacity(largeCapacity)
+        one.setItemInserted((int) (largeCapacity * 0.91))
 
         then:
         one.isFull()

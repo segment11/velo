@@ -6,6 +6,7 @@ import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
 import io.velo.repl.incremental.XDict;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -241,6 +242,26 @@ public class DictMap implements NeedCleanUp {
      * File output stream for writing dictionaries to a file.
      */
     private FileOutputStream fos;
+
+    /**
+     * Sets the file output stream (test only).
+     *
+     * @param fos the new file output stream
+     */
+    @TestOnly
+    public void setFos(FileOutputStream fos) {
+        this.fos = fos;
+    }
+
+    /**
+     * Returns the file output stream (test only).
+     *
+     * @return the file output stream
+     */
+    @TestOnly
+    public FileOutputStream getFos() {
+        return fos;
+    }
 
     /**
      * Cleans up resources used by the dictionary map.

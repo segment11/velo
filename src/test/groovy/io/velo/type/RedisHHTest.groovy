@@ -316,9 +316,7 @@ class RedisHHTest extends Specification {
         given:
         def rh = new RedisHH()
         rh.put('a', 'b'.bytes)
-        def mapField = RedisHH.class.getDeclaredField('map')
-        mapField.setAccessible(true)
-        def map = (Map) mapField.get(rh)
+        def map = rh.getMap()
         (Short.MAX_VALUE + 1).times { i ->
             map.put('field_' + i, ('v_' + i).bytes)
         }

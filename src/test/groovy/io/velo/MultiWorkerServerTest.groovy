@@ -2089,17 +2089,13 @@ class MultiWorkerServerTest extends Specification {
         pidFile.text == currentPid
 
         cleanup:
-        // release file lock and channel via reflection since fields are private
+        // release file lock and channel via test only accessors since fields are private
         try {
-            def lockField = MultiWorkerServer.class.getDeclaredField('pidFileLock')
-            lockField.setAccessible(true)
-            def lock = (FileLock) lockField.get(null)
+            def lock = MultiWorkerServer.getPidFileLock()
             if (lock != null) {
                 lock.release()
             }
-            def channelField = MultiWorkerServer.class.getDeclaredField('pidFileChannel')
-            channelField.setAccessible(true)
-            def channel = (FileChannel) channelField.get(null)
+            def channel = MultiWorkerServer.getPidFileChannel()
             if (channel != null) {
                 channel.close()
             }
@@ -2138,9 +2134,7 @@ class MultiWorkerServerTest extends Specification {
         firstChannel.close()
         // release any channel dirFile may have opened before failing
         try {
-            def channelField = MultiWorkerServer.class.getDeclaredField('pidFileChannel')
-            channelField.setAccessible(true)
-            def channel = (FileChannel) channelField.get(null)
+            def channel = MultiWorkerServer.getPidFileChannel()
             if (channel != null) {
                 channel.close()
             }
