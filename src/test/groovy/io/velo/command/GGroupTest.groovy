@@ -3,6 +3,7 @@ package io.velo.command
 import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.TypeMismatchException
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
@@ -139,6 +140,15 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getbit a 0 1')
         then:
         reply == ErrorReply.FORMAT
+
+        when: 'key holds a list type value'
+        def listCv = Mock.prepareCompressedValueList(1)[0]
+        listCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        listCv.compressedData = 'LIST-ENCODED'.bytes
+        inMemoryGetSet.put(slot, 'wrongtype', 0, listCv)
+        gGroup.execute('getbit wrongtype 0')
+        then:
+        thrown(TypeMismatchException)
     }
 
     def 'test getdel'() {
@@ -161,6 +171,17 @@ class GGroupTest extends Specification {
         then:
         reply instanceof BulkReply
         (reply as BulkReply).raw == cv.compressedData
+
+        when: 'key holds a list type value'
+        def listCv = Mock.prepareCompressedValueList(1)[0]
+        listCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        listCv.compressedData = 'LIST-ENCODED'.bytes
+        inMemoryGetSet.put(slot, 'l', 0, listCv)
+        gGroup.execute('getdel l')
+        then:
+        thrown(TypeMismatchException)
+        // the container key must not be deleted when the type check fails
+        inMemoryGetSet.getBuf(slot, 'l', 0, listCv.keyHash) != null
     }
 
     def 'test getex'() {
@@ -247,6 +268,19 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getex a ex 60 xx')
         then:
         reply == ErrorReply.FORMAT
+
+        when: 'key holds a list type value'
+        def listCv = Mock.prepareCompressedValueList(1)[0]
+        listCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        listCv.compressedData = 'LIST-ENCODED'.bytes
+        inMemoryGetSet.put(slot, 'l', 0, listCv)
+        gGroup.execute('getex l ex 60')
+        then:
+        thrown(TypeMismatchException)
+        // the container value and its type marker must stay untouched
+        def storedCv = inMemoryGetSet.getBuf(slot, 'l', 0, listCv.keyHash).cv()
+        storedCv.dictSeqOrSpType == CompressedValue.SP_TYPE_LIST
+        storedCv.expireAt == listCv.expireAt
     }
 
     def 'test getrange'() {
@@ -282,6 +316,15 @@ class GGroupTest extends Specification {
         then:
         reply instanceof BulkReply
         (reply as BulkReply).raw.length == 0
+
+        when: 'key holds a list type value'
+        def listCv = Mock.prepareCompressedValueList(1)[0]
+        listCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        listCv.compressedData = 'LIST-ENCODED'.bytes
+        inMemoryGetSet.put(slot, 'l', 0, listCv)
+        gGroup.execute('getrange l 0 3')
+        then:
+        thrown(TypeMismatchException)
     }
 
     def 'test getset'() {
@@ -311,6 +354,19 @@ class GGroupTest extends Specification {
         def bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, 0L)
         then:
         bufOrCv.cv().compressedData == 'value2'.bytes
+
+        when: 'key holds a list type value'
+        def listCv = Mock.prepareCompressedValueList(1)[0]
+        listCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        listCv.compressedData = 'LIST-ENCODED'.bytes
+        inMemoryGetSet.put(slot, 'l', 0, listCv)
+        gGroup.execute('getset l plainvalue')
+        then:
+        thrown(TypeMismatchException)
+        // the container value and its type marker must not be overwritten
+        def storedCv = inMemoryGetSet.getBuf(slot, 'l', 0, listCv.keyHash).cv()
+        storedCv.dictSeqOrSpType == CompressedValue.SP_TYPE_LIST
+        storedCv.compressedData == 'LIST-ENCODED'.bytes
     }
 
     def 'test geoadd'() {

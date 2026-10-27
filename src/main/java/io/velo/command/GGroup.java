@@ -4,6 +4,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.TypeMismatchException;
 import io.velo.reply.*;
 import io.velo.type.RedisBitSet;
 import io.velo.type.RedisGeo;
@@ -256,7 +257,7 @@ public class GGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var valueBytes = get(slotWithKeyHash);
+        var valueBytes = get(slotWithKeyHash, true);
         if (valueBytes == null) {
             return IntegerReply.REPLY_0;
         }
@@ -271,7 +272,7 @@ public class GGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var valueBytes = get(slotWithKeyHash);
+        var valueBytes = get(slotWithKeyHash, true);
         if (valueBytes != null) {
             removeDelay(slotWithKeyHash);
             return new BulkReply(valueBytes);
@@ -338,6 +339,10 @@ public class GGroup extends BaseCommand {
             return NilReply.INSTANCE;
         }
 
+        if (!cv.isTypeString()) {
+            throw new TypeMismatchException("Expect type string, but got sp type=" + cv.getDictSeqOrSpType());
+        }
+
         var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
 
         long expireAt = cv.getExpireAt();
@@ -355,8 +360,13 @@ public class GGroup extends BaseCommand {
         }
 
         if (expireAt != expireAtOld) {
+            cv.setSeq(snowFlake.nextId());
+            cv.setKeyHash(slotWithKeyHash.keyHash());
             cv.setExpireAt(expireAt);
-            setCv(cv, slotWithKeyHash);
+
+            // write the value back as it is, only the expire time changes,
+            // do not use setCv() here, it re-encodes the value and drops the type marker
+            putToOneSlot(slotWithKeyHash.slot(), slotWithKeyHash, cv);
         }
         return new BulkReply(valueBytes);
     }
@@ -378,7 +388,7 @@ public class GGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var valueBytes = get(slotWithKeyHash);
+        var valueBytes = get(slotWithKeyHash, true);
         if (valueBytes == null) {
             return BLANK_REPLY;
         }
@@ -404,8 +414,8 @@ public class GGroup extends BaseCommand {
         var valueBytes = data[2];
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        // not only for type string, other types will be overwritten
-        var valueBytesExist = get(slotWithKeyHash);
+        // wrong type key replies WRONGTYPE, other string-compatible types will be overwritten
+        var valueBytesExist = get(slotWithKeyHash, true);
 
         set(valueBytes, slotWithKeyHash);
 
