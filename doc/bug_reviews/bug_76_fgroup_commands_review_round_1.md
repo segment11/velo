@@ -726,6 +726,11 @@ Style-only companion commit (user request, no behavior change): `25e71691` `refa
 test assertions` — `(reply as ErrorReply).message` strict casts across O/J/Y/N/V/Q GroupTest, BGroupTest, RequestHandlerTest;
 touched methods re-run green.
 
+Test-infrastructure follow-up (user request): `ec2676d1` `refactor: use testonly leader latch accessors in the failover
+test` — the 76.6 test's reflective `leaderLatch` field access was replaced with `@TestOnly`-annotated
+`LeaderSelector.getLeaderLatch()/setLeaderLatch(...)` (same pattern as the existing `getMasterAddressLocalMocked` pair);
+`test failover` and `LeaderSelectorTest` (25/25) re-run green.
+
 Per-bug RED runs were executed with the production change absent/stashed; each row's RED output was read from the Spock
 XML before the fix was written (76.3/76.4 evidence above is pasted from those runs).
 
