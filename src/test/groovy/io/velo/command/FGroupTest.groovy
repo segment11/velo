@@ -10,7 +10,12 @@ import io.velo.persist.LocalPersistTest
 import io.velo.persist.index.IndexHandlerPool
 import io.velo.persist.index.KeyAnalysisHandler
 import io.velo.repl.Binlog
+import io.velo.repl.LeaderSelector
 import io.velo.reply.*
+import org.apache.curator.framework.CuratorFramework
+import org.apache.curator.framework.CuratorFrameworkFactory
+import org.apache.curator.framework.recipes.leader.LeaderLatch
+import org.apache.curator.retry.ExponentialBackoffRetry
 import spock.lang.Specification
 
 import java.time.Duration
@@ -198,7 +203,27 @@ class FGroupTest extends Specification {
         oneSlot0.isReadonly()
         oneSlot1.isReadonly()
 
+        when: '76.6: leader latch stop is offloaded off the calling thread'
+        def latchField = LeaderSelector.class.getDeclaredField('leaderLatch')
+        latchField.setAccessible(true)
+        def recordingLatch = new RecordingLeaderLatch(
+                CuratorFrameworkFactory.newClient('localhost:1', new ExponentialBackoffRetry(1000, 3)), '/test')
+        latchField.set(LeaderSelector.getInstance(), recordingLatch)
+        RecordingLeaderLatch.closedByThread = null
+        reply = fGroup.failover()
+        def closedDeadline = System.currentTimeMillis() + 3000
+        while (RecordingLeaderLatch.closedByThread == null && System.currentTimeMillis() < closedDeadline) {
+            Thread.sleep(20)
+        }
+        then:
+        resolveReply(reply) == OKReply.INSTANCE
+        RecordingLeaderLatch.closedByThread != null
+        RecordingLeaderLatch.closedByThread != Thread.currentThread()
+
         cleanup:
+        def latchCleanupField = LeaderSelector.class.getDeclaredField('leaderLatch')
+        latchCleanupField.setAccessible(true)
+        latchCleanupField.set(LeaderSelector.getInstance(), null)
         oneSlot0.setReadonly(false)
         oneSlot1.setReadonly(false)
         localPersist.cleanUp()
@@ -313,6 +338,19 @@ class FGroupTest extends Specification {
             analysisEventloop.breakEventloop()
         }
         localPersist.cleanUp()
+    }
+
+    static class RecordingLeaderLatch extends LeaderLatch {
+        static Thread closedByThread = null
+
+        RecordingLeaderLatch(CuratorFramework client, String latchPath) {
+            super(client, latchPath)
+        }
+
+        @Override
+        void close() {
+            closedByThread = Thread.currentThread()
+        }
     }
 
     static class CountingKeyAnalysisHandler extends KeyAnalysisHandler {

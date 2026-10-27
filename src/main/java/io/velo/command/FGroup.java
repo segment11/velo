@@ -193,9 +193,12 @@ public class FGroup extends BaseCommand {
                 return;
             }
 
+            // closing the latch is blocking ZooKeeper I/O and synchronized, keep it off the slot worker eventloop
             var leaderSelector = LeaderSelector.getInstance();
-            leaderSelector.stopLeaderLatch();
-            log.warn("Repl leader latch stopped");
+            Thread.ofVirtual().name("velo-failover-stop-latch").start(() -> {
+                leaderSelector.stopLeaderLatch();
+                log.warn("Repl leader latch stopped");
+            });
             // later self will start leader latch again and make self as slave
 
             finalPromise.set(OKReply.INSTANCE);
