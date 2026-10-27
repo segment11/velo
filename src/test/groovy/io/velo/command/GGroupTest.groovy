@@ -1009,6 +1009,15 @@ class GGroupTest extends Specification {
         inMemoryGetSet.getBuf(slot, 'dst77c', 0, 0L) == null
 
         when:
+        // Bug 77.6: withhash replies the geohash score as an integer reply like redis
+        reply = gGroup.execute('geosearch xxx frommember m0 byradius 0.0001 m withhash')
+        then:
+        reply instanceof MultiBulkReply
+        def hashRow = (reply as MultiBulkReply).replies[0] as MultiBulkReply
+        hashRow.replies[1] instanceof IntegerReply
+        (hashRow.replies[1] as IntegerReply).integer == RedisGeo.hashAsStore(new RedisGeo.P(13.361389, 38.115556))
+
+        when:
         // read mode with an empty result replies an empty array
         reply = gGroup.execute('geosearch xxx fromlonlat 0 0 byradius 1 m')
         then:

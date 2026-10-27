@@ -1086,7 +1086,8 @@ public class GGroup extends BaseCommand {
                 ii++;
             }
             if (isWithHash) {
-                subReplies[ii] = new BulkReply(RedisGeo.hashAsStore(result.p));
+                // redis replies the geohash score with an integer reply
+                subReplies[ii] = new IntegerReply(RedisGeo.hashAsStore(result.p));
                 ii++;
             }
             if (isWithCoord) {
