@@ -32,6 +32,6 @@ class QGroupTest extends Specification {
         def reply = qGroup.handle()
         then:
         reply instanceof ErrorReply
-        reply.message == "unknown command 'incr'"
+        (reply as ErrorReply).message == "unknown command 'incr'"
     }
 }

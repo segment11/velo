@@ -419,7 +419,7 @@ class RequestHandlerTest extends Specification {
             def data = new byte[1][]
             data[0] = cmd.bytes
             def commandReply = requestHandler.handle(new Request(data, false, false), socket)
-            commandReply instanceof ErrorReply && commandReply.message == "unknown command '${cmd.toLowerCase()}'"
+            commandReply instanceof ErrorReply && (commandReply as ErrorReply).message == "unknown command '${cmd.toLowerCase()}'"
         }
 
         when:

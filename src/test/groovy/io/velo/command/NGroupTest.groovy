@@ -32,6 +32,6 @@ class NGroupTest extends Specification {
         def reply = nGroup.handle()
         then:
         reply instanceof ErrorReply
-        reply.message == "unknown command 'incr'"
+        (reply as ErrorReply).message == "unknown command 'incr'"
     }
 }

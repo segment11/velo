@@ -138,9 +138,9 @@ class BGroupTest extends Specification {
         bitfieldData[1] = 's'.bytes
 
         expect: 'bitop and bitfield are not implemented, they must not answer with a nil reply'
-        bGroup.execute('bitop and d s').message == ErrorReply.UNKNOWN_COMMAND('bitop').message
-        bGroup.execute('bitfield s get i8 0').message == ErrorReply.UNKNOWN_COMMAND('bitfield').message
-        bGroup.execute('bitfield_ro s get i8 0').message == ErrorReply.UNKNOWN_COMMAND('bitfield_ro').message
+        (bGroup.execute('bitop and d s') as ErrorReply).message == ErrorReply.UNKNOWN_COMMAND('bitop').message
+        (bGroup.execute('bitfield s get i8 0') as ErrorReply).message == ErrorReply.UNKNOWN_COMMAND('bitfield').message
+        (bGroup.execute('bitfield_ro s get i8 0') as ErrorReply).message == ErrorReply.UNKNOWN_COMMAND('bitfield_ro').message
 
         and: 'and they must not be advertised as available commands'
         CommandRegistry.get('bitop') == null

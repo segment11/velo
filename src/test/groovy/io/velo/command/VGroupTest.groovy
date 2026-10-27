@@ -32,6 +32,6 @@ class VGroupTest extends Specification {
         def reply = vGroup.handle()
         then:
         reply instanceof ErrorReply
-        reply.message == "unknown command 'incr'"
+        (reply as ErrorReply).message == "unknown command 'incr'"
     }
 }
