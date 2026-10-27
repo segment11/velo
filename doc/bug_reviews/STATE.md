@@ -5,7 +5,7 @@ Single source of truth for report id allocation and module coverage.
 
 ## next_bug_id
 
-77
+78
 
 ## Allocated
 
@@ -19,6 +19,7 @@ Single source of truth for report id allocation and module coverage.
 | 74 | DGroup commands (dbsize/debug/decr/decrby/decrbyfloat/del/dump) | 1 | closed: 9/9 CONFIRMED, fixed in 9 commits (`fe48c5f1`…`39f4dd60`), re-review ACCEPTED (red/green + JaCoCo independently reproduced); follow-ups: lossy `SET` number normalisation (`BaseCommand.set()`), `HGroup.hincrby2` non-finite float, `HGroup.hincrby` int32 delta |
 | 75 | EGroup commands (echo/exists/expire/expireat/expiretime) | 1 | fix phase complete: 6/6 CONFIRMED, 6 fixed in 8 commits (`bad9cf26`, `ff6c55c2`, `37ab2b4d`, `ee014c93`, `9bf87c44`, `e20e5aa5`, `71c87daa`, `126e013f`), re-review pending |
 | 76 | FGroup commands (failover/flushdb/flushall) | 1 | closed: 7/7 fixed in 6 commits (`cebb1fe5`, `15cbd60d` incl. 76.5, `33b3f472`, `df62b0c5`, `3a118894`, `82470d2c`) + style `25e71691`; re-review ACCEPTED (agent 2: RED re-derived per commit, focused tests green, JaCoCo confirmed, live Velo-vs-Redis 7.2.11 differential); follow-up: failover exception path skips the rollback |
+| 77 | GGroup commands (getbit/getdel/getex/getrange/getset/geo*) | 1 | fix phase complete: 9/10 fixed in 9 commits (`b720ac57`, `876e7d54`, `0d0958c9`, `ab03c146`, `010cc912`, `c279c722`, `12a70d7d`, `9607153d`, `6458e0c8`); 77.8 won't fix (product decision: GEOSEARCHSTORE dst stays geo-typed); re-review pending; residual: geo distance value divergence (exact vs geohash-decoded coords), big-string TTL-update inline duplication shared with expire |
 
 ## Module coverage (latest round per module)
 
@@ -34,6 +35,7 @@ Single source of truth for report id allocation and module coverage.
 | DGroup (dbsize/debug/decr/decrby/decrbyfloat/del/dump) | bug_74 round 1 | closed — 9/9 fixed, re-review ACCEPTED; follow-ups in string/hash modules (see report Residual Risk) |
 | EGroup (echo/exists/expire/expireat/expiretime) | bug_75 round 1 | all 6 findings fixed (75.1 GT-on-no-TTL, 75.6 type-marker corruption, 75.2 unsupported option, 75.3 expire-time overflow, 75.4 expireat-0 delete, 75.5 exists key-length check); re-review pending |
 | FGroup (failover/flushdb/flushall) | bug_76 round 1 | closed — 7/7 fixed, re-review ACCEPTED; open follow-up: R1 failover exception path skips the rollback (fenced slots stay readonly); residual: FAILOVER still a partial implementation (no promote, TO/TIMEOUT unsupported by design) |
+| GGroup (getbit/getdel/getex/getrange/getset/geo*) | bug_77 round 1 | 9/10 fixed (9 commits, RED→GREEN+JaCoCo per commit), 77.8 won't fix (product decision); re-review pending; residuals in report Residual Risk |
 | types / config / metrics / cluster / net / compression / commands (string/hash/list/set/zset/geo/hll) | see doc/bug_reviews/ | check reports |
 
 ## Known id collisions (historical, do not propagate)
