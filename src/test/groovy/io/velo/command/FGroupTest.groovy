@@ -204,11 +204,10 @@ class FGroupTest extends Specification {
         oneSlot1.isReadonly()
 
         when: '76.6: leader latch stop is offloaded off the calling thread'
-        def latchField = LeaderSelector.class.getDeclaredField('leaderLatch')
-        latchField.setAccessible(true)
+        def leaderSelector = LeaderSelector.getInstance()
         def recordingLatch = new RecordingLeaderLatch(
                 CuratorFrameworkFactory.newClient('localhost:1', new ExponentialBackoffRetry(1000, 3)), '/test')
-        latchField.set(LeaderSelector.getInstance(), recordingLatch)
+        leaderSelector.setLeaderLatch(recordingLatch)
         RecordingLeaderLatch.closedByThread = null
         reply = fGroup.failover()
         def closedDeadline = System.currentTimeMillis() + 3000
@@ -221,9 +220,7 @@ class FGroupTest extends Specification {
         RecordingLeaderLatch.closedByThread != Thread.currentThread()
 
         cleanup:
-        def latchCleanupField = LeaderSelector.class.getDeclaredField('leaderLatch')
-        latchCleanupField.setAccessible(true)
-        latchCleanupField.set(LeaderSelector.getInstance(), null)
+        LeaderSelector.getInstance().setLeaderLatch(null)
         oneSlot0.setReadonly(false)
         oneSlot1.setReadonly(false)
         localPersist.cleanUp()

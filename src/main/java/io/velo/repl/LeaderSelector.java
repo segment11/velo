@@ -304,6 +304,26 @@ public class LeaderSelector implements NeedCleanUp {
     }
 
     /**
+     * Returns the leader latch (test only).
+     *
+     * @return the leader latch
+     */
+    @TestOnly
+    public LeaderLatch getLeaderLatch() {
+        return leaderLatch;
+    }
+
+    /**
+     * Sets the leader latch (test only).
+     *
+     * @param leaderLatch the leader latch
+     */
+    @TestOnly
+    public void setLeaderLatch(LeaderLatch leaderLatch) {
+        this.leaderLatch = leaderLatch;
+    }
+
+    /**
      * Stops the leader latch if it is running.
      */
     public synchronized void stopLeaderLatch() {
