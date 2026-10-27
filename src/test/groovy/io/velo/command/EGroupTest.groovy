@@ -367,6 +367,24 @@ class EGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
         inMemoryGetSet.getBuf(slot, 'a', 0, 0) == null
+
+        when:
+        // an unsupported option must be rejected, redis 7.2 answers
+        // 'ERR Unsupported option FOO' and keeps the ttl untouched
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = eGroup.execute('expire a 10 FOO')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "Unsupported option FOO"
+        cv.expireAt == CompressedValue.NO_EXPIRE
+
+        when:
+        // redis 7.2 checks the option before the expire time value
+        reply = eGroup.execute('expire a abc FOO')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "Unsupported option FOO"
     }
 
     def 'test expiretime'() {

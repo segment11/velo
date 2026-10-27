@@ -233,6 +233,23 @@ public class EGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
+        boolean isNx = false;
+        boolean isXx = false;
+        boolean isGt = false;
+        boolean isLt = false;
+
+        if (data.length == 4) {
+            var typeBytes = data[3];
+            var type = new String(typeBytes);
+            isNx = "nx".equalsIgnoreCase(type);
+            isXx = "xx".equalsIgnoreCase(type);
+            isGt = "gt".equalsIgnoreCase(type);
+            isLt = "lt".equalsIgnoreCase(type);
+            if (!isNx && !isXx && !isGt && !isLt) {
+                return ErrorReply.UNSUPPORTED_OPTION(type);
+            }
+        }
+
         var secondsBytes = data[2];
 
         long seconds;
@@ -260,20 +277,6 @@ public class EGroup extends BaseCommand {
             return ErrorReply.INVALID_EXPIRE_TIME(cmd);
         }
         final long expireAt = when + basetime;
-
-        boolean isNx = false;
-        boolean isXx = false;
-        boolean isGt = false;
-        boolean isLt = false;
-
-        if (data.length == 4) {
-            var typeBytes = data[3];
-            var type = new String(typeBytes);
-            isNx = "nx".equalsIgnoreCase(type);
-            isXx = "xx".equalsIgnoreCase(type);
-            isGt = "gt".equalsIgnoreCase(type);
-            isLt = "lt".equalsIgnoreCase(type);
-        }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         // if nx xx gt lt, need not read cv, just read expire at from key bucket, todo

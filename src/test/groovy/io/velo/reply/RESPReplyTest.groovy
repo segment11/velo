@@ -60,6 +60,8 @@ class RESPReplyTest extends Specification {
         ErrorReply.UNKNOWN_COMMAND('test').buffer().asArray() == "-ERR unknown command 'test'\r\n".bytes
         ErrorReply.INVALID_EXPIRE_TIME('expire').message == "invalid expire time in 'expire' command"
         ErrorReply.INVALID_EXPIRE_TIME('pexpire').buffer().asArray() == "-ERR invalid expire time in 'pexpire' command\r\n".bytes
+        ErrorReply.UNSUPPORTED_OPTION('FOO').message == "Unsupported option FOO"
+        ErrorReply.UNSUPPORTED_OPTION('FOO').buffer().asArray() == "-ERR Unsupported option FOO\r\n".bytes
         new ErrorReply('error').message == 'error'
         new ErrorReply('error').buffer().asArray() == "-ERR error\r\n".bytes
         new ErrorReply('error').bufferAsHttp().asArray() == "error".bytes

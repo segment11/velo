@@ -35,6 +35,14 @@ public class ErrorReply implements Reply {
         return new ErrorReply("invalid expire time in '" + cmd + "' command");
     }
 
+    /**
+     * @param opt the unsupported option
+     * @return error reply for an unsupported expire option
+     */
+    public static ErrorReply UNSUPPORTED_OPTION(String opt) {
+        return new ErrorReply("Unsupported option " + opt);
+    }
+
     /** Error reply for missing dictionary. */
     public static final ErrorReply DICT_MISSING = new ErrorReply("dict missing");
 
