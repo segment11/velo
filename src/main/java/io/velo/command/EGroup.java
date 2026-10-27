@@ -306,7 +306,7 @@ public class EGroup extends BaseCommand {
 
         if (expireAt <= now) {
             // the expire time is in the past, delete the key like redis does
-            remove(slotWithKeyHash);
+            removeDelay(slotWithKeyHash);
             return IntegerReply.REPLY_1;
         }
 
