@@ -128,21 +128,28 @@ class FGroupTest extends Specification {
         def fGroup = new FGroup('flushdb', data1, null)
         fGroup.from(BaseCommand.mockAGroup())
 
-        when:
-        def eventloop = Eventloop.builder()
-                .withIdleInterval(Duration.ofMillis(100))
-                .build()
-        eventloop.keepAlive(true)
-        Thread.start {
-            eventloop.run()
-        }
-        LocalPersist.instance.addOneSlot(slot, eventloop)
-        def eventloopCurrent = Eventloop.builder()
-                .withCurrentThread()
-                .withIdleInterval(Duration.ofMillis(100))
-                .build()
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when: '76.3: readonly slot (e.g. replica) must refuse the flush'
+        oneSlot.setReadonly(true)
         def reply = fGroup.execute('flushdb')
-        eventloopCurrent.run()
+        then:
+        reply == ErrorReply.READONLY
+        (reply as ErrorReply).message == "READONLY You can't write against a read only replica."
+
+        when: '76.3: node-level role transition write fence must refuse the flush'
+        oneSlot.setReadonly(false)
+        localPersist.setRoleTransitionWriteFenced(true)
+        reply = fGroup.execute('flushdb')
+        then:
+        reply == ErrorReply.READONLY
+
+        when: 'fence off, slot writable: flush proceeds'
+        localPersist.setRoleTransitionWriteFenced(false)
+        reply = fGroup.execute('flushdb')
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
@@ -150,6 +157,8 @@ class FGroupTest extends Specification {
         }.result
 
         cleanup:
-        eventloop.breakEventloop()
+        localPersist.setRoleTransitionWriteFenced(false)
+        oneSlot.setReadonly(false)
+        localPersist.cleanUp()
     }
 }

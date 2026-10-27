@@ -1056,7 +1056,7 @@ class MultiWorkerServerTest extends Specification {
         eventloopCurrent.run()
         then:
         p.whenResult { reply ->
-            reply.toString().contains('readonly')
+            reply.toString().contains('READONLY')
         }.result
 
         when:

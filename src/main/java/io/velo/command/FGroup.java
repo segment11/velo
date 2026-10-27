@@ -142,6 +142,18 @@ public class FGroup extends BaseCommand {
     }
 
     private Reply flushdb() {
+        // reject on a node-level role transition write fence, same as other write paths
+        if (localPersist.isRoleTransitionWriteFenced()) {
+            return ErrorReply.READONLY;
+        }
+
+        // reject on any readonly slot (e.g. replica), same as other write paths
+        for (var oneSlot : localPersist.initializedOneSlots()) {
+            if (oneSlot.isReadonly()) {
+                return ErrorReply.READONLY;
+            }
+        }
+
         // skip for test
         if (data.length == 2) {
             return OKReply.INSTANCE;
