@@ -146,6 +146,13 @@ class EGroupTest extends Specification {
             result instanceof IntegerReply && (result as IntegerReply).integer == 1
         }.result
 
+        when:
+        // the key length check must be done in all modes, the del command does the same
+        reply = eGroup.execute('exists >key b')
+        eventloopCurrent.run()
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
         cleanup:
         eventloop.breakEventloop()
     }
