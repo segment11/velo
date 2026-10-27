@@ -230,14 +230,15 @@ public class FGroup extends BaseCommand {
 
         return localPersist.doSthInSlots(oneSlot -> {
             oneSlot.flush();
-
-            if (oneSlot == localPersist.firstOneSlot()) {
-                var indexHandlerPool = localPersist.getIndexHandlerPool();
-                if (indexHandlerPool != null) {
-                    indexHandlerPool.getKeyAnalysisHandler().flushdb();
-                }
-            }
             return true;
-        }, resultList -> OKReply.INSTANCE);
+        }, resultList -> {
+            // key analysis store is process-wide, clear it exactly once here;
+            // must not depend on firstOneSlot(), which resolves to another node's slot (null) in cluster mode
+            var indexHandlerPool = localPersist.getIndexHandlerPool();
+            if (indexHandlerPool != null) {
+                indexHandlerPool.getKeyAnalysisHandler().flushdb();
+            }
+            return OKReply.INSTANCE;
+        });
     }
 }

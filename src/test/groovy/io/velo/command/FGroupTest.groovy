@@ -1,11 +1,20 @@
 package io.velo.command
 
+import io.activej.config.Config
+import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
+import io.velo.ConfForGlobal
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.persist.index.IndexHandlerPool
+import io.velo.persist.index.KeyAnalysisHandler
 import io.velo.repl.Binlog
 import io.velo.reply.*
 import spock.lang.Specification
+
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
 
 class FGroupTest extends Specification {
     def _FGroup = new FGroup(null, null, null)
@@ -264,9 +273,73 @@ class FGroupTest extends Specification {
             result == OKReply.INSTANCE
         }.result
 
+        when: '76.7: key analysis store is cleared once even when firstOneSlot() resolves to nothing'
+        ConfForGlobal.clusterEnabled = true
+        def multiShard = localPersist.multiShard
+        multiShard.mySelfShard().multiSlotRange.list.clear()
+        localPersist.firstOneSlot() == null
+
+        def keyDir = new File(Consts.persistDir, 'keys-for-analysis-fgroup')
+        if (!keyDir.exists()) {
+            keyDir.mkdirs()
+        }
+        def analysisEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        analysisEventloop.keepAlive(true)
+        Thread.start {
+            analysisEventloop.run()
+        }
+        def countingHandler = new CountingKeyAnalysisHandler(keyDir, analysisEventloop, Config.create())
+        def pool = new FlushCountingPool(countingHandler, (byte) 1, Consts.persistDir, Config.create())
+        localPersist.indexHandlerPool = pool
+        reply = fGroup.execute('flushdb')
+        then:
+        localPersist.firstOneSlot() == null
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == OKReply.INSTANCE
+        }.result
+        countingHandler.flushdbCalls == 1
+
         cleanup:
+        ConfForGlobal.clusterEnabled = false
         localPersist.setRoleTransitionWriteFenced(false)
         oneSlot.setReadonly(false)
+        if (countingHandler != null) {
+            countingHandler.cleanUp()
+        }
+        if (analysisEventloop) {
+            analysisEventloop.breakEventloop()
+        }
         localPersist.cleanUp()
+    }
+
+    static class CountingKeyAnalysisHandler extends KeyAnalysisHandler {
+        int flushdbCalls = 0
+
+        CountingKeyAnalysisHandler(File keyDir, Eventloop eventloop, Config config) throws Exception {
+            super(keyDir, eventloop, config)
+        }
+
+        @Override
+        CompletableFuture<Void> flushdb() {
+            flushdbCalls++
+            return CompletableFuture.completedFuture(null)
+        }
+    }
+
+    static class FlushCountingPool extends IndexHandlerPool {
+        final CountingKeyAnalysisHandler countingHandler
+
+        FlushCountingPool(CountingKeyAnalysisHandler handler, byte indexWorkers, File persistDir, Config config) throws IOException {
+            super(indexWorkers, persistDir, config)
+            this.countingHandler = handler
+        }
+
+        @Override
+        KeyAnalysisHandler getKeyAnalysisHandler() {
+            return countingHandler
+        }
     }
 }
