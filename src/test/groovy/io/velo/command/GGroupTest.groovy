@@ -341,6 +341,25 @@ class GGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
+        // Bug 77.10: 64 bit offsets are accepted like redis and clamped
+        reply = gGroup.execute('getrange a 99999999999 -1')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).raw.length == 0
+
+        when:
+        reply = gGroup.execute('getrange a -99999999999 2')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).raw == 'abc'.bytes
+
+        when:
+        reply = gGroup.execute('getrange a 9223372036854775806 9223372036854775807')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).raw.length == 0
+
+        when:
         reply = gGroup.execute('getrange a 2 1')
         then:
         reply instanceof BulkReply

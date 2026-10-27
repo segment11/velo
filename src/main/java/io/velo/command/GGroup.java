@@ -397,11 +397,11 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        int start;
-        int end;
+        long startLong;
+        long endLong;
         try {
-            start = Integer.parseInt(new String(data[2]));
-            end = Integer.parseInt(new String(data[3]));
+            startLong = Long.parseLong(new String(data[2]));
+            endLong = Long.parseLong(new String(data[3]));
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }
@@ -411,6 +411,10 @@ public class GGroup extends BaseCommand {
         if (valueBytes == null) {
             return BLANK_REPLY;
         }
+
+        // redis parses 64 bit offsets, clamp them to the value length range before index reset
+        int start = (int) Math.max(-valueBytes.length, Math.min(valueBytes.length, startLong));
+        int end = (int) Math.max(-valueBytes.length, Math.min(valueBytes.length, endLong));
 
         var startEnd = IndexStartEndReset.reset(start, end, valueBytes.length);
         if (!startEnd.valid()) {
