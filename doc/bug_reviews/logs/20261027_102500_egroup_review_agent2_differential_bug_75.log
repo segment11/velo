@@ -1,0 +1,29 @@
+# bug 75 EGroup round 1 - reviewer (AI agent 2) evidence log
+# date: 2026-10-27 10:25
+# velo: build/libs/velo-1.0.0.jar (built 2026-10-22 16:29, after the last commit touching
+#       BaseCommand.setCv/set and EGroup.expire -> 2669f81f 2026-10-10), port 41500, dir /tmp/opencode/velo75
+# redis: 7.2.14 (source ~/ws/redis @ tag 7.2.14), port 7799
+# order of every pair: VELO first, REDIS second
+#
+=== 75.1 GT on a persistent key
+  expire k 100 gt => 1; ttl k => 99
+  expire k 100 gt => 0; ttl k => -1
+=== 75.2 unknown option
+  expire k 10 FOO => 1; ttl k => 9
+  expire k 10 FOO => ERR Unsupported option FOO; ttl k => -1
+=== 75.3 overflow
+  expire k 9223372036854775807 => 1; ttl k => -2; exists k => 0
+  expire k 9223372036854775807 => ERR invalid expire time in 'expire' command; ttl k => -1; exists k => 1
+=== 75.4 expireat 0
+  expireat k 0 => 1; exists k => 1; ttl k => -1; expiretime k => -1
+  expireat k 0 => 1; exists k => 0; ttl k => -2; expiretime k => -2
+=== 75.5 exists with a 257-byte key
+  exists <257-byte key> => ERR key too long (max length is 256)
+  exists <257-byte key> => 0
+=== 75.6 expire on structured values
+  before: l=list s=set z=zset h=hash str=string
+  after : l=string s=string z=string h=string str=string
+  hgetall h => ERR wrong type  
+  before: l=list s=set z=zset h=hash str=string
+  after : l=list s=set z=zset h=hash str=string
+  hgetall h => f v 

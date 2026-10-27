@@ -1,0 +1,44 @@
+# bug 75 EGroup round 1 - fix phase verification log (AI agent 1)
+# date: 2026-10-27 11:20 (final run at HEAD 126e013f)
+# velo: build/libs/velo-1.0.0.jar rebuilt with the bug 75 fixes, port 41500
+# redis: 7.2.14, port 7799
+# order of every pair: VELO first, REDIS second
+#
+=== 75.1 GT on a persistent key
+  expire k 100 gt => 0; ttl => -1
+  expire k 100 gt => 0; ttl => -1
+=== 75.2 unknown option
+  expire k 10 FOO => ERR Unsupported option FOO; ttl => -1
+  expire k 10 FOO => ERR Unsupported option FOO; ttl => -1
+=== 75.3 overflow
+  expire k 9223372036854775807 => ERR invalid expire time in 'expire' command; ttl => -1; exists => 1
+  expire k 9223372036854775807 => ERR invalid expire time in 'expire' command; ttl => -1; exists => 1
+  expireat k 9223372036854775807 => ERR invalid expire time in 'expireat' command; ttl => -1
+  expireat k 9223372036854775807 => ERR invalid expire time in 'expireat' command; ttl => -1
+  pexpire k 9223372036854775807 => ERR invalid expire time in 'pexpire' command; ttl => -1
+  pexpire k 9223372036854775807 => ERR invalid expire time in 'pexpire' command; ttl => -1
+  pexpireat k 9223372036854775807 => 1; ttl => 9223370243783254
+  pexpireat k 9223372036854775807 => 1; ttl => 9223370243783254
+=== 75.4 expireat 0 / past / negative
+  expireat k 0 => 1; exists => 0; ttl => -2; expiretime => -2
+  expireat k 0 => 1; exists => 0; ttl => -2; expiretime => -2
+  expireat k 1 => 1; exists => 0
+  expireat k 1 => 1; exists => 0
+  expire k -1 => 1; exists => 0
+  expire k -1 => 1; exists => 0
+=== 75.6 expire on structured values
+  after expire: l=list s=set z=zset h=hash str=string
+  hgetall h => f v 
+  after expire: l=list s=set z=zset h=hash str=string
+  hgetall h => f v 
+=== normal paths still work
+  expire k 100 => 1; ttl => 99; get => v
+  expire k 100 nx => 1; ttl => 99
+  expire k 100 xx => 0; ttl => -1
+  expire k 100 gt => 0; ttl => -1
+  expire k 100 lt => 1; ttl => 99
+  expire k 100 => 1; ttl => 100; get => v
+  expire k 100 nx => 1; ttl => 100
+  expire k 100 xx => 0; ttl => -1
+  expire k 100 gt => 0; ttl => -1
+  expire k 100 lt => 1; ttl => 100
