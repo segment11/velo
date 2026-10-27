@@ -27,6 +27,14 @@ public class ErrorReply implements Reply {
         return new ErrorReply("unknown command '" + cmd + "'");
     }
 
+    /**
+     * @param cmd the command name
+     * @return error reply for an expire time that is out of range
+     */
+    public static ErrorReply INVALID_EXPIRE_TIME(String cmd) {
+        return new ErrorReply("invalid expire time in '" + cmd + "' command");
+    }
+
     /** Error reply for missing dictionary. */
     public static final ErrorReply DICT_MISSING = new ErrorReply("dict missing");
 

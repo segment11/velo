@@ -177,6 +177,54 @@ class PGroupTest extends Specification {
         reply instanceof MultiBulkReply
     }
 
+    def 'test pexpire'() {
+        given:
+        final short slot = 0
+        def inMemoryGetSet = new InMemoryGetSet()
+        def pGroup = new PGroup(null, null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+
+        when:
+        // an overflowing expire time must be rejected, redis 7.2 answers
+        // 'ERR invalid expire time in 'pexpire' command' and keeps the ttl untouched
+        def reply = pGroup.execute('pexpire a 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'pexpire' command"
+        cv.expireAt == CompressedValue.NO_EXPIRE
+
+        when:
+        reply = pGroup.execute('pexpire a 100000')
+        then:
+        reply == IntegerReply.REPLY_1
+        cv.expireAt > System.currentTimeMillis()
+    }
+
+    def 'test pexpireat'() {
+        given:
+        final short slot = 0
+        def inMemoryGetSet = new InMemoryGetSet()
+        def pGroup = new PGroup(null, null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+
+        when:
+        // an absolute expire time does not overflow, redis 7.2 accepts it
+        def reply = pGroup.execute('pexpireat a 9223372036854775807')
+        then:
+        reply == IntegerReply.REPLY_1
+        cv.expireAt == 9223372036854775807L
+    }
+
     def 'test persist'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

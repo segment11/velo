@@ -242,12 +242,24 @@ public class EGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        long expireAt;
+        final long now = System.currentTimeMillis();
+        // the base time is 0 for the *at commands, the current time for the relative ones
+        final long basetime = isAt ? 0L : now;
+        long when;
         if (isMilliseconds) {
-            expireAt = isAt ? seconds : System.currentTimeMillis() + seconds;
+            when = seconds;
         } else {
-            expireAt = isAt ? seconds * 1000 : System.currentTimeMillis() + seconds * 1000;
+            // seconds to milliseconds, check the overflow before the multiply
+            if (seconds > Long.MAX_VALUE / 1000 || seconds < Long.MIN_VALUE / 1000) {
+                return ErrorReply.INVALID_EXPIRE_TIME(cmd);
+            }
+            when = seconds * 1000;
         }
+        // the base time is added to the expire time, check the overflow before the add
+        if (when > Long.MAX_VALUE - basetime) {
+            return ErrorReply.INVALID_EXPIRE_TIME(cmd);
+        }
+        final long expireAt = when + basetime;
 
         boolean isNx = false;
         boolean isXx = false;

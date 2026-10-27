@@ -308,6 +308,38 @@ class EGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
         inMemoryGetSet.getBuf(slot, 'a', 0, 0).cv().dictSeqOrSpType == CompressedValue.SP_TYPE_HH
+
+        when:
+        // an overflowing expire time must be rejected, redis 7.2 answers
+        // 'ERR invalid expire time in 'expire' command' and keeps the ttl untouched
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = eGroup.execute('expire a 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'expire' command"
+        cv.expireAt == CompressedValue.NO_EXPIRE
+
+        when:
+        reply = eGroup.execute('expire a -9223372036854775808')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'expire' command"
+        cv.expireAt == CompressedValue.NO_EXPIRE
+
+        when:
+        reply = eGroup.execute('expireat a 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'expireat' command"
+        cv.expireAt == CompressedValue.NO_EXPIRE
+
+        when:
+        // a large but valid expire time is still accepted
+        reply = eGroup.execute('expire a 1000000000000')
+        then:
+        reply == IntegerReply.REPLY_1
+        cv.expireAt > System.currentTimeMillis()
     }
 
     def 'test expiretime'() {
