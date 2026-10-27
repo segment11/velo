@@ -365,7 +365,17 @@ class GGroupTest extends Specification {
         gGroup.from(BaseCommand.mockAGroup())
 
         when:
-        def reply = gGroup.execute('getset a value')
+        def reply = gGroup.execute('getset >key v')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        reply = gGroup.execute('getset k >value')
+        then:
+        reply == ErrorReply.VALUE_TOO_LONG
+
+        when:
+        reply = gGroup.execute('getset a value')
         then:
         reply == NilReply.INSTANCE
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().compressedData == 'value'.bytes

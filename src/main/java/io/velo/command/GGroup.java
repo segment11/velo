@@ -428,7 +428,15 @@ public class GGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
+        var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
         var valueBytes = data[2];
+        if (valueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
+            return ErrorReply.VALUE_TOO_LONG;
+        }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         // wrong type key replies WRONGTYPE, other string-compatible types will be overwritten
