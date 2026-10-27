@@ -554,7 +554,10 @@ public class GGroup extends BaseCommand {
                 try {
                     var lon = Double.parseDouble(new String(data[i]));
                     var lat = Double.parseDouble(new String(data[i + 1]));
-                    if (lon > RedisGeo.GEO_LONG_MAX || lon < RedisGeo.GEO_LONG_MIN ||
+                    // NaN passes every < > comparison, reject it explicitly;
+                    // infinite values are already caught by the bounds check
+                    if (Double.isNaN(lon) || Double.isNaN(lat) ||
+                        lon > RedisGeo.GEO_LONG_MAX || lon < RedisGeo.GEO_LONG_MIN ||
                         lat > RedisGeo.GEO_LAT_MAX || lat < RedisGeo.GEO_LAT_MIN) {
                         return ErrorReply.NOT_FLOAT;
                     }

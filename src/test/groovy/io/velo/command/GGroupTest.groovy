@@ -471,6 +471,35 @@ class GGroupTest extends Specification {
         reply == ErrorReply.NOT_FLOAT
 
         when:
+        // NaN passes every < > comparison, must be rejected explicitly
+        reply = gGroup.execute('geoadd b NaN 37.5 m0')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        reply = gGroup.execute('geoadd c 13.36 NaN m0')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // NaN together with a valid triple is still rejected
+        reply = gGroup.execute('geoadd d 13.36 38.1 ok NaN 37.5 bad')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // invalid longitude < -180
+        reply = gGroup.execute('geoadd e -181.0 38.1 m0')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        // invalid latitude < -85.05112877980659
+        reply = gGroup.execute('geoadd f 13.36 -86.0 m0')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
         reply = gGroup.execute('geoadd a nx 1.0 2.0')
         then:
         reply == ErrorReply.SYNTAX
