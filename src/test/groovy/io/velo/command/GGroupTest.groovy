@@ -924,6 +924,61 @@ class GGroupTest extends Specification {
         then:
         reply == ErrorReply.NOT_FLOAT
 
+        when:
+        // read mode with a missing source key replies an empty array
+        reply = gGroup.execute('geosearch nosuchsrc frommember mmm byradius 100 km')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        // read mode with an empty result replies an empty array
+        reply = gGroup.execute('geosearch xxx fromlonlat 0 0 byradius 1 m')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        // Bug 77.7: create the destination key first
+        reply = gGroup.execute('geosearchstore dst77 xxx frommember mmm byradius 400 km')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 3
+        inMemoryGetSet.getBuf(slot, 'dst77', 0, 0L) != null
+
+        when:
+        // Bug 77.7: an empty result must delete the stale destination key like redis
+        reply = gGroup.execute('geosearchstore dst77 xxx fromlonlat 0 0 byradius 1 m')
+        then:
+        reply == IntegerReply.REPLY_0
+        inMemoryGetSet.getBuf(slot, 'dst77', 0, 0L) == null
+
+        when:
+        // Bug 77.7: a missing source key with a stale destination deletes it too
+        reply = gGroup.execute('geosearchstore dst77b xxx frommember mmm byradius 400 km')
+        then:
+        (reply as IntegerReply).integer == 3
+
+        when:
+        reply = gGroup.execute('geosearchstore dst77b nosuchsrc frommember mmm byradius 400 km')
+        then:
+        reply == IntegerReply.REPLY_0
+        inMemoryGetSet.getBuf(slot, 'dst77b', 0, 0L) == null
+
+        when:
+        // Bug 77.7: cross worker empty store deletes the destination asynchronously
+        gGroup.crossRequestWorker = false
+        reply = gGroup.execute('geosearchstore dst77 xxx frommember mmm byradius 400 km')
+        then:
+        (reply as IntegerReply).integer == 3
+
+        when:
+        gGroup.crossRequestWorker = true
+        reply = gGroup.execute('geosearchstore dst77 xxx fromlonlat 0 0 byradius 1 m')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result -> result == IntegerReply.REPLY_0 }.result
+        inMemoryGetSet.getBuf(slot, 'dst77', 0, 0L) == null
+
         cleanup:
         eventloop.breakEventloop()
     }

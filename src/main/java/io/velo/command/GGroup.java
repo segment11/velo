@@ -697,6 +697,33 @@ public class GGroup extends BaseCommand {
     private record GeoSearchResult(String member, RedisGeo.P p, double distance) {
     }
 
+    /**
+     * Deletes the geosearchstore destination key on an empty result / missing source and replies 0,
+     * mirroring redis geo.c which dbDelete(s) the store key before replying 0.
+     */
+    private Reply deleteDstKeyAndReplyZero(SlotWithKeyHash dstS) {
+        if (!isCrossRequestWorker) {
+            removeDelay(dstS);
+            return IntegerReply.REPLY_0;
+        }
+
+        var dstOneSlot = localPersist.oneSlot(dstS.slot());
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        var p = dstOneSlot.asyncRun(() -> removeDelay(dstS));
+        p.whenComplete((v, t) -> {
+            if (t != null) {
+                finalPromise.setException(t);
+            } else {
+                finalPromise.set(IntegerReply.REPLY_0);
+            }
+        });
+
+        return asyncReply;
+    }
+
     private Reply geosearch(byte[][] dd, byte[] dstKeyBytes, SlotWithKeyHash dstS) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
@@ -888,7 +915,11 @@ public class GGroup extends BaseCommand {
 
         var rg = getRedisGeo(slotWithKeyHash);
         if (rg == null) {
-            return isNeedStoreToDstKey ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+            if (isNeedStoreToDstKey) {
+                // redis deletes the stale destination key when the source key does not exist
+                return deleteDstKeyAndReplyZero(dstS);
+            }
+            return MultiBulkReply.EMPTY;
         }
 
         if (fromMember != null) {
@@ -925,7 +956,11 @@ public class GGroup extends BaseCommand {
         }
 
         if (resultList.isEmpty()) {
-            return isNeedStoreToDstKey ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+            if (isNeedStoreToDstKey) {
+                // redis deletes the stale destination key when no member matches
+                return deleteDstKeyAndReplyZero(dstS);
+            }
+            return MultiBulkReply.EMPTY;
         }
 
         if (isDesc) {
