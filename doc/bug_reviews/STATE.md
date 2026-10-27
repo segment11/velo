@@ -5,7 +5,7 @@ Single source of truth for report id allocation and module coverage.
 
 ## next_bug_id
 
-76
+77
 
 ## Allocated
 
@@ -18,6 +18,7 @@ Single source of truth for report id allocation and module coverage.
 | 73 | CGroup commands | 1 | 7 findings fixed + accepted; follow-ups A1 `94db1fa4` and R1 hardened by `00cbbc54`/`fbf3e06c`/`d0e37a45`/`31c3abc6`; verified e2e against a 2-slot/2-net worker server (all 5 cases pass, leak case red on the pre-fix jar); open: pipelined self-kill replies, PING/ECHO bypass CLIENT REPLY OFF |
 | 74 | DGroup commands (dbsize/debug/decr/decrby/decrbyfloat/del/dump) | 1 | closed: 9/9 CONFIRMED, fixed in 9 commits (`fe48c5f1`…`39f4dd60`), re-review ACCEPTED (red/green + JaCoCo independently reproduced); follow-ups: lossy `SET` number normalisation (`BaseCommand.set()`), `HGroup.hincrby2` non-finite float, `HGroup.hincrby` int32 delta |
 | 75 | EGroup commands (echo/exists/expire/expireat/expiretime) | 1 | fix phase complete: 6/6 CONFIRMED, 6 fixed in 8 commits (`bad9cf26`, `ff6c55c2`, `37ab2b4d`, `ee014c93`, `9bf87c44`, `e20e5aa5`, `71c87daa`, `126e013f`), re-review pending |
+| 76 | FGroup commands (failover/flushdb/flushall) | 1 | fix phase complete: 6/6 fixed in 6 commits (`cebb1fe5`, `15cbd60d` incl. 76.5, `33b3f472`, `df62b0c5`, `3a118894`, `82470d2c`) + style `25e71691`; all RED/GREEN + JaCoCo evidenced; re-review (agent 2) pending |
 
 ## Module coverage (latest round per module)
 
@@ -32,6 +33,7 @@ Single source of truth for report id allocation and module coverage.
 | CGroup (client/command/config/copy C commands) | bug_73 round 1 | fixed + re-reviewed (3 rounds) + R1 hardened (4 commits); all accepted; open: pipelined self-kill replies, `handleFast` ignoring CLIENT REPLY OFF, gradle daemon heap |
 | DGroup (dbsize/debug/decr/decrby/decrbyfloat/del/dump) | bug_74 round 1 | closed — 9/9 fixed, re-review ACCEPTED; follow-ups in string/hash modules (see report Residual Risk) |
 | EGroup (echo/exists/expire/expireat/expiretime) | bug_75 round 1 | all 6 findings fixed (75.1 GT-on-no-TTL, 75.6 type-marker corruption, 75.2 unsupported option, 75.3 expire-time overflow, 75.4 expireat-0 delete, 75.5 exists key-length check); re-review pending |
+| FGroup (failover/flushdb/flushall) | bug_76 round 1 | fix phase complete — all 7 findings disposed (76.5 fixed with 76.4); re-review pending; residual: FAILOVER still a partial implementation (no promote, TO/TIMEOUT unsupported by design) |
 | types / config / metrics / cluster / net / compression / commands (string/hash/list/set/zset/geo/hll) | see doc/bug_reviews/ | check reports |
 
 ## Known id collisions (historical, do not propagate)
