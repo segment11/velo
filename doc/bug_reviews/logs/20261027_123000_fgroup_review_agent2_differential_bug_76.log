@@ -1,0 +1,90 @@
+# bug 76 FGroup round 1 - reviewer (AI agent 2) evidence log
+# date: 2026-10-27 12:25
+# velo: build/libs/velo-1.0.0.jar (built 2026-10-27 11:04), port 41500 (master) / 41501 (replica), dir /tmp/opencode/velo76{,b}
+# redis: 7.2.11, port 7799 (master) / 7800 (replica)
+# reviewed commit: 925a9611
+#
+===== VELO
+--- 76.1 FLUSHDB ASYNC (data must be deleted)
+FLUSHDB ASYNC => OK
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.1b FLUSHDB SYNC
+FLUSHDB SYNC => OK
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.1c FLUSHALL ASYNC
+FLUSHALL ASYNC => OK
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.1d control: plain FLUSHDB
+FLUSHDB => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.2 FLUSHDB FOO BAR
+FLUSHDB FOO BAR => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.2b FLUSHDB ASYNC FOO
+FLUSHDB ASYNC FOO => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.2c FAILOVER ABORT
+FAILOVER ABORT => OK
+--- 76.2d FAILOVER TIMEOUT 100
+FAILOVER TIMEOUT 100 => ERR no slave
+--- 76.2e FAILOVER TO 127.0.0.1 6399
+FAILOVER TO 127.0.0.1 6399 => ERR no slave
+--- 76.2f FAILOVER NONSENSE x
+FAILOVER NONSENSE x => ERR no slave
+--- 76.2g FAILOVER (no args)
+FAILOVER => ERR no slave
+===== REDIS
+--- 76.1 FLUSHDB ASYNC (data must be deleted)
+FLUSHDB ASYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1b FLUSHDB SYNC
+FLUSHDB SYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1c FLUSHALL ASYNC
+FLUSHALL ASYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1d control: plain FLUSHDB
+FLUSHDB => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.2 FLUSHDB FOO BAR
+FLUSHDB FOO BAR => ERR syntax error
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.2b FLUSHDB ASYNC FOO
+FLUSHDB ASYNC FOO => ERR syntax error
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.2c FAILOVER ABORT
+FAILOVER ABORT => ERR No failover in progress.
+--- 76.2d FAILOVER TIMEOUT 100
+FAILOVER TIMEOUT 100 => ERR FAILOVER requires connected replicas.
+--- 76.2e FAILOVER TO 127.0.0.1 6399
+FAILOVER TO 127.0.0.1 6399 => ERR FAILOVER requires connected replicas.
+--- 76.2f FAILOVER NONSENSE x
+FAILOVER NONSENSE x => ERR syntax error
+--- 76.2g FAILOVER (no args)
+FAILOVER => ERR FAILOVER requires connected replicas.
+
+===== 76.3 replica wipe (velo master 41500 / velo replica 41501)
+--- 76.3 step1: normal write on replica
+ERR readonly
+
+--- 76.3 step2: FLUSHALL on replica
+OK
+replica DBSIZE => 0
+replica EXISTS k => 0
+master DBSIZE => 2
+master EXISTS k => 1
+
+===== 76.3 redis replica (7799 master / 7800 replica)
+redis-cli -p 7799 set kk vv => READONLY You can't write against a read only replica.
+redis replica DBSIZE before => 2
+redis replica FLUSHALL => OK
+redis replica DBSIZE after => 0
+redis master DBSIZE => 0
+
+===== 76.4/5 failover on velo master with one live replica
+FAILOVER => ERR slave not catch up=0.0.0.0:41501, current=FileIndexAndOffset{fileIndex=0, offset=1175}, slave=FileIndexAndOffset{fileIndex=0, offset=1115}
+master SET after failover => OK
+
+===== redis FAILOVER (control)
+redis FAILOVER => ERR FAILOVER is not valid when server is a replica.
+redis master role after => role:slave

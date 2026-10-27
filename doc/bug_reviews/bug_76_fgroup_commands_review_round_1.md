@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** fix phase complete (agent 1) — 6 fixes in 6 commits + 1 style commit; all findings fixed incl. 76.5 riding with 76.4; re-review (agent 2) pending
+**Status:** closed — fix phase complete (agent 1, 6 fixes in 6 commits + 1 style commit) and **re-review ACCEPTED (agent 2)**: 7/7 findings fixed and independently re-verified (RED re-derived per commit, focused tests green, JaCoCo confirmed, live Velo-vs-Redis 7.2.11 differential); 1 follow-up (R1: failover exception path skips the rollback) recorded in Residual Risk
 **Reviewer evidence log:** `doc/bug_reviews/logs/20261027_123000_fgroup_review_agent2_differential_bug_76.log` (live Velo 41500/41501 vs Redis 7.2.11 7799/7800 differential)
 **Review branch:** `review/fgroup`
 **Reviewed commit:** `925a9611f2d829405411218f0eccd61883325351`
@@ -734,7 +734,90 @@ test` — the 76.6 test's reflective `leaderLatch` field access was replaced wit
 Per-bug RED runs were executed with the production change absent/stashed; each row's RED output was read from the Spock
 XML before the fix was written (76.3/76.4 evidence above is pasted from those runs).
 
+## Re-review (AI agent 2, round 1)
+
+**Reviewer:** AI agent 2 · **Date:** 2026-10-27 · **HEAD at re-review:** `002de6f0` (fix range `925a9611..002de6f0`)
+**Evidence log:** `doc/bug_reviews/logs/20261027_153000_fgroup_rereview_agent2_bug_76.log`
+**Method:** for every fix commit the reviewer re-derived the RED evidence independently — the *single* fixed hunk in
+`src/main/java/io/velo/command/FGroup.java` was reverted in the working tree while the **new** tests were kept, the focused test class was
+re-run, and the working tree was restored afterwards. The four evidences required by the fix-phase gate (RED → commit → focused green →
+JaCoCo) were then checked per commit, followed by a live Velo-vs-Redis 7.2.11 differential on a jar rebuilt from HEAD.
+
+### Per-commit verdict
+
+| Bug | Commit | RED (independently reproduced) | Focused test | JaCoCo (changed lines) | Live check | Verdict |
+|---|---|---|---|---|---|---|
+| 76.3 | `cebb1fe5` | un-fix → `test flushdb` FAIL at `FGroupTest.groovy:279` (`reply == ErrorReply.READONLY` vs `AsyncReply{OKReply}`) — the flush ran on a readonly slot | green 4/4 at HEAD | FGroup 211-221 covered, both guards + branches | replica `FLUSHALL` → `READONLY You can't write against a read only replica.`, replica data intact (DBSIZE 1→1) | **ACCEPTED** |
+| 76.4 + 76.5 | `15cbd60d` | un-fix (per-slot catch-up validation removed for non-first slots) → `test failover` FAIL at `FGroupTest.groovy:153` (reply resolved `OKReply`, the lagging slot was not detected) | green 4/4 at HEAD | per-slot loop 114-151 covered (incl. 4/4 on the offset/fileIndex compare); rollback 169-190 covered; only fault-injection lines uncovered | live abort path: `FAILOVER` → `ERR no slave` and the master stays writable afterwards (rollback un-fenced the slot) | **ACCEPTED** |
+| 76.1 | `33b3f472` | un-fix A (abort branch) → FAIL at `:57` and `:108` (`'No failover in progress.'` vs `'not support'`); un-fix B (old "skip for test" hook) → FAIL at `:47` and `:248` (`flushdb async` returned a synchronous `OKReply`) | green 4/4 at HEAD | abort check 100-102 covered; ASYNC/SYNC acceptance + syntax rejection 223-232 covered | `FLUSHDB ASYNC` / `FLUSHDB SYNC` / `FLUSHALL ASYNC` now delete the data (was: `+OK` + data retained); `FAILOVER ABORT` → `ERR No failover in progress.` — identical to Redis 7.2.11 | **ACCEPTED** |
+| 76.2 | `df62b0c5` | un-fix (option parsing) → `test failover` FAIL at `FGroupTest.groovy:117` (`reply == ErrorReply.SYNTAX` vs `AsyncReply{ErrorReply{'no slave'}}` — the unknown token had started a real failover) | green 4/4 at HEAD | option chain 105-111 covered (to/timeout/abort/force/unknown); `len>2` guard 224-227 covered | `FLUSHDB FOO BAR` → `ERR syntax error` + data retained; `FLUSHDB ASYNC FOO` → `ERR syntax error`; `FAILOVER NONSENSE x` → `ERR syntax error` — identical to Redis 7.2.11 | **ACCEPTED** |
+| 76.7 | `3a118894` | un-fix (old `oneSlot == firstOneSlot()` guard) → `test flushdb` FAIL at `FGroupTest.groovy:325` (`countingHandler.flushdbCalls == 0`, the analysis store was never cleared while the in-memory data was wiped) | green 4/4 at HEAD | aggregation flush 237-245 covered incl. the pool-null branch | n/a (process-wide RocksDB store, no wire-visible effect) | **ACCEPTED** |
+| 76.6 | `82470d2c` | un-fix (direct call instead of the virtual thread) → `test failover` FAIL at `FGroupTest.groovy:220` (`closedByThread != Thread.currentThread()` — the latch was closed on the calling/slot thread) | green 4/4 at HEAD | offload lambda 196-201 covered | n/a (no ZK in the test deployment) | **ACCEPTED** |
+
+**Companion commits** (style / test infrastructure, no behaviour change) — all touched test classes re-run green by the reviewer:
+`25e71691` (explicit `ErrorReply` casts: OGroup 2/0, BGroup 46/0, JGroup 2/0, NGroup 2/0, QGroup 2/0, VGroup 2/0, YGroup 2/0,
+RequestHandlerTest 8/0), `ec2676d1` (`@TestOnly` leader-latch accessors: LeaderSelectorTest 25/0), `0f29326c` / `002de6f0`
+(`@TestOnly` accessors: DictMapTest 6/0, CGroupTest 11/0, RedisBFTest 9/0, RedisGeoTest 14/0, RedisHHTest 9/0), `e0581922` (docs only).
+
+**Pre-existing failures claim — verified.** `MultiWorkerServerTest` shows 2 failures at HEAD (`test mock inject and handle` —
+`NoSuchElementException` in `MultiWorkerServer.handlePipeline`; `test cluster slot cross shards` — NPE, `socket` is null in
+`MultiWorkerServer.handleRequest`). The reviewer re-ran the same class with the **pre-fix** versions of `FGroup.java`, `ErrorReply.java`,
+`MultiWorkerServer.java` and `MultiWorkerServerTest.groovy` checked out from `925a9611` → **the same 2 failures**, so they are environmental /
+pre-existing and not caused by the bug 76 work. Agent 1's claim confirmed.
+
+**JaCoCo of the changed region** (`io.velo.command.FGroup`, lines 93-247, at HEAD): every line changed by the six fix commits is covered
+except the defensive fault-injection lines `147-148` (`IOException` → `RuntimeException`), `156-158` (the `Promises.all` exception path) and
+`186-187` (the rollback `IOException` handler); line `155` is a partial branch (`e != null` never taken). Matches the fix log.
+
+**Environment note.** The known `compileTestGroovy` → "Java heap space" daemon flake reproduced 4 times during this re-review as well;
+`./gradlew --stop` plus `-Dorg.gradle.jvmargs=-Xmx8g` cleared it every time (up to 5 retries per run). Confirmed environmental.
+
+### Behavioural verification after the fixes (live, jar rebuilt from HEAD)
+
+| Case | Velo before | Velo after | Redis 7.2.11 |
+|---|---|---|---|
+| `FLUSHDB ASYNC` (key present) | `+OK`, key **retained** | `+OK`, key **deleted** | `+OK`, key deleted |
+| `FLUSHDB SYNC` | `+OK`, key retained | `+OK`, key deleted | `+OK`, key deleted |
+| `FLUSHALL ASYNC` | `+OK`, key retained | `+OK`, key deleted | `+OK`, key deleted |
+| `FLUSHDB FOO BAR` | `+OK`, key **deleted** | `ERR syntax error`, key retained | `ERR syntax error`, key retained |
+| `FLUSHDB ASYNC FOO` | `+OK`, key deleted | `ERR syntax error`, key retained | `ERR syntax error`, key retained |
+| `FAILOVER ABORT` | `+OK` (no abort) | `ERR No failover in progress.` | `ERR No failover in progress.` |
+| `FAILOVER NONSENSE x` | started a **real failover** (`ERR no slave`) | `ERR syntax error` | `ERR syntax error` |
+| `FAILOVER TO host port` / `FAILOVER TIMEOUT ms` | silently ignored | `ERR not support` | `ERR FAILOVER requires connected replicas.` (Velo does not implement TO/TIMEOUT — accepted divergence) |
+| `FLUSHALL` on a **replica** | `+OK`, replica **wiped** (DBSIZE 1→0) | `READONLY You can't write against a read only replica.`, data intact | `READONLY You can't write against a read only replica.`, data intact |
+| `FAILOVER` with no replica, then `SET` | n/a | `ERR no slave`, then `SET` → `+OK` (rollback un-fenced the slot) | n/a |
+
+**Conclusion:** all 7 findings (76.1-76.7) are **fixed and accepted**. Two residual risks are recorded below (R1 needs a follow-up commit;
+R2/R3 are accepted design consequences to keep in mind).
+
 ## Residual Risk
+
+**Reviewer addendum (AI agent 2, re-review of `925a9611..002de6f0`):**
+
+- **R1 — the failover's exception path skips the rollback (follow-up needed).** `FGroup.java:154-159`: when a per-slot lambda throws
+  (e.g. `oneSlot.setReadonly(true)` → `IOException` → `RuntimeException` at `147-148`), `Promises.all` completes exceptionally and the
+  aggregation takes the `e != null` branch → `finalPromise.setException(e)` — **the rollback block (169-190) is never executed**. Slots that were
+  already fenced by the other workers' lambdas therefore stay `readonly` for good: the node silently stops accepting writes, and the client gets a
+  generic error (`-ERR <io message>`, or `-ERR null` for a message-less exception). The `firstError` branch does roll back, so only the
+  exception path is affected. This is the same branch the fix log already lists as uncovered (JaCoCo: `156-158` not covered, `155` partial).
+  **Recommended follow-up (one commit, own RED test):** move the rollback into an unconditional path (e.g. `finally`) so that both the
+  `firstError` and the exception path un-fence the slots this command fenced.
+- **R2 — the FLUSHDB readonly pre-check is not atomic with the flush.** `FGroup.java:216-221` reads `oneSlot.isReadonly()` from the *caller's*
+  thread, while the wipe happens later on each slot's own eventloop (`234-236`). A slot that becomes readonly in between (role transition,
+  promotion to slave) is still wiped. The window is narrow and the same pattern exists in `BaseCommand.putToOneSlot` (1220), so it is consistent
+  with the rest of the codebase — but a bulk wipe has a much larger blast radius than a single-key write. Optional hardening: re-check inside the
+  per-slot lambda (on the slot's own thread) and abort the flush there.
+- **R3 — two deliberate strictness changes to keep in mind.** (a) `FLUSHDB`/`FLUSHALL` is now **all-or-nothing per node**: a single readonly slot
+  (e.g. a slot importing from another shard during a migration) rejects the whole command with `READONLY`, even for the other shards' slots.
+  (b) `FAILOVER` now requires **every** slot to have a caught-up replica (`FGroup.java:126-140`); before the fix only the first slot was checked.
+  Combined with the retained exact-equality rule (a replica 17 bytes behind refuses the failover — observed live), failover on a multi-slot node
+  is now strictly harder to trigger than before. Both are intentional consequences of the fix (the reviewer asked for "every slot validated"), but
+  they are availability regressions worth monitoring in production.
+- **R4 — the 76.6 offload changes the reply ordering.** `FGroup.java:196-204`: the client now receives `+OK` *before* the leader latch has
+  actually been closed (the close runs on a virtual thread), and that virtual thread is not joined, so a JVM shutdown during a failover can cut the
+  latch close short. Before the fix the reply followed the close. Acceptable for a command whose production path is `CLUSTER FAILOVER`, but it
+  means "the failover completed" is no longer strictly ordered after "the node stopped being the leader".
+
 
 - **Fault-injection lines uncovered** (76.4 fix): per-slot `IOException` → `RuntimeException` mapping (FGroup.java:137-138),
   the `Promises.all` exception path (145-148) and the rollback `IOException` handler (176-177) need forced I/O failures to
@@ -758,10 +841,10 @@ XML before the fix was written (76.3/76.4 evidence above is pasted from those ru
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 76.1 | `data.length == 2` test hook makes `FLUSHDB ASYNC/SYNC`, `FAILOVER ABORT` silent no-ops | Medium (was High) | Correctness / Redis compat | CONFIRMED (reproduced) | fixed `33b3f472` |
-| 76.2 | No arg validation: garbage args no-op (len 2) or destructive-flush (len ≥ 3) | Medium | Redis compat / Edge case | CONFIRMED (reproduced) | fixed `df62b0c5` |
-| 76.3 | flushdb bypasses slot readonly / role-transition fence — replica data wipe | High | Correctness / Security | CONFIRMED (reproduced) | fixed `cebb1fe5` |
-| 76.4 | FAILOVER checks catch-up for first slot only but fences/closes ALL slots | High | Correctness / Concurrency | CONFIRMED (inspection) | fixed `15cbd60d` |
-| 76.5 | Writes accepted between catch-up check and setReadonly (TOCTOU) | Low (was Medium) | Concurrency | PARTIALLY CONFIRMED — merged into 76.4 | fixed with `15cbd60d` |
-| 76.6 | Blocking synchronized ZK close on slot worker eventloop | Low | Concurrency | CONFIRMED (inspection) | fixed `82470d2c` |
-| 76.7 | Key-analysis flushdb guard depends on firstOneSlot() reference | Low | Edge case | CONFIRMED (inspection) — root cause refined (cluster mode) | fixed `3a118894` |
+| 76.1 | `data.length == 2` test hook makes `FLUSHDB ASYNC/SYNC`, `FAILOVER ABORT` silent no-ops | Medium (was High) | Correctness / Redis compat | CONFIRMED (reproduced) | fixed `33b3f472` — re-reviewed ACCEPTED |
+| 76.2 | No arg validation: garbage args no-op (len 2) or destructive-flush (len ≥ 3) | Medium | Redis compat / Edge case | CONFIRMED (reproduced) | fixed `df62b0c5` — re-reviewed ACCEPTED |
+| 76.3 | flushdb bypasses slot readonly / role-transition fence — replica data wipe | High | Correctness / Security | CONFIRMED (reproduced) | fixed `cebb1fe5` — re-reviewed ACCEPTED |
+| 76.4 | FAILOVER checks catch-up for first slot only but fences/closes ALL slots | High | Correctness / Concurrency | CONFIRMED (inspection) | fixed `15cbd60d` — re-reviewed ACCEPTED |
+| 76.5 | Writes accepted between catch-up check and setReadonly (TOCTOU) | Low (was Medium) | Concurrency | PARTIALLY CONFIRMED — merged into 76.4 | fixed with `15cbd60d` — re-reviewed ACCEPTED |
+| 76.6 | Blocking synchronized ZK close on slot worker eventloop | Low | Concurrency | CONFIRMED (inspection) | fixed `82470d2c` — re-reviewed ACCEPTED |
+| 76.7 | Key-analysis flushdb guard depends on firstOneSlot() reference | Low | Edge case | CONFIRMED (inspection) — root cause refined (cluster mode) | fixed `3a118894` — re-reviewed ACCEPTED |

@@ -1,0 +1,156 @@
+# bug 76 FGroup round 1 - re-review (AI agent 2) evidence log
+# date: 2026-10-27 15:00-15:30
+# reviewed fix commits: cebb1fe5(76.3) 15cbd60d(76.4+76.5) 33b3f472(76.1) df62b0c5(76.2) 3a118894(76.7) 82470d2c(76.6)
+# HEAD at re-review: 002de6f0 refactor: add testonly index handler pool setter and drop redundant boolean compare
+# velo: build/libs/velo-1.0.0.jar rebuilt at HEAD (14:59), port 41500 (master) / 41501 (replica)
+# redis: 7.2.11, port 7799 (master) / 7800 (replica)
+
+########## 1. GREEN BASELINE at HEAD
+$ ./gradlew cleanTest :test --tests io.velo.command.FGroupTest
+TEST-io.velo.command.FGroupTest.xml -> tests=4 failures=0 errors=0 skipped=0
+  ok: test parse slot / test handle / test failover / test flushdb
+
+########## 2. INDEPENDENT RED RE-VERIFICATION (one fix reverted at a time, HEAD tests kept)
+method: revert only the fixed hunk in src/main/java/io/velo/command/FGroup.java, run the focused test, restore
+--- un-fix 76.3
+FGroupTest > test flushdb FAILED
+    org.spockframework.runtime.SpockComparisonFailure at FGroupTest.groovy:279
+4 tests completed, 1 failed
+FGroupTest > test flushdb FAILED
+
+--- un-fix 76.4
+FGroupTest > test failover FAILED
+4 tests completed, 1 failed
+FGroupTest > test failover FAILED
+
+--- un-fix 76.1
+FGroupTest > test handle FAILED
+    org.spockframework.runtime.SpockComparisonFailure at FGroupTest.groovy:57
+FGroupTest > test failover FAILED
+    org.spockframework.runtime.SpockComparisonFailure at FGroupTest.groovy:108
+4 tests completed, 2 failed
+FGroupTest > test handle FAILED
+FGroupTest > test failover FAILED
+
+--- un-fix 76.1b
+FGroupTest > test handle FAILED
+    org.spockframework.runtime.SpockComparisonFailure at FGroupTest.groovy:47
+FGroupTest > test flushdb FAILED
+4 tests completed, 2 failed
+FGroupTest > test handle FAILED
+FGroupTest > test flushdb FAILED
+
+--- un-fix 76.2
+FGroupTest > test failover FAILED
+    org.spockframework.runtime.SpockComparisonFailure at FGroupTest.groovy:117
+4 tests completed, 1 failed
+FGroupTest > test failover FAILED
+
+--- un-fix 76.7
+FGroupTest > test flushdb FAILED
+    org.spockframework.runtime.SpockComparisonFailure at FGroupTest.groovy:325
+4 tests completed, 1 failed
+FGroupTest > test flushdb FAILED
+
+--- un-fix 76.6
+FGroupTest > test failover FAILED
+4 tests completed, 1 failed
+FGroupTest > test failover FAILED
+
+########## 3. JACOCO (io.velo.command.FGroup, lines 93-247) at HEAD
+  244  ✗ not-covered   
+
+Not-covered lines: 94, 100, 101, 105, 106, 107, 108, 110, 114, 117, 118, 119, 120, 122, 123, 125, 126, 127, 131, 132, 133, 134, 135, 137, 138, 140, 142, 143, 144, 145, 146, 147, 148, 153, 154, 155, 156, 157, 158, 161, 162, 163, 164, 165, 169, 170, 172, 173, 174, 175, 178, 179, 181, 182, 184, 186, 187, 188, 189, 192, 193, 197, 198, 199, 200, 201, 204, 205, 207, 212, 213, 217, 218, 219, 221, 224, 225, 226, 228, 229, 230, 234, 235, 236, 240, 241, 242, 244
+not covered: 147,148 (IOException->RuntimeException), 156,157,158 (Promises.all exception path), 186,187 (rollback IOException); partial: 155
+
+########## 4. LIVE POST-FIX DIFFERENTIAL (velo 41500 vs redis 7799)
+===== VELO
+--- 76.1 FLUSHDB ASYNC (data must be deleted)
+FLUSHDB ASYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1b FLUSHDB SYNC
+FLUSHDB SYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1c FLUSHALL ASYNC
+FLUSHALL ASYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1d control: plain FLUSHDB
+FLUSHDB => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.2 FLUSHDB FOO BAR
+FLUSHDB FOO BAR => ERR syntax error
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.2b FLUSHDB ASYNC FOO
+FLUSHDB ASYNC FOO => ERR syntax error
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.2c FAILOVER ABORT
+FAILOVER ABORT => ERR No failover in progress.
+--- 76.2d FAILOVER TIMEOUT 100
+FAILOVER TIMEOUT 100 => ERR not support
+--- 76.2e FAILOVER TO 127.0.0.1 6399
+FAILOVER TO 127.0.0.1 6399 => ERR not support
+--- 76.2f FAILOVER NONSENSE x
+FAILOVER NONSENSE x => ERR syntax error
+--- 76.2g FAILOVER (no args)
+FAILOVER => ERR no slave
+===== REDIS
+--- 76.1 FLUSHDB ASYNC (data must be deleted)
+FLUSHDB ASYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1b FLUSHDB SYNC
+FLUSHDB SYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1c FLUSHALL ASYNC
+FLUSHALL ASYNC => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.1d control: plain FLUSHDB
+FLUSHDB => OK
+EXISTS k => 0 ; DBSIZE => 0
+--- 76.2 FLUSHDB FOO BAR
+FLUSHDB FOO BAR => ERR syntax error
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.2b FLUSHDB ASYNC FOO
+FLUSHDB ASYNC FOO => ERR syntax error
+EXISTS k => 1 ; DBSIZE => 1
+--- 76.2c FAILOVER ABORT
+FAILOVER ABORT => ERR No failover in progress.
+--- 76.2d FAILOVER TIMEOUT 100
+FAILOVER TIMEOUT 100 => ERR FAILOVER requires connected replicas.
+--- 76.2e FAILOVER TO 127.0.0.1 6399
+FAILOVER TO 127.0.0.1 6399 => ERR FAILOVER requires connected replicas.
+--- 76.2f FAILOVER NONSENSE x
+FAILOVER NONSENSE x => ERR syntax error
+--- 76.2g FAILOVER (no args)
+FAILOVER => ERR FAILOVER requires connected replicas.
+
+########## 5. LIVE POST-FIX REPLICA TEST (velo master 41500 / velo replica 41501)
+redis-cli -p 41501 replicaof 127.0.0.1 41500 ; redis-cli -p 41500 set k v
+replica DBSIZE => 1
+--- write on replica
+READONLY You can't write against a read only replica.
+--- FLUSHALL on replica (76.3 fixed)
+READONLY You can't write against a read only replica.
+replica DBSIZE after => 1
+replica EXISTS k => 1
+master DBSIZE => 1
+--- FLUSHDB on replica
+READONLY You can't write against a read only replica.
+
+########## 6. LIVE POST-FIX FAILOVER ABORT + ROLLBACK (velo master 41500, no replica attached)
+--- FAILOVER (expect abort)
+ERR no slave
+--- master SET after the aborted failover (expect OK => rollback un-fenced the slot)
+OK
+master DBSIZE => 1
+
+########## 7. PRE-EXISTING FAILURE CHECK (MultiWorkerServerTest)
+at HEAD: tests=24 failures=2 -> 'test mock inject and handle' (NoSuchElementException, handlePipeline), 'test cluster slot cross shards' (NPE socket)
+same 2 failures with the pre-fix files (925a9611) checked out for FGroup.java/ErrorReply.java/MultiWorkerServer.java/MultiWorkerServerTest.groovy
+=> pre-existing / environmental, NOT caused by the bug 76 fixes (agent 1 claim verified)
+
+########## 8. COMPANION REFACTOR COMMITS - touched test classes re-run green
+OGroupTest tests=2 failures=0 | BGroupTest tests=46 failures=0 | JGroupTest 2/0 | NGroupTest 2/0 | QGroupTest 2/0 | VGroupTest 2/0 | YGroupTest 2/0
+RequestHandlerTest 8/0 | LeaderSelectorTest 25/0 | DictMapTest 6/0 | CGroupTest 11/0 | RedisBFTest 9/0 | RedisGeoTest 14/0 | RedisHHTest 9/0
+
+########## 9. ENVIRONMENT NOTE
+the known 'compileTestGroovy -> Java heap space' daemon flake reproduced 4x during this re-review; cleared by './gradlew --stop' + -Dorg.gradle.jvmargs=-Xmx8g (retried up to 5x per run)
