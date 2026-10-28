@@ -988,6 +988,8 @@ Accepted as proposed by the reviewer: **78.1 → 78.2 → 78.3 → 78.4 → 78.5
 
 **Result: 38 of 44 cases are byte identical to Redis**, the differences are only error texts and one deliberate divergence (see below).
 
+The differential was run against the jar built from the final state (`./gradlew jar` → `build/libs/velo-1.0.0.jar`, started with `dir=/tmp/opencode/velo-e2e` and `net.listenAddresses=127.0.0.1:41000`), the start log was checked for errors (none) and the server was still alive after the whole run (`PING` → `PONG`, `DBSIZE` → 10).
+
 | Finding | Command | Velo | Redis 7.2.11 |
 |---|---|---|---|
 | 78.1 | `hincrby h_not_hh_e2e1 f 1` → `hlen` → `hgetall` → `hdel` | `1` → `1` → `f,1` → `1` | identical |
@@ -1073,9 +1075,9 @@ RedisHashKeysTest: decode an empty field name and a corrupt length
 
 ### Follow-ups (post-commit)
 
-- Add the split-mode keepttl-on-expired-field case (Concern 1) to `HGroupTest.'test hsetex'`.
-- Optionally handle the `Long.MIN_VALUE` delta by negating before the call (`Math.negateExact` style guard) or delegating the increment directly (Concern 2).
-- Clean the wildcard import / stale comments / javadoc in a style commit (Concern 3).
+- Add the split-mode keepttl-on-expired-field case (Concern 1) to `HGroupTest.'test hsetex'` — **done** in `dc278381`: the crafted state (the index caches a ttl that is already over, the field cv is alive) now covers the branch, `HGroup.java:2074` is 4/4 branches covered.
+- Optionally handle the `Long.MIN_VALUE` delta by negating before the call (`Math.negateExact` style guard) or delegating the increment directly (Concern 2) — **not done**, it needs a change of the shared `DGroup.decrBy` guard (the string module has the same edge case), it stays in Residual Risk.
+- Clean the wildcard import / stale comments / javadoc in a style commit (Concern 3) — **done** in `21abdf71`: the explicit `java.util` imports are back, the orphaned javadoc sits on `checkSplitKeyType` again, the two field count comparisons are done in long math as their comment says (behaviour identical, the int comparison was already safe).
 
 ## Residual Risk
 
