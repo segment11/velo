@@ -673,6 +673,44 @@ httl
         (hGroup.execute('hgetall hashNew') as MultiBulkReply).replies.length == 2
         // and the field can be removed again
         (hGroup.execute('hdel hashNew field') as IntegerReply).integer == 1
+
+        // bug 78.2: the increment must support the whole int64 range
+        when: 'split mode, an int64 delta'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashInt64'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashInt64', 'field'))
+        reply = hGroup.execute('hincrby hashInt64 field 2147483648')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2147483648L
+
+        when: 'split mode, the minimum int64 delta'
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashInt64Min'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashInt64Min', 'field'))
+        reply = hGroup.execute('hincrby hashInt64Min field -2147483648')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == -2147483648L
+
+        when: 'HH mode, an int64 delta'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashInt64HH')
+        reply = hGroup.execute('hincrby hashInt64HH field 2147483648')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2147483648L
+
+        when: 'HH mode, the minimum int64 delta'
+        inMemoryGetSet.remove(slot, 'hashInt64HHMin')
+        reply = hGroup.execute('hincrby hashInt64HHMin field -2147483648')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == -2147483648L
+
+        when: 'a delta out of the int64 range'
+        reply = hGroup.execute('hincrby hashInt64 field 99999999999999999999')
+        then:
+        reply == ErrorReply.NOT_INTEGER
     }
 
     def 'test hkeys'() {

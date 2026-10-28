@@ -1434,7 +1434,7 @@ public class HGroup extends BaseCommand {
             return ErrorReply.KEY_TOO_LONG;
         }
 
-        int by = 0;
+        long by = 0;
         double byFloat = 0;
         if (isFloat) {
             try {
@@ -1444,7 +1444,7 @@ public class HGroup extends BaseCommand {
             }
         } else {
             try {
-                by = Integer.parseInt(new String(byBytes));
+                by = Long.parseLong(new String(byBytes));
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
@@ -1493,7 +1493,7 @@ public class HGroup extends BaseCommand {
         return reply;
     }
 
-    private Reply hincrby2(byte[] fieldBytes, int by, double byFloat, boolean isByFloat) {
+    private Reply hincrby2(byte[] fieldBytes, long by, double byFloat, boolean isByFloat) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
