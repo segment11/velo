@@ -297,7 +297,7 @@ public class RedisHH {
             var expireAt = buffer.getLong();
 
             int keyLength = buffer.getShort();
-            if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength <= 0) {
+            if (keyLength > CompressedValue.KEY_MAX_LENGTH || keyLength < 0) {
                 throw new IllegalStateException("Key length error, key length=" + keyLength);
             }
 
@@ -311,7 +311,7 @@ public class RedisHH {
             var keyBytes = new byte[keyLength];
             buffer.get(keyBytes);
             var valueLength = buffer.getInt();
-            if (valueLength > CompressedValue.VALUE_MAX_LENGTH || valueLength <= 0) {
+            if (valueLength > CompressedValue.VALUE_MAX_LENGTH || valueLength < 0) {
                 throw new IllegalStateException("Value length error, value length=" + valueLength);
             }
 

@@ -1181,15 +1181,41 @@ httl
         then:
         reply == ErrorReply.VALUE_TOO_LONG
 
-        when:
-        reply = hGroup.execute('hmset a _0 value')
+        // bug 78.13: an empty field name and an empty value are valid, redis
+        // accepts them
+        when: 'split mode, an empty field name'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashEmpty'))
+        reply = hGroup.execute('hset hashEmpty _0 value')
         then:
-        reply == ErrorReply.SYNTAX
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        (hGroup.execute('hget hashEmpty _0') as BulkReply).raw == 'value'.bytes
+        (hGroup.execute('hlen hashEmpty') as IntegerReply).integer == 1
+
+        when: 'split mode, an empty value'
+        reply = hGroup.execute('hset hashEmpty field _0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        (hGroup.execute('hget hashEmpty field') as BulkReply).raw == ''.bytes
+
+        when: 'HH mode, an empty field name and an empty value'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashEmptyHH')
+        reply = hGroup.execute('hset hashEmptyHH _0 value')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        (hGroup.execute('hget hashEmptyHH _0') as BulkReply).raw == 'value'.bytes
+        (hGroup.execute('hlen hashEmptyHH') as IntegerReply).integer == 1
 
         when:
-        reply = hGroup.execute('hmset a field _0')
+        reply = hGroup.execute('hset hashEmptyHH field _0')
         then:
-        reply == ErrorReply.SYNTAX
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        (hGroup.execute('hget hashEmptyHH field') as BulkReply).raw == ''.bytes
 
         // bug 78.5: overwriting the value clears the field ttl, like redis does
         when: 'HH mode, the field has a ttl and the value is overwritten'
@@ -2452,15 +2478,22 @@ httl
         then:
         reply == ErrorReply.VALUE_TOO_LONG
 
-        when:
-        reply = hGroup.execute('hsetnx a _0 value')
+        // bug 78.13: an empty field name and an empty value are valid
+        when: 'split mode, an empty value'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashNxEmpty'))
+        reply = hGroup.execute('hsetnx hashNxEmpty field _0')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == IntegerReply.REPLY_1
+        (hGroup.execute('hget hashNxEmpty field') as BulkReply).raw == ''.bytes
 
-        when:
-        reply = hGroup.execute('hsetnx a field _0')
+        when: 'HH mode, an empty value'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashNxEmptyHH')
+        reply = hGroup.execute('hsetnx hashNxEmptyHH field _0')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == IntegerReply.REPLY_1
+        (hGroup.execute('hget hashNxEmptyHH field') as BulkReply).raw == ''.bytes
 
         // bug 78.9: an expired field does not exist, redis creates it again
         when: 'split mode, the field is expired'

@@ -328,4 +328,32 @@ class RedisHHTest extends Specification {
         def e = thrown(IllegalStateException)
         e.message.contains('exceeds Short.MAX_VALUE')
     }
+
+    def 'decode an empty field name, an empty value and a corrupt length'() {
+        given:
+        def rh = new RedisHH()
+        rh.put('', 'value'.bytes)
+        rh.put('field', ''.bytes)
+
+        when:
+        def encoded = rh.encodeButDoNotCompress()
+        def decoded = RedisHH.decode(encoded)
+        then:
+        decoded.get('') == 'value'.bytes
+        decoded.get('field') == ''.bytes
+        decoded.size() == 2
+
+        when: 'the key length is negative'
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.getShort() // size
+        buffer.getInt() // dict seq
+        buffer.getInt() // body length
+        buffer.getInt() // crc
+        buffer.getLong() // expire at
+        buffer.putShort((short) -1)
+        RedisHH.iterate(buffer.array(), false, { field, value, expireAt -> false })
+        then:
+        thrown(IllegalStateException)
+    }
+
 }

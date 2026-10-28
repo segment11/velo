@@ -1430,7 +1430,7 @@ public class HGroup extends BaseCommand {
 
         // the field count must match the number of arguments, the comparison is
         // done in long math to avoid an integer overflow
-        if (data.length != (long) fieldsIndex + numFields) {
+        if (data.length != fieldsIndex + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -1821,10 +1821,6 @@ public class HGroup extends BaseCommand {
             }
             if (fieldValueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
                 return ErrorReply.VALUE_TOO_LONG;
-            }
-
-            if (fieldBytes.length == 0 || fieldValueBytes.length == 0) {
-                return ErrorReply.SYNTAX;
             }
 
             fieldValues.put(new String(fieldBytes), fieldValueBytes);
@@ -2393,10 +2389,6 @@ public class HGroup extends BaseCommand {
         }
         if (fieldValueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
             return ErrorReply.VALUE_TOO_LONG;
-        }
-
-        if (fieldBytes.length == 0 || fieldValueBytes.length == 0) {
-            return ErrorReply.SYNTAX;
         }
 
         if (isUseHH(keyBytes)) {

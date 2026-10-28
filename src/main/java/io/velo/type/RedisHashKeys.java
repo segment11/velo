@@ -262,7 +262,7 @@ public class RedisHashKeys {
             long expireAt = buffer.getLong();
 
             int len = buffer.getShort();
-            if (len <= 0) {
+            if (len < 0) {
                 throw new IllegalStateException("Length error, length=" + len);
             }
             if (len > buffer.remaining()) {
@@ -323,7 +323,7 @@ public class RedisHashKeys {
             var expireAt = buffer.getLong();
 
             int len = buffer.getShort();
-            if (len <= 0) {
+            if (len < 0) {
                 throw new IllegalStateException("Length error, length=" + len);
             }
             if (len > buffer.remaining()) {

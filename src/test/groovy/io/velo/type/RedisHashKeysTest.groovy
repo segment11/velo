@@ -111,7 +111,8 @@ class RedisHashKeysTest extends Specification {
         def encoded = rhk.encode()
         def buffer = ByteBuffer.wrap(encoded)
         // New format: after header(14), first field starts with expireAt(8), then fieldLen at offset 22
-        buffer.putShort(RedisHashKeys.HEADER_LENGTH + 8, (short) 0)
+        // a negative field length is illegal, a zero length is an empty field name
+        buffer.putShort(RedisHashKeys.HEADER_LENGTH + 8, (short) -1)
         boolean exception = false
         try {
             RedisHashKeys.decode(encoded, false)
@@ -394,4 +395,30 @@ class RedisHashKeysTest extends Specification {
         then:
         exception
     }
+
+    def 'decode an empty field name and a corrupt length'() {
+        given:
+        def rhk = new RedisHashKeys()
+        rhk.add('')
+
+        when:
+        def encoded = rhk.encodeButDoNotCompress()
+        def decoded = RedisHashKeys.decode(encoded)
+        then:
+        decoded.contains('')
+        decoded.size() == 1
+
+        when: 'the field length is negative'
+        def buffer = ByteBuffer.wrap(encoded)
+        buffer.getShort() // size
+        buffer.getInt() // dict seq
+        buffer.getInt() // body length
+        buffer.getInt() // crc
+        buffer.getLong() // expire at
+        buffer.putShort((short) -1)
+        RedisHashKeys.decode(buffer.array(), false)
+        then:
+        thrown(IllegalStateException)
+    }
+
 }
