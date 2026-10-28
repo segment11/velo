@@ -751,6 +751,46 @@ httl
         reply = hGroup.execute('hincrbyfloat hashNonFinite field 1')
         then:
         reply == ErrorReply.NOT_FLOAT
+
+        // bug 78.4: the HH layout must not silently wrap on overflow
+        when: 'HH mode, the value overflows'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashOverflow')
+        hGroup.execute('hset hashOverflow field 9223372036854775807')
+        reply = hGroup.execute('hincrby hashOverflow field 1')
+        then:
+        reply == ErrorReply.INCR_DECR_OVERFLOW
+
+        when: 'HH mode, the value underflows'
+        inMemoryGetSet.remove(slot, 'hashOverflow')
+        hGroup.execute('hset hashOverflow field -9223372036854775808')
+        reply = hGroup.execute('hincrby hashOverflow field -1')
+        then:
+        reply == ErrorReply.INCR_DECR_OVERFLOW
+
+        when: 'split mode, the value overflows'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashOverflow'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashOverflow', 'field'))
+        hGroup.execute('hset hashOverflow field 9223372036854775807')
+        reply = hGroup.execute('hincrby hashOverflow field 1')
+        then:
+        reply == ErrorReply.INCR_DECR_OVERFLOW
+
+        when: 'HH mode, a negative delta that does not overflow'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashOverflow')
+        hGroup.execute('hset hashOverflow field 10')
+        reply = hGroup.execute('hincrby hashOverflow field -1')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 9L
+
+        when: 'HH mode, a zero delta'
+        reply = hGroup.execute('hincrby hashOverflow field 0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 9L
     }
 
     def 'test hkeys'() {
