@@ -2093,6 +2093,54 @@ httl
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
 
+        // bug 78.9: an expired field does not exist, redis answers 1 for fnx and
+        // 0 for fxx
+        when: 'split mode, the field exists and is live, fnx does not set it'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFnx'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFnx', 'field'))
+        hGroup.execute('hset hashFnx field value')
+        reply = hGroup.execute('hsetex hashFnx fnx FIELDS 1 field value2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        (hGroup.execute('hget hashFnx field') as BulkReply).raw == 'value'.bytes
+
+        when: 'split mode, the field exists and is live, fxx sets it'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFxx'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFxx', 'field'))
+        hGroup.execute('hset hashFxx field value')
+        reply = hGroup.execute('hsetex hashFxx fxx FIELDS 1 field value2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        (hGroup.execute('hget hashFxx field') as BulkReply).raw == 'value2'.bytes
+
+        when: 'split mode, the field is expired and fnx is used'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashExpired'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashExpired', 'field'))
+        hGroup.execute('hset hashExpired field value')
+        hGroup.execute("hpexpireat hashExpired ${System.currentTimeMillis() - 60000} fields 1 field")
+        reply = hGroup.execute('hsetex hashExpired fnx FIELDS 1 field value2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        (hGroup.execute('hget hashExpired field') as BulkReply).raw == 'value2'.bytes
+        (hGroup.execute('hlen hashExpired') as IntegerReply).integer == 1
+
+        when: 'split mode, the field is expired and fxx is used'
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashExpired'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashExpired', 'field'))
+        hGroup.execute('hset hashExpired field value')
+        hGroup.execute("hpexpireat hashExpired ${System.currentTimeMillis() - 60000} fields 1 field")
+        reply = hGroup.execute('hsetex hashExpired fxx FIELDS 1 field value2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        hGroup.execute('hget hashExpired field') == NilReply.INSTANCE
+
         when: 'test EX option invalid integer'
         reply = hGroup.execute('hsetex hashA EX abc FIELDS 1 field1 value1')
         then:
@@ -2275,6 +2323,21 @@ httl
         reply = hGroup.execute('hsetnx a field _0')
         then:
         reply == ErrorReply.SYNTAX
+
+        // bug 78.9: an expired field does not exist, redis creates it again
+        when: 'split mode, the field is expired'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashExpired'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashExpired', 'field'))
+        hGroup.execute('hset hashExpired field value')
+        hGroup.execute("hpexpireat hashExpired ${System.currentTimeMillis() - 60000} fields 1 field")
+        reply = hGroup.execute('hsetnx hashExpired field value2')
+        then:
+        reply == IntegerReply.REPLY_1
+        (hGroup.execute('hget hashExpired field') as BulkReply).raw == 'value2'.bytes
+        // the field is live again, the stale cached ttl must not hide it
+        (hGroup.execute('hlen hashExpired') as IntegerReply).integer == 1
+
         // bug 78.8: the split layout stores the hash out of line, the type of the
         // main key must be checked, redis answers WRONGTYPE for another type
         when:

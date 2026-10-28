@@ -1968,14 +1968,17 @@ public class HGroup extends BaseCommand {
         }
 
         int setCount = 0;
+        var now = System.currentTimeMillis();
         for (var entry : fieldValues.entrySet()) {
             var field = entry.getKey();
             var value = entry.getValue();
 
-            if (fnx && rhk.contains(field)) {
+            // an expired field does not exist, redis creates it again
+            var fieldExists = rhk.contains(field) && rhk.isLiveByCache(field, now);
+            if (fnx && fieldExists) {
                 continue;
             }
-            if (fxx && !rhk.contains(field)) {
+            if (fxx && !fieldExists) {
                 continue;
             }
 
@@ -2353,7 +2356,8 @@ public class HGroup extends BaseCommand {
         }
 
         var field = new String(fieldBytes);
-        if (rhk.contains(field)) {
+        // an expired field does not exist, redis creates it again
+        if (rhk.contains(field) && rhk.isLiveByCache(field, System.currentTimeMillis())) {
             return IntegerReply.REPLY_0;
         }
 
@@ -2368,6 +2372,8 @@ public class HGroup extends BaseCommand {
 
         set(fieldValueBytes, slotWithKeyHashThisField);
         rhk.add(field);
+        // the new field has no ttl, the stale cached ttl must be removed
+        rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
         saveRedisHashKeys(rhk, key);
         return IntegerReply.REPLY_1;
     }
