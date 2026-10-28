@@ -421,8 +421,6 @@ public class HGroup extends BaseCommand {
     }
 
     /**
-     * Checks the type of the main key for the split storage layout.
-     * <p>
      * The split layout stores the hash out of line, the main key cv is never read by the
      * hash commands, so a key of another type looks like an empty hash. Redis answers
      * WRONGTYPE for those.
@@ -431,17 +429,13 @@ public class HGroup extends BaseCommand {
      * @return {@link ErrorReply#WRONG_TYPE} if the key exists but is not a hash, otherwise null
      */
     /**
-     * The error reply for an invalid expire time, like redis answers it.
-     *
-     * @return the error reply
+     * @return the error reply redis answers for an invalid expire time
      */
     private Reply invalidExpireTime() {
         return new ErrorReply("invalid expire time in '" + cmd + "' command");
     }
 
     /**
-     * Computes the expire time of the hash field ttl options.
-     *
      * @param option    the option name, ex, px, exat or pxat
      * @param timeValue the option value in seconds or milliseconds
      * @param now       the current time in milliseconds
@@ -1604,8 +1598,6 @@ public class HGroup extends BaseCommand {
     }
 
     /**
-     * Increments a hash field by a float value in the split storage layout.
-     * <p>
      * The arithmetic keeps the full precision, like redis does, the global double scale is a
      * display setting and must not be used here.
      *
@@ -1643,10 +1635,8 @@ public class HGroup extends BaseCommand {
     }
 
     /**
-     * Formats a float value like redis does, the trailing zeros are removed.
-     *
      * @param value the value
-     * @return the formatted value
+     * @return the value formatted like redis does it, without the trailing zeros
      */
     private static String formatFloatValue(BigDecimal value) {
         var stripped = value.stripTrailingZeros();
