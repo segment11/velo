@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** review round 1 complete — 14 findings verified: 10 `CONFIRMED (reproduced)`, 4 `PARTIALLY CONFIRMED` (78.3, 78.5, 78.9, 78.12 — each with a refuted/incorrect sub-claim), 0 refuted as a whole; **fix phase complete — 14/14 fixed in 14 commits**, re-review pending
+**Status:** round 1 closed — 14 findings verified (10 `CONFIRMED (reproduced)`, 4 `PARTIALLY CONFIRMED`), **fixed (14 commits) and re-reviewed: all 14 fixes ACCEPTED** (independent red/green differential, 190/190 focused tests green, JaCoCo on changed lines); residuals in *Residual Risk*
 **Review branch:** `review/hgroup`
 **Reviewed commit:** `19d3b14f955a9eff7c0ccd214c67808edcdd2d25` (author) / verified by agent 2 at `e16e619a` — same code, the delta is this document only
 
@@ -988,13 +988,66 @@ Accepted as proposed by the reviewer: **78.1 → 78.2 → 78.3 → 78.4 → 78.5
 - The hash commands accept an empty field name and an empty value now. That required the decode guards of `RedisHashKeys` and `RedisHH` to allow a zero length (`len < 0` is illegal, `len == 0` is an empty field name or an empty value).
 - `HSETEX` replies `1` now when the fields were set and `0` when the `FNX` / `FXX` condition was not met, the dead `setCount > 0` check was removed.
 
-## Re-review (AI agent 2)
+## Re-review (AI agent 2, round 1 fix phase — role-swapped session, directed by the user)
 
-(to be appended)
+**Method:** all 17 code commits (`3ea4a660`…`259f9e37`) reviewed diff by diff against the agreed scope (including the corrected 78.5 direction, the 78.9 HDEL exclusion and the 78.3/78.12 refinements); then an **independent red/green differential**: pre-fix main sources restored from `8339d6e1` (`HGroup.java`, `RedisHashKeys.java`, `RedisHH.java`) with all HEAD tests kept, focused suites re-run, sources restored, suites re-run; then JaCoCo inspected on the changed lines (`scripts/jacoco_cover.py`). One transient `compileTestGroovy FAILED: Java heap space` occurred (the known daemon flakiness from bug_73/74); the identical re-run was green.
+
+**Red differential (pre-fix sources + HEAD tests):** `86 tests completed, 19 failed` —
+
+```
+HGroupTest: test hdel / test hexists / test hget / test hgetall / test hincrby / test hkeys /
+  test hmget / test hmset / test hrandfield / test hgetdel / test hgetex / test hsetex /
+  test hsetnx / test hvals / test httl / test hexpire /
+  test hincrby keeps the cached ttl in sync with the field cv ttl
+RedisHHTest: decode an empty field name, an empty value and a corrupt length
+RedisHashKeysTest: decode an empty field name and a corrupt length
+```
+
+— every fix area is represented in the red set (78.8 wrong-type: the 14 read/write methods; 78.1-78.5: hincrby + the dedicated TTL-sync method; 78.9/78.13: hsetnx; 78.6/78.7/78.11/78.12: hsetex/hgetex/hgetdel/hexpire/httl; 78.14: hrandfield; 78.13: the two decode tests).
+
+**Green differential (HEAD sources, same tests):** `BUILD SUCCESSFUL` — `HGroupTest` 57, `RedisHashKeysTest` 19, `RedisHHTest` 10, `BaseCommandTest` 22, `OneSlotTest` 41, `DGroupTest` 23, `IGroupTest` 18 — **190 tests, 0 failures, 0 errors**. `DGroupTest`/`IGroupTest` green proves the 78.10 constraint (string module untouched).
+
+### Per-commit verdicts
+
+| Bug | Commit(s) | Diff review | Red/green | JaCoCo (changed lines) | Verdict |
+|---|---|---|---|---|---|
+| 78.1 | `3ea4a660` | index created/extended on every successful increment (int + float), cache untouched here (78.5 handles TTL) | `test hincrby` red→green | `HGroup` 1530-1560: 19/19 lines, 4/4 branches | **ACCEPTED** |
+| 78.2 | `82a7a94a` | `Long.parseLong`, `long by` threaded through `hincrby2` | red→green | parse branches covered | **ACCEPTED** (one residual, see below) |
+| 78.3 | `e0dacf6f` | delta guard after parse + stored-value guard in `hincrby2`; new `ErrorReply.NAN_OR_INFINITY` matches upstream text `value is NaN or Infinity` | red→green | `HGroup` 1445-1447 / 1532-1536 covered | **ACCEPTED** |
+| 78.4 | `384c1d68` | two-sided guard for `longValue + by` (verified against both signs and `by == 0`) | red→green | guard lines all branches covered | **ACCEPTED** |
+| 78.5 | `4d824b3e` + `d5d1c510` + `09a950ce` | follows the **corrected** direction: HH `hmset2` clears the field TTL (3-arg `put` with `NO_EXPIRE`); split HINCRBY keeps the index cached TTL in sync — a live field keeps it, an expired-at-write field is recreated without TTL and its stale cache entry cleared (09a950ce removes the extra CV pre-read of d5d1c510) | `test hincrby keeps the cached ttl in sync with the field cv ttl` red→green | `HGroup` 1530-1560 + 1780-1800 covered | **ACCEPTED** |
+| 78.8 | `9b3400a8` + refactor `607db5ad` | `checkSplitKeyType` at all 17 split call sites incl. hscan (old inline check replaced, same semantics); `getShortType` reads only the type byte (WAL/LRU/PVM paths, `transferToShortType` maps HH+HASH → `typeAsByteHash`) | 14 methods red→green | `HGroup` 481-488: 4/4 lines, branches covered; 17 call sites exercised | **ACCEPTED** |
+| 78.9 | `be38bc96` | `contains && isLiveByCache` in hsetnx + hsetex; stale cached TTL cleared after hsetnx re-create; **HDEL untouched** as required | red→green | `HGroup` 2360-2395 covered except pre-existing hscan lines (see notes) | **ACCEPTED** |
+| 78.7 | `c3d53159` | hash-level all-or-nothing pre-pass in both layouts (upstream `non_exists`/`all_exists` shape), per-field skip removed | red→green | `HGroup` 2040-2052 / 2095-2105 covered | **ACCEPTED** |
+| 78.6 | `b8c92730` | split: keepttl re-writes the cached TTL (past TTL ⇒ new value without TTL); HH: keepttl uses the 2-arg `put` (preserves `mapExpireAt`); non-keepttl still clears (upstream: no option ⇒ clear) | red→green | `HGroup` 2067-2075 / 2115-2118 — **one sub-branch uncovered**, see Concerns 1 | **ACCEPTED** (with follow-up) |
+| 78.12 | `12c82ec1` | exact-match in long math (`4L + numFields`, `numFields * 2L`), `numFields <= 0` rejected for hgetdel/hgetex/hsetex; trailing junk now SYNTAX | red→green (`httl a fields 2147483645 …` AIOOBE gone) | guard lines covered | **ACCEPTED** |
+| 78.11 | `bf08c7cd` | unified `computeFieldExpireAt` (negative / `seconds*1000` / `now +` overflows rejected, `invalid expire time in '<cmd>' command` text) applied to HEXPIRE family + HGETEX + HSETEX; `expireAt <= now` ⇒ field deleted + reply `2` on both layouts | red→green | `HGroup` 1039-1050 / 1115-1122 covered | **ACCEPTED** |
+| 78.13 | `8cae3063` | empty checks dropped in hmset/hsetnx; decode guards relaxed to `len < 0` (zero-length legal) in both types + iterate | red→green (both decode tests) | decode guards covered both directions | **ACCEPTED** |
+| 78.14 | `f26e5f85` | positional parsing (count argv[2] → `VALUE_NOT_POSITIVE`, WITHVALUES argv[3] only, argc>4 SYNTAX), missing-key+count ⇒ EMPTY, count-less ⇒ BulkReply — both layouts | red→green | `HGroup` 2093-2130 covered | **ACCEPTED** |
+| 78.10 | `259f9e37` | full-precision BigDecimal arithmetic, `stripTrailingZeros` + plain string (doc examples `10.6` / `5200` verified by trace); BulkReply (Redis replies bulk); split path keeps the field TTL explicitly; string module untouched (DGroup/IGroup green) | red→green | `HGroup` 1608-1655 (`hincrbyFloatSplit` + formatter): 26/26 lines, 7/7 branches | **ACCEPTED** |
+
+**Re-review verdict: all 14 fixes ACCEPTED.** Red/green independently reproduced, focused suites green (190/190), JaCoCo confirmed on the changed lines, refactors verified with their own tests.
+
+### Concerns (all non-blocking)
+
+1. **JaCoCo gap vs the Fix Log claim (78.6):** the split hsetex keepttl branch where the cached TTL is already past (`HGroup.java:2070-2072` — expired field, new value gets no TTL) is **not executed** by any test (1 of 4 branches on 2070 missed, 2072 not covered). The Fix Log's "with an expired field" claim holds for the HH path only. The branch is two lines and consistent with the HH twin, but it is exactly the class of stale-cache edge this round was about — recommend one added split-mode test case (follow-up, no re-review rejection).
+2. **`HINCRBY k f -9223372036854775808` on the split path** still cannot succeed: `-by` at `HGroup.java:1582` negates `Long.MIN_VALUE` onto itself, so `decrBy` receives a decrement and the guard answers `INCR_DECR_OVERFLOW`; Redis (and Velo's own HH path) answer `-9223372036854775808`. Exactly one delta value out of 2^64; recorded in Residual Risk rather than rejecting the fix.
+3. **Style drift introduced by the phase:** `import java.util.*` wildcard in HGroup (bf08c7cd, violates the AGENTS.md import rule); two comments say "done in long math" where bf08c7cd/8cae3063 reverted the casts to int math (`HGroup.java:986-988`, `1429-1431` — behaviorally safe: int equality with wrap cannot false-accept a small argc, verified by enumeration); an orphaned javadoc block (the old `checkSplitKeyType` doc now sits above `invalidExpireTime`); `hexists` switched from `getCv` to `exists()` inside the 78.11 commit (behavior-equivalent drive-by, scope-hygiene note only).
+4. **Pre-existing desynced data:** fields incremented during the `a6706982`→`fe48c5f1` window (cache cleared while the CV kept its TTL) stay desynced until rewritten — the new code keeps them in their (wrong) current state by design. See Residual Risk.
+
+### Follow-ups (post-commit)
+
+- Add the split-mode keepttl-on-expired-field case (Concern 1) to `HGroupTest.'test hsetex'`.
+- Optionally handle the `Long.MIN_VALUE` delta by negating before the call (`Math.negateExact` style guard) or delegating the increment directly (Concern 2).
+- Clean the wildcard import / stale comments / javadoc in a style commit (Concern 3).
 
 ## Residual Risk
 
-(to be appended after fix phase)
+- **78.2 edge:** split `HINCRBY` with delta exactly `Long.MIN_VALUE` answers `INCR_DECR_OVERFLOW` where Redis (and Velo HH) answer the correct value (`HGroup.java:1582` negation overflow). One delta value; follow-up candidate.
+- **78.10 formatting divergence:** the new arithmetic is exact decimal (`BigDecimal` of the shortest-representation doubles) with trailing-zero stripping, which is *more* precise than Redis's long-double/17-digit output for non-representable sums — e.g. `HINCRBYFLOAT` 0.1+0.2 yields `0.3` where Redis yields `0.30000000000000004`. Data loss is gone (the actual bug); exact byte-for-byte output parity with Redis is not claimed. The string module (`INCRBYFLOAT`/`DECRBYFLOAT`) still uses `doubleScale` — unchanged by design, string-module round.
+- **Legacy desynced fields:** fields HINCRBY'd between `a6706982` (May) and `fe48c5f1` (October) carry a cleared cache with a live CV TTL; they remain desynced until the field is rewritten or the hash index re-saved. A one-off resync (e.g. on HTTL reads) would close it; not scheduled.
+- **hscan split cursor branch** (`HGroup.java:2365-2366` skip path) remains uncovered — that is bug_71 territory (71.5 open), untouched by this round by agreement.
+- **Style debt** from the fix phase (wildcard import, two stale comments, orphaned javadoc) — cosmetic, one style commit.
 
 ## Summary
 
