@@ -1984,7 +1984,6 @@ public class HGroup extends BaseCommand {
             rhk = new RedisHashKeys();
         }
 
-        int setCount = 0;
         for (var entry : fieldValues.entrySet()) {
             var field = entry.getKey();
             var value = entry.getValue();
@@ -1992,16 +1991,25 @@ public class HGroup extends BaseCommand {
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var sFieldKey = slot(fieldKey);
 
-            long fieldExpireAt = keepttl ? CompressedValue.NO_EXPIRE : expireAt;
+            long fieldExpireAt;
+            if (keepttl) {
+                // redis retains the ttl of the field when keepttl is used
+                fieldExpireAt = rhk.getCachedExpireAt(field);
+                if (fieldExpireAt != CompressedValue.NO_EXPIRE && fieldExpireAt < now) {
+                    // the field was expired, the new value has no ttl
+                    fieldExpireAt = CompressedValue.NO_EXPIRE;
+                }
+            } else {
+                fieldExpireAt = expireAt;
+            }
             set(value, sFieldKey, CompressedValue.NULL_DICT_SEQ, fieldExpireAt);
 
             rhk.add(field);
             rhk.putCachedExpireAt(field, fieldExpireAt);
-            setCount++;
         }
 
         saveRedisHashKeys(rhk, key);
-        return new IntegerReply(setCount > 0 ? 1 : 0);
+        return new IntegerReply(1);
     }
 
     private Reply hsetex2(LinkedHashMap<String, byte[]> fieldValues, boolean fnx, boolean fxx,
@@ -2028,18 +2036,20 @@ public class HGroup extends BaseCommand {
             rhh = new RedisHH();
         }
 
-        int setCount = 0;
         for (var entry : fieldValues.entrySet()) {
             var field = entry.getKey();
             var value = entry.getValue();
 
-            long fieldExpireAt = keepttl ? CompressedValue.NO_EXPIRE : expireAt;
-            rhh.put(field, value, fieldExpireAt);
-            setCount++;
+            if (keepttl) {
+                // redis retains the ttl of the field when keepttl is used
+                rhh.put(field, value);
+            } else {
+                rhh.put(field, value, expireAt);
+            }
         }
 
         saveRedisHH(rhh, slotWithKeyHash);
-        return new IntegerReply(setCount > 0 ? 1 : 0);
+        return new IntegerReply(1);
     }
 
     private Reply hrandfield() {

@@ -2318,6 +2318,57 @@ httl
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
 
+        // bug 78.6: keepttl retains the ttl of the field, like redis does
+        when: 'split mode, keepttl keeps the field ttl'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashKeep'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashKeep', 'field'))
+        hGroup.execute('hsetex hashKeep EX 60 FIELDS 1 field v1')
+        def keepTtlBefore = (hGroup.execute('httl hashKeep fields 1 field') as MultiBulkReply).replies[0]
+        hGroup.execute('hsetex hashKeep keepttl FIELDS 1 field v2')
+        def keepTtlAfter = (hGroup.execute('httl hashKeep fields 1 field') as MultiBulkReply).replies[0]
+        then:
+        (keepTtlBefore as IntegerReply).integer > 0
+        (keepTtlAfter as IntegerReply).integer > 0
+        (keepTtlAfter as IntegerReply).integer <= (keepTtlBefore as IntegerReply).integer
+        (hGroup.execute('hget hashKeep field') as BulkReply).raw == 'v2'.bytes
+
+        when: 'HH mode, keepttl keeps the field ttl'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashKeepHH')
+        hGroup.execute('hsetex hashKeepHH EX 60 FIELDS 1 field v1')
+        def keepTtlBeforeHH = (hGroup.execute('httl hashKeepHH fields 1 field') as MultiBulkReply).replies[0]
+        hGroup.execute('hsetex hashKeepHH keepttl FIELDS 1 field v2')
+        def keepTtlAfterHH = (hGroup.execute('httl hashKeepHH fields 1 field') as MultiBulkReply).replies[0]
+        then:
+        (keepTtlBeforeHH as IntegerReply).integer > 0
+        (keepTtlAfterHH as IntegerReply).integer > 0
+        (keepTtlAfterHH as IntegerReply).integer <= (keepTtlBeforeHH as IntegerReply).integer
+        (hGroup.execute('hget hashKeepHH field') as BulkReply).raw == 'v2'.bytes
+
+        when: 'split mode, keepttl on a field without a ttl keeps it without a ttl'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashKeepNoTtl'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashKeepNoTtl', 'field'))
+        hGroup.execute('hset hashKeepNoTtl field v1')
+        hGroup.execute('hsetex hashKeepNoTtl keepttl FIELDS 1 field v2')
+        def keepNoTtl = (hGroup.execute('httl hashKeepNoTtl fields 1 field') as MultiBulkReply).replies[0]
+        then:
+        (keepNoTtl as IntegerReply).integer == -1
+        (hGroup.execute('hget hashKeepNoTtl field') as BulkReply).raw == 'v2'.bytes
+
+        when: 'split mode, keepttl on an expired field sets the value without a ttl'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashKeepExpired'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashKeepExpired', 'field'))
+        hGroup.execute('hsetex hashKeepExpired EX 60 FIELDS 1 field v1')
+        hGroup.execute("hpexpireat hashKeepExpired ${System.currentTimeMillis() - 60000} fields 1 field")
+        hGroup.execute('hsetex hashKeepExpired keepttl FIELDS 1 field v2')
+        def keepExpiredTtl = (hGroup.execute('httl hashKeepExpired fields 1 field') as MultiBulkReply).replies[0]
+        then:
+        (keepExpiredTtl as IntegerReply).integer == -1
+        (hGroup.execute('hget hashKeepExpired field') as BulkReply).raw == 'v2'.bytes
+
         // bug 78.8: the split layout stores the hash out of line, the type of the
         // main key must be checked, redis answers WRONGTYPE for another type
         when:
