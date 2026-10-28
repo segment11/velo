@@ -2504,6 +2504,29 @@ httl
         (keepTtlAfter as IntegerReply).integer <= (keepTtlBefore as IntegerReply).integer
         (hGroup.execute('hget hashKeep field') as BulkReply).raw == 'v2'.bytes
 
+        when: 'split mode, the cached ttl is over but the field is alive'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashKeepStale'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashKeepStale', 'field'))
+        // the index caches a ttl that is already over
+        def cvKeysStale = Mock.prepareCompressedValueList(1)[0]
+        cvKeysStale.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def rhkStale = new RedisHashKeys()
+        rhkStale.add('field')
+        rhkStale.putCachedExpireAt('field', System.currentTimeMillis() - 60000)
+        cvKeysStale.compressedData = rhkStale.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('hashKeepStale'), 0, cvKeysStale)
+        // the field cv is alive
+        def cvFieldStale = Mock.prepareCompressedValueList(1)[0]
+        cvFieldStale.compressedData = 'v1'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashKeepStale', 'field'), 0, cvFieldStale)
+        reply = hGroup.execute('hsetex hashKeepStale keepttl FIELDS 1 field v2')
+        then:
+        reply == IntegerReply.REPLY_1
+        (hGroup.execute('hget hashKeepStale field') as BulkReply).raw == 'v2'.bytes
+        def keepStaleTtl = (hGroup.execute('httl hashKeepStale fields 1 field') as MultiBulkReply).replies[0]
+        (keepStaleTtl as IntegerReply).integer == -1
+
         when: 'HH mode, keepttl keeps the field ttl'
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'hashKeepHH')
