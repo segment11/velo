@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** review round 1 complete — 14 findings verified: 10 `CONFIRMED (reproduced)`, 4 `PARTIALLY CONFIRMED` (78.3, 78.5, 78.9, 78.12 — each with a refuted/incorrect sub-claim), 0 refuted as a whole; fix phase pending
+**Status:** review round 1 complete — 14 findings verified: 10 `CONFIRMED (reproduced)`, 4 `PARTIALLY CONFIRMED` (78.3, 78.5, 78.9, 78.12 — each with a refuted/incorrect sub-claim), 0 refuted as a whole; **fix phase complete — 14/14 fixed in 14 commits**, re-review pending
 **Review branch:** `review/hgroup`
 **Reviewed commit:** `19d3b14f955a9eff7c0ccd214c67808edcdd2d25` (author) / verified by agent 2 at `e16e619a` — same code, the delta is this document only
 
@@ -952,7 +952,41 @@ Accepted as proposed by the reviewer: **78.1 → 78.2 → 78.3 → 78.4 → 78.5
 
 ## Fix Log (AI agent 1, round 1 fix phase)
 
-(to be appended)
+**Fixer:** AI agent 1 · **Branch:** `review/hgroup` · **Phase order:** the order agreed in the *Author Response* (78.1 → 78.2 → 78.3 → 78.4 → 78.5 → 78.8 → 78.9 → 78.7 → 78.6 → 78.12 → 78.11 → 78.13 → 78.14 → 78.10)
+
+**Method:** every fix followed the TDD loop of `doc/write_better_test_cases_for_ai_agents.md` — the permanent regression test was written first in `src/test/groovy/io/velo/command/HGroupTest.groovy` (one `def 'test <command>'()` method per command, the cases of a command stay together), the test was watched failing for the expected reason, then the minimal production change was made, then the focused test was re-run and the changed lines were confirmed with `scripts/jacoco_cover.py`.
+
+**Test harness:** `./gradlew :test --tests "io.velo.command.HGroupTest"` (57 test methods), plus `io.velo.BaseCommandTest` and `io.velo.persist.OneSlotTest` for the `getShortType` work, and `io.velo.type.RedisHashKeysTest` / `io.velo.type.RedisHHTest` for the empty field name / empty value storage work. The string module (`DGroupTest`, `IGroupTest`) was run unchanged to prove the hash fix did not change the `INCRBYFLOAT` behaviour.
+
+| # | Commit | RED evidence (failing before the fix) | GREEN evidence | JaCoCo |
+|---|---|---|---|---|
+| 78.1 | `3ea4a660` | `Condition not satisfied: newKeysCv != null` — after `hincrby hashNew field 1` the `h_k_{hashNew}` index did not exist, so `hlen`/`hgetall` saw nothing and `hdel` answered `0` | `HGroupTest` 56 tests, 0 failures | `HGroup` 1480-1495: 21/21 lines, the new `if (rhk == null)` branch covered |
+| 78.2 | `82a7a94a` | `hincrby hashInt64 field 2147483648` → `ErrorReply('not integer')`; `hincrby hashInt64Min field -2147483648` → `Int(2147483648)` (sign flipped) | `HGroupTest` 56 tests, 0 failures | `HGroup` 1437-1455: 13/13 lines, both parse branches covered |
+| 78.3 | `e0dacf6f` | `java.lang.NumberFormatException: Character I is neither a decimal digit number …` escaping `HGroup.hincrby2` (`BigDecimal.valueOf`) | `HGroupTest` 57 tests, 0 failures | `HGroup` 1445-1447 (the delta guard) and 1532-1536 (the stored value guard): all branches covered |
+| 78.4 | `384c1d68` | `hincrby hashOverflow field 1` → `Int(-9223372036854775808)` (silent wrap) | `HGroupTest` 57 tests, 0 failures | `HGroup` 1554-1562: the two sided overflow guard, all 4 branches covered (a negative delta and a zero delta were added to the test) |
+| 78.5 | `4d824b3e`, refined by `d5d1c510` + `09a950ce` | HH `hset` over a field with a TTL → `httl` answered `59` instead of `-1`; split `hincrby` → the cached TTL of the index became `0` while the field cv kept its TTL | `HGroupTest` 57 tests, 0 failures | `HGroup` 1537-1549 (the index sync) and 1768-1772 (the HH overwrite) covered |
+| 78.8 | `9b3400a8` | 16 failures at once — every split path command answered `nil` / `0` / an empty array for a string key, and `hset` created the hash index beside the string value | `HGroupTest` 56 tests, 0 failures | `HGroup` 534/672/759/960/1094/1151/1242/1400/1512/1645/1725/1787/1960/2056/2208/2345/2407 — all 17 call sites of `checkSplitKeyType` covered, the helper branches covered |
+| 78.9 | `be38bc96` | `hsetnx hashExpired field value2` → `Int(0)` (an expired field counted as existing); `hsetex hashExpired fnx FIELDS 1 field value2` → `Int(0)` | `HGroupTest` 57 tests, 0 failures | `HGroup` 1977-1993 and 2360-2377: the live check and the stale cache clear covered |
+| 78.7 | `c3d53159` | `hsetex hashFnxAll fnx FIELDS 2 a 9 b 8` → `Int(1)` and the field `b` was written, although the field `a` existed | `HGroupTest` 57 tests, 0 failures | `HGroup` 1970-1980 and 2014-2024: the all or nothing check covered in both layouts |
+| 78.6 | `b8c92730` | after `hsetex hashKeep keepttl FIELDS 1 field v2` → `httl` answered `-1` (the TTL was gone) | `HGroupTest` 57 tests, 0 failures | `HGroup` 1995-2012 and 2036-2052: the keepttl branches (with a ttl, without a ttl and with an expired field) covered |
+| 78.12 | `12c82ec1` | `httl a fields 2147483645 field0` → `ArrayIndexOutOfBoundsException: Index 5 out of bounds for length 5` at `HGroup.hIterateFields`; `hexpire a 10 fields 2147483647 field0` → the same at `HGroup.hexpire`; `hgetdel hashA FIELDS 0` → an empty array | `HGroupTest` 57 tests, 0 failures | `HGroup` 742/944/1222/1228/1382/1388/1943/1949: the long math and the `numFields <= 0` guards covered |
+| 78.11 | `bf08c7cd` | `hexpire a -5 fields 1 field0` → a `MultiBulkReply` (the negative time was accepted), `hexpireat a 1 fields 1 field0` → `Int(1)` instead of `2` and the field was not deleted | `HGroupTest` 57 tests, 0 failures | `HGroup` 451-481 (the expire time computation), 939-945 (the validation) and the delete branches of both layouts covered |
+| 78.13 | `8cae3063` | `hset hashEmpty _0 value` → `ErrorReply('syntax error')` for an empty field name and an empty value | `HGroupTest` 57 tests, `RedisHashKeysTest` and `RedisHHTest` green | `RedisHashKeys` 260-275 and `RedisHH` 296-320: the relaxed decode guards covered in both directions (a zero length is valid, a negative length throws) |
+| 78.14 | `f26e5f85` | `hrandfield a 1 1` → `NilReply` (the free form parsing), `hrandfield missingRand 3` → `NilReply` instead of an empty array, `hrandfield a` → an array instead of the field itself | `HGroupTest` 57 tests, 0 failures | `HGroup` 2035-2075 and 2090-2130: the positional parsing, the syntax error and the missing key replies covered in both layouts |
+| 78.10 | `259f9e37` | `hincrbyfloat a field 1` → `DoubleReply(2.00)`; `hincrbyfloat hashFloat field 0.001` → `0.00` (the increment was lost) | `HGroupTest` 57 tests, 0 failures, `DGroupTest` 23 and `IGroupTest` 18 tests still green (the string module is untouched) | `HGroup` 1616-1660: the new split float path and the formatter fully covered (a number cv, a string cv, a compressed cv, a non numeric value and a round number) |
+
+### Refactors that belong to a finding
+
+| Commit | What | Why |
+|---|---|---|
+| `d5d1c510` + `09a950ce` | the split `HINCRBY` reads the field TTL from the index (`RedisHashKeys.expireAtByField`) instead of the field cv | `docs/plans/2026-05-27-hash-field-ttl-cache-refactor-plan.md` states that the cached TTL must be left unchanged on `HINCRBY`, the index is the source for the aggregate commands and the extra cv read is not needed |
+| `607db5ad` | `checkSplitKeyType` uses `BaseCommand.getShortType` (added by the reviewer of this round) instead of reading the whole cv | the type check only needs the type, the short type byte is enough and it is much cheaper |
+
+### Notes for the re-reviewer
+
+- The `HINCRBYFLOAT` reply of the hash commands changed from a `DoubleReply` to a `BulkReply`, because redis replies with a bulk string (`addReplyBulkCBuffer`) and the `DoubleReply` applied the global `doubleScale` to the value (`10.60` instead of `10.6`). The string module (`INCRBYFLOAT` / `DECRBYFLOAT`) still replies with a `DoubleReply` and still uses `doubleScale`, it was not touched.
+- The hash commands accept an empty field name and an empty value now. That required the decode guards of `RedisHashKeys` and `RedisHH` to allow a zero length (`len < 0` is illegal, `len == 0` is an empty field name or an empty value).
+- `HSETEX` replies `1` now when the fields were set and `0` when the `FNX` / `FXX` condition was not met, the dead `setCount > 0` check was removed.
 
 ## Re-review (AI agent 2)
 
@@ -966,17 +1000,19 @@ Accepted as proposed by the reviewer: **78.1 → 78.2 → 78.3 → 78.4 → 78.5
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 78.1 | split HINCRBY on missing hash never creates index | High | Correctness | CONFIRMED (reproduced) | open — fix |
-| 78.2 | HINCRBY delta int32 / MIN_VALUE sign flip | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix |
-| 78.3 | HH HINCRBYFLOAT non-finite → raw NFE | Medium | Correctness | PARTIALLY CONFIRMED (`inf`/`nan` already rejected; `1e400`/`Infinity`/`NaN`/stored-non-finite affected) | open — fix |
-| 78.4 | HH HINCRBY overflow wraps | Medium | Correctness | CONFIRMED (reproduced) | open — fix |
-| 78.5 | field TTL on overwrite: layouts diverge, HH HSET keeps TTL, split HINCRBY cache/CV split | High | Correctness | PARTIALLY CONFIRMED (premise corrected: Redis **keeps** the TTL on HINCRBY; the HH-HSET half and the split cache/CV mismatch half stand) | open — fix |
-| 78.6 | HSETEX KEEPTTL clears TTL | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix |
-| 78.7 | HSETEX FNX/FXX per-field, partial writes | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix |
-| 78.8 | split mode: no WRONGTYPE; HSET creates dual-representation key | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix |
-| 78.9 | write paths use unfiltered index (expired fields "exist") | Medium | Correctness | PARTIALLY CONFIRMED (HSETNX + HSETEX-FXX confirmed; the HDEL half is REFUTED — Redis also answers 1) | open — fix |
-| 78.10 | HINCRBYFLOAT scale-2 rounding loses increments | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix (last; shared root with the string module) |
-| 78.11 | HEXPIRE-family: no negative/zero/past validation, reply 2 missing | Low | Protocol compat | CONFIRMED (reproduced) | open — fix |
-| 78.12 | numfields overflow → AIOOBE; 0/trailing args accepted | Low | Edge case | PARTIALLY CONFIRMED (overflow → AIOOBE and trailing junk confirmed; "numFields 0 accepted" REFUTED — Velo answers `format`) | open — fix |
-| 78.13 | HSET/HMSET/HSETNX reject empty field/value | Low | Protocol compat | CONFIRMED (reproduced) | open — fix |
-| 78.14 | HRANDFIELD parsing + missing-key-with-count reply drift | Low | Protocol compat | CONFIRMED (reproduced) | open — fix |
+| 78.1 | split HINCRBY on missing hash never creates index | High | Correctness | CONFIRMED (reproduced) | fixed `3ea4a660` |
+| 78.2 | HINCRBY delta int32 / MIN_VALUE sign flip | Medium | Protocol compat | CONFIRMED (reproduced) | fixed `82a7a94a` |
+| 78.3 | HH HINCRBYFLOAT non-finite → raw NFE | Medium | Correctness | PARTIALLY CONFIRMED (`inf`/`nan` already rejected; `1e400`/`Infinity`/`NaN`/stored-non-finite affected) | fixed `e0dacf6f` |
+| 78.4 | HH HINCRBY overflow wraps | Medium | Correctness | CONFIRMED (reproduced) | fixed `384c1d68` |
+| 78.5 | field TTL on overwrite: layouts diverge, HH HSET keeps TTL, split HINCRBY cache/CV split | High | Correctness | PARTIALLY CONFIRMED (premise corrected: Redis **keeps** the TTL on HINCRBY; the HH-HSET half and the split cache/CV mismatch half stand) | fixed `4d824b3e` + `d5d1c510` + `09a950ce` |
+| 78.6 | HSETEX KEEPTTL clears TTL | Medium | Protocol compat | CONFIRMED (reproduced) | fixed `b8c92730` |
+| 78.7 | HSETEX FNX/FXX per-field, partial writes | Medium | Protocol compat | CONFIRMED (reproduced) | fixed `c3d53159` |
+| 78.8 | split mode: no WRONGTYPE; HSET creates dual-representation key | Medium | Protocol compat | CONFIRMED (reproduced) | fixed `9b3400a8` |
+| 78.9 | write paths use unfiltered index (expired fields "exist") | Medium | Correctness | PARTIALLY CONFIRMED (HSETNX + HSETEX-FXX confirmed; the HDEL half is REFUTED — Redis also answers 1) | fixed `be38bc96` (the HDEL half not changed) |
+| 78.10 | HINCRBYFLOAT scale-2 rounding loses increments | Medium | Protocol compat | CONFIRMED (reproduced) | fixed `259f9e37` (hash side only, the string module untouched) |
+| 78.11 | HEXPIRE-family: no negative/zero/past validation, reply 2 missing | Low | Protocol compat | CONFIRMED (reproduced) | fixed `bf08c7cd` |
+| 78.12 | numfields overflow → AIOOBE; 0/trailing args accepted | Low | Edge case | PARTIALLY CONFIRMED (overflow → AIOOBE and trailing junk confirmed; "numFields 0 accepted" REFUTED — Velo answers `format`) | fixed `12c82ec1` |
+| 78.13 | HSET/HMSET/HSETNX reject empty field/value | Low | Protocol compat | CONFIRMED (reproduced) | fixed `8cae3063` |
+| 78.14 | HRANDFIELD parsing + missing-key-with-count reply drift | Low | Protocol compat | CONFIRMED (reproduced) | fixed `f26e5f85` |
+
+**Refactor commits of this phase:** `607db5ad` (the hash key type check uses the new `getShortType` instead of reading the whole cv).
