@@ -1442,6 +1442,10 @@ public class HGroup extends BaseCommand {
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_FLOAT;
             }
+            if (!Double.isFinite(byFloat)) {
+                // infinity and nan are not valid float values
+                return ErrorReply.NAN_OR_INFINITY;
+            }
         } else {
             try {
                 by = Long.parseLong(new String(byBytes));
@@ -1527,6 +1531,10 @@ public class HGroup extends BaseCommand {
                 var numberStr = new String(fieldValueBytes);
                 if (isByFloat) {
                     doubleValue = Double.parseDouble(numberStr);
+                    if (!Double.isFinite(doubleValue)) {
+                        // infinity and nan are not valid float values
+                        return NOT_NUMBER_REPLY;
+                    }
                 } else {
                     longValue = Long.parseLong(numberStr);
                 }

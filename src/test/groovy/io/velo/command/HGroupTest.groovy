@@ -711,6 +711,46 @@ httl
         reply = hGroup.execute('hincrby hashInt64 field 99999999999999999999')
         then:
         reply == ErrorReply.NOT_INTEGER
+
+        // bug 78.3: a non finite value must not escape as a raw exception
+        when: 'HH mode, a delta that overflows to infinity'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashNonFinite')
+        reply = hGroup.execute('hincrbyfloat hashNonFinite field 1e400')
+        then:
+        reply == ErrorReply.NAN_OR_INFINITY
+
+        when: 'HH mode, an infinite delta'
+        reply = hGroup.execute('hincrbyfloat hashNonFinite field Infinity')
+        then:
+        reply == ErrorReply.NAN_OR_INFINITY
+
+        when: 'HH mode, a NaN delta'
+        reply = hGroup.execute('hincrbyfloat hashNonFinite field NaN')
+        then:
+        reply == ErrorReply.NAN_OR_INFINITY
+
+        when: 'HH mode, the stored value is not finite'
+        inMemoryGetSet.remove(slot, 'hashNonFinite')
+        hGroup.execute('hset hashNonFinite field Infinity')
+        reply = hGroup.execute('hincrbyfloat hashNonFinite field 1')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when: 'split mode, a delta that overflows to infinity'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashNonFinite'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashNonFinite', 'field'))
+        reply = hGroup.execute('hincrbyfloat hashNonFinite field 1e400')
+        then:
+        reply == ErrorReply.NAN_OR_INFINITY
+
+        when: 'split mode, the stored value is not finite'
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashNonFinite', 'field'))
+        hGroup.execute('hset hashNonFinite field Infinity')
+        reply = hGroup.execute('hincrbyfloat hashNonFinite field 1')
+        then:
+        reply == ErrorReply.NOT_FLOAT
     }
 
     def 'test hkeys'() {

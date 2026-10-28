@@ -69,6 +69,9 @@ public class ErrorReply implements Reply {
     /** Error reply for not a float. */
     public static final ErrorReply NOT_FLOAT = new ErrorReply("not float");
 
+    /** Error reply for a NaN or Infinity value. */
+    public static final ErrorReply NAN_OR_INFINITY = new ErrorReply("value is NaN or Infinity");
+
     /** Error reply for not a string. */
     public static final ErrorReply NOT_STRING = new ErrorReply("not string");
 
