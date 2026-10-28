@@ -13,7 +13,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.*;
 
 /**
@@ -1578,12 +1577,12 @@ public class HGroup extends BaseCommand {
 
         Reply reply;
         if (isFloat) {
-            reply = dGroup.decrBy(0, -byFloat, true);
+            reply = hincrbyFloatSplit(slot(fieldKey), byFloat);
         } else {
             reply = dGroup.decrBy(-by, 0, false);
         }
 
-        if (reply instanceof IntegerReply || reply instanceof DoubleReply) {
+        if (!(reply instanceof ErrorReply)) {
             // the field index must exist, otherwise the written field is invisible
             // to every aggregate command, like hlen, hgetall, hkeys and hdel
             if (rhk == null) {
@@ -1604,6 +1603,60 @@ public class HGroup extends BaseCommand {
         return reply;
     }
 
+    /**
+     * Increments a hash field by a float value in the split storage layout.
+     * <p>
+     * The arithmetic keeps the full precision, like redis does, the global double scale is a
+     * display setting and must not be used here.
+     *
+     * @param fieldSlot the field key
+     * @param byFloat   the increment
+     * @return the new value as a bulk string, like redis replies it, or the error reply
+     */
+    private Reply hincrbyFloatSplit(SlotWithKeyHash fieldSlot, double byFloat) {
+        var cv = getCv(fieldSlot);
+        var currentValue = BigDecimal.ZERO;
+        if (cv != null) {
+            if (cv.isTypeNumber()) {
+                var doubleValue = cv.numberValue().doubleValue();
+                if (!Double.isFinite(doubleValue)) {
+                    // infinity and nan are not valid float values
+                    return ErrorReply.NOT_FLOAT;
+                }
+                currentValue = BigDecimal.valueOf(doubleValue);
+            } else if (cv.isCompressed()) {
+                return ErrorReply.NOT_FLOAT;
+            } else {
+                try {
+                    currentValue = BigDecimal.valueOf(Double.parseDouble(new String(cv.getCompressedData())));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.NOT_FLOAT;
+                }
+            }
+        }
+
+        var newValue = formatFloatValue(currentValue.add(BigDecimal.valueOf(byFloat)));
+        // redis keeps the ttl of the field
+        var expireAt = cv == null ? CompressedValue.NO_EXPIRE : cv.getExpireAt();
+        set(newValue.getBytes(), fieldSlot, CompressedValue.NULL_DICT_SEQ, expireAt);
+        return new BulkReply(newValue);
+    }
+
+    /**
+     * Formats a float value like redis does, the trailing zeros are removed.
+     *
+     * @param value the value
+     * @return the formatted value
+     */
+    private static String formatFloatValue(BigDecimal value) {
+        var stripped = value.stripTrailingZeros();
+        if (stripped.scale() < 0) {
+            // a value like 1E+3 is 1000
+            stripped = stripped.setScale(0);
+        }
+        return stripped.toPlainString();
+    }
+
     private Reply hincrby2(byte[] fieldBytes, long by, double byFloat, boolean isByFloat) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rhh = getRedisHH(slotWithKeyHash);
@@ -1616,12 +1669,12 @@ public class HGroup extends BaseCommand {
 
         if (fieldValueBytes == null) {
             if (isByFloat) {
-                var newValue = BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP);
-                var newValueBytes = newValue.toPlainString().getBytes();
+                var newValue = formatFloatValue(BigDecimal.valueOf(byFloat));
+                var newValueBytes = newValue.getBytes();
                 rhh.put(field, newValueBytes);
 
                 saveRedisHH(rhh, slotWithKeyHash);
-                return new DoubleReply(newValue);
+                return new BulkReply(newValue);
             } else {
                 var newValueBytes = String.valueOf(by).getBytes();
                 rhh.put(field, newValueBytes);
@@ -1650,13 +1703,12 @@ public class HGroup extends BaseCommand {
             }
 
             if (isByFloat) {
-                var newValue = BigDecimal.valueOf(doubleValue).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP)
-                        .add(BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP));
-                var newValueBytes = newValue.toPlainString().getBytes();
+                var newValue = formatFloatValue(BigDecimal.valueOf(doubleValue).add(BigDecimal.valueOf(byFloat)));
+                var newValueBytes = newValue.getBytes();
                 rhh.put(field, newValueBytes);
 
                 saveRedisHH(rhh, slotWithKeyHash);
-                return new DoubleReply(newValue);
+                return new BulkReply(newValue);
             } else {
                 if (by > 0) {
                     if (longValue > Long.MAX_VALUE - by) {

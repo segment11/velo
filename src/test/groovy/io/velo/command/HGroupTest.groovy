@@ -2,6 +2,7 @@ package io.velo.command
 
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.Dict
 import io.velo.SocketInspectorTest
 import io.velo.acl.AclUsers
 import io.velo.acl.U
@@ -624,15 +625,15 @@ httl
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
-        reply instanceof DoubleReply
-        (reply as DoubleReply).doubleValue() == 2.0d
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '2'
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
-        reply instanceof DoubleReply
-        (reply as DoubleReply).doubleValue() == 2.0d
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '2'
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -675,8 +676,8 @@ httl
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
-        reply instanceof DoubleReply
-        (reply as DoubleReply).doubleValue() == 2.1d
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '2.1'
 
         when:
         rhh.remove('field')
@@ -684,8 +685,8 @@ httl
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
-        reply instanceof DoubleReply
-        (reply as DoubleReply).doubleValue() == 1.0d
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '1'
 
         when:
         rhh.put('field', 'a'.bytes)
@@ -840,8 +841,95 @@ httl
         reply = hGroup.execute('hincrby wrongTypeKey field 1')
         then:
         reply == ErrorReply.WRONG_TYPE
-    }
+    
 
+        // bug 78.10: the float increment must keep the full precision, the global
+        // double scale is a display setting and must not be used for the arithmetic
+        when: 'HH mode, a small increment'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashFloat')
+        reply = hGroup.execute('hincrbyfloat hashFloat field 0.001')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '0.001'
+        (hGroup.execute('hget hashFloat field') as BulkReply).asString() == '0.001'
+
+        when: 'HH mode, the small increment is repeated'
+        reply = hGroup.execute('hincrbyfloat hashFloat field 0.001')
+        then:
+        (reply as BulkReply).asString() == '0.002'
+
+        when: 'HH mode, a value with trailing zeros'
+        inMemoryGetSet.remove(slot, 'hashFloat2')
+        reply = hGroup.execute('hincrbyfloat hashFloat2 field 10.50')
+        then:
+        (reply as BulkReply).asString() == '10.5'
+
+        when: 'HH mode, the increment is added'
+        reply = hGroup.execute('hincrbyfloat hashFloat2 field 0.1')
+        then:
+        (reply as BulkReply).asString() == '10.6'
+        (hGroup.execute('hget hashFloat2 field') as BulkReply).asString() == '10.6'
+
+        when: 'split mode, a small increment'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFloat'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFloat', 'field'))
+        reply = hGroup.execute('hincrbyfloat hashFloat field 0.001')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '0.001'
+        (hGroup.execute('hget hashFloat field') as BulkReply).asString() == '0.001'
+
+        when: 'split mode, the small increment is repeated'
+        reply = hGroup.execute('hincrbyfloat hashFloat field 0.001')
+        then:
+        (reply as BulkReply).asString() == '0.002'
+
+        when: 'split mode, a value with trailing zeros'
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFloat2'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFloat2', 'field'))
+        reply = hGroup.execute('hincrbyfloat hashFloat2 field 10.50')
+        then:
+        (reply as BulkReply).asString() == '10.5'
+
+        when: 'split mode, the increment is added'
+        reply = hGroup.execute('hincrbyfloat hashFloat2 field 0.1')
+        then:
+        (reply as BulkReply).asString() == '10.6'
+        (hGroup.execute('hget hashFloat2 field') as BulkReply).asString() == '10.6'
+
+        when: 'split mode, the value is a string'
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFloat3'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFloat3', 'field'))
+        def cvString = Mock.prepareCompressedValueList(1)[0]
+        cvString.compressedData = '10.5'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashFloat3', 'field'), 0, cvString)
+        reply = hGroup.execute('hincrbyfloat hashFloat3 field 0.1')
+        then:
+        (reply as BulkReply).asString() == '10.6'
+
+        when: 'split mode, the value is not a number'
+        cvString.compressedData = 'abc'.bytes
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashFloat3', 'field'), 0, cvString)
+        reply = hGroup.execute('hincrbyfloat hashFloat3 field 0.1')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when: 'split mode, the value is compressed'
+        cvString.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashFloat3', 'field'), 0, cvString)
+        reply = hGroup.execute('hincrbyfloat hashFloat3 field 0.1')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when: 'the value is a round number'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashFloat4')
+        reply = hGroup.execute('hincrbyfloat hashFloat4 field 1e3')
+        then:
+        (reply as BulkReply).asString() == '1000'
+    }
     def 'test hkeys'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
