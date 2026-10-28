@@ -2141,6 +2141,72 @@ httl
         (reply as IntegerReply).integer == 0
         hGroup.execute('hget hashExpired field') == NilReply.INSTANCE
 
+        // bug 78.7: fnx and fxx are hash level conditions, all the fields are set
+        // or none of them is set
+        when: 'split mode, fnx with one existing field sets nothing'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFnxAll'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFnxAll', 'a'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFnxAll', 'b'))
+        hGroup.execute('hset hashFnxAll a 1')
+        reply = hGroup.execute('hsetex hashFnxAll fnx FIELDS 2 a 9 b 8')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        (hGroup.execute('hget hashFnxAll a') as BulkReply).raw == '1'.bytes
+        hGroup.execute('hget hashFnxAll b') == NilReply.INSTANCE
+
+        when: 'split mode, fxx with one missing field sets nothing'
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFxxAll'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFxxAll', 'a'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashFxxAll', 'b'))
+        hGroup.execute('hset hashFxxAll a 1')
+        reply = hGroup.execute('hsetex hashFxxAll fxx FIELDS 2 a 9 b 8')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        (hGroup.execute('hget hashFxxAll a') as BulkReply).raw == '1'.bytes
+        hGroup.execute('hget hashFxxAll b') == NilReply.INSTANCE
+
+        when: 'HH mode, fnx with one existing field sets nothing'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashFnxAllHH')
+        hGroup.execute('hset hashFnxAllHH a 1')
+        reply = hGroup.execute('hsetex hashFnxAllHH fnx FIELDS 2 a 9 b 8')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        (hGroup.execute('hget hashFnxAllHH a') as BulkReply).raw == '1'.bytes
+        hGroup.execute('hget hashFnxAllHH b') == NilReply.INSTANCE
+
+        when: 'HH mode, fxx with one missing field sets nothing'
+        inMemoryGetSet.remove(slot, 'hashFxxAllHH')
+        hGroup.execute('hset hashFxxAllHH a 1')
+        reply = hGroup.execute('hsetex hashFxxAllHH fxx FIELDS 2 a 9 b 8')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        (hGroup.execute('hget hashFxxAllHH a') as BulkReply).raw == '1'.bytes
+        hGroup.execute('hget hashFxxAllHH b') == NilReply.INSTANCE
+
+        when: 'split mode, fxx on a key that does not exist sets nothing'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFxxNone'))
+        reply = hGroup.execute('hsetex hashFxxNone fxx FIELDS 1 field value')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        hGroup.execute('hget hashFxxNone field') == NilReply.INSTANCE
+
+        when: 'HH mode, fxx on a key that does not exist sets nothing'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashFxxNoneHH')
+        reply = hGroup.execute('hsetex hashFxxNoneHH fxx FIELDS 1 field value')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        hGroup.execute('hget hashFxxNoneHH field') == NilReply.INSTANCE
+
         when: 'test EX option invalid integer'
         reply = hGroup.execute('hsetex hashA EX abc FIELDS 1 field1 value1')
         then:

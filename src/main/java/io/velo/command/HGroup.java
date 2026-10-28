@@ -1963,24 +1963,31 @@ public class HGroup extends BaseCommand {
         }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
+
+        // fnx and fxx are hash level conditions, all the fields are set or none
+        // of them is set
+        var now = System.currentTimeMillis();
+        if (fnx || fxx) {
+            for (var field : fieldValues.keySet()) {
+                // an expired field does not exist, redis creates it again
+                var fieldExists = rhk != null && rhk.contains(field) && rhk.isLiveByCache(field, now);
+                if (fnx && fieldExists) {
+                    return new IntegerReply(0);
+                }
+                if (fxx && !fieldExists) {
+                    return new IntegerReply(0);
+                }
+            }
+        }
+
         if (rhk == null) {
             rhk = new RedisHashKeys();
         }
 
         int setCount = 0;
-        var now = System.currentTimeMillis();
         for (var entry : fieldValues.entrySet()) {
             var field = entry.getKey();
             var value = entry.getValue();
-
-            // an expired field does not exist, redis creates it again
-            var fieldExists = rhk.contains(field) && rhk.isLiveByCache(field, now);
-            if (fnx && fieldExists) {
-                continue;
-            }
-            if (fxx && !fieldExists) {
-                continue;
-            }
 
             var fieldKey = RedisHashKeys.fieldKey(key, field);
             var sFieldKey = slot(fieldKey);
@@ -2001,6 +2008,22 @@ public class HGroup extends BaseCommand {
                           long expireAt, boolean hasExpireOption, boolean keepttl) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rhh = getRedisHH(slotWithKeyHash);
+
+        // fnx and fxx are hash level conditions, all the fields are set or none
+        // of them is set
+        if (fnx || fxx) {
+            for (var field : fieldValues.keySet()) {
+                // an expired field does not exist, redis creates it again
+                var fieldExists = rhh != null && rhh.get(field) != null;
+                if (fnx && fieldExists) {
+                    return new IntegerReply(0);
+                }
+                if (fxx && !fieldExists) {
+                    return new IntegerReply(0);
+                }
+            }
+        }
+
         if (rhh == null) {
             rhh = new RedisHH();
         }
@@ -2009,13 +2032,6 @@ public class HGroup extends BaseCommand {
         for (var entry : fieldValues.entrySet()) {
             var field = entry.getKey();
             var value = entry.getValue();
-
-            if (fnx && rhh.get(field) != null) {
-                continue;
-            }
-            if (fxx && rhh.get(field) == null) {
-                continue;
-            }
 
             long fieldExpireAt = keepttl ? CompressedValue.NO_EXPIRE : expireAt;
             rhh.put(field, value, fieldExpireAt);
