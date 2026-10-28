@@ -1125,6 +1125,39 @@ httl
         reply = hGroup.execute('hmset a field _0')
         then:
         reply == ErrorReply.SYNTAX
+
+        // bug 78.5: overwriting the value clears the field ttl, like redis does
+        when: 'HH mode, the field has a ttl and the value is overwritten'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'hashTtl')
+        hGroup.execute('hset hashTtl field v1')
+        hGroup.execute('hexpire hashTtl 60 fields 1 field')
+        def ttlBefore = (hGroup.execute('httl hashTtl fields 1 field') as MultiBulkReply).replies[0]
+        hGroup.execute('hset hashTtl field v2')
+        def ttlAfter = (hGroup.execute('httl hashTtl fields 1 field') as MultiBulkReply).replies[0]
+        then:
+        (ttlBefore as IntegerReply).integer > 0
+        (ttlAfter as IntegerReply).integer == -1
+
+        when: 'HH mode, hmset overwrites the value of a field with a ttl'
+        inMemoryGetSet.remove(slot, 'hashTtl')
+        hGroup.execute('hset hashTtl field v1')
+        hGroup.execute('hexpire hashTtl 60 fields 1 field')
+        hGroup.execute('hmset hashTtl field v2')
+        def ttlAfterHmset = (hGroup.execute('httl hashTtl fields 1 field') as MultiBulkReply).replies[0]
+        then:
+        (ttlAfterHmset as IntegerReply).integer == -1
+
+        when: 'split mode, the field has a ttl and the value is overwritten'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashTtl'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashTtl', 'field'))
+        hGroup.execute('hset hashTtl field v1')
+        hGroup.execute('hexpire hashTtl 60 fields 1 field')
+        hGroup.execute('hset hashTtl field v2')
+        def splitTtlAfter = (hGroup.execute('httl hashTtl fields 1 field') as MultiBulkReply).replies[0]
+        then:
+        (splitTtlAfter as IntegerReply).integer == -1
     }
 
     def 'test hset returns newly added field count'() {
@@ -2720,12 +2753,13 @@ httl
         savedRHK.getCachedExpireAt('field0') == CompressedValue.NO_EXPIRE
     }
 
-    def 'test hincrby clears cached ttl after successful increment'() {
+    def 'test hincrby keeps the cached ttl in sync with the field cv ttl'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
         def hGroup = new HGroup(null, null, null)
         hGroup.byPassGetSet = inMemoryGetSet
         hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
 
         // Set up hash with 1 field that has cached TTL
         def cvKeys = Mock.prepareCompressedValueList(1)[0]
@@ -2749,10 +2783,14 @@ httl
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 8
 
-        // Verify cached TTL was cleared (CV was written with NO_EXPIRE)
+        // Redis keeps the field ttl on hincrby, so the cached ttl must be kept too
         def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
         def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
-        savedRHK.getCachedExpireAt('field0') == CompressedValue.NO_EXPIRE
+        savedRHK.getCachedExpireAt('field0') > System.currentTimeMillis()
+
+        // and the field cv ttl is not changed either
+        def fieldCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.fieldKey('hashA', 'field0'), 0, 0)
+        fieldCv.cv().getExpireAt() > System.currentTimeMillis()
     }
 
     def 'test hincrby on non-numeric value does not clear cached ttl'() {

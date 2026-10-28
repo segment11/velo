@@ -1464,10 +1464,10 @@ public class HGroup extends BaseCommand {
         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
         var rhk = getRedisHashKeys(key);
-        long oldCachedExpireAt = CompressedValue.NO_EXPIRE;
-        if (rhk != null) {
-            oldCachedExpireAt = rhk.getCachedExpireAt(field);
-        }
+        // the field cv ttl is kept by the increment, remember it to keep the
+        // cached ttl of the index in sync
+        var oldFieldCv = getCv(slot(fieldKey));
+        var fieldExpireAt = oldFieldCv == null ? CompressedValue.NO_EXPIRE : oldFieldCv.getExpireAt();
 
         byte[][] dd = {null, Wal.keyBytes(fieldKey)};
         var dGroup = new DGroup(cmd, dd, socket);
@@ -1488,9 +1488,10 @@ public class HGroup extends BaseCommand {
                 rhk = new RedisHashKeys();
             }
             rhk.add(field);
-            if (oldCachedExpireAt != CompressedValue.NO_EXPIRE) {
-                rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
-            }
+            // redis keeps the field ttl on hincrby, so the cached ttl must be kept
+            // in sync with the field cv ttl, otherwise the point reads and the
+            // aggregate commands disagree about the field
+            rhk.putCachedExpireAt(field, fieldExpireAt);
             saveRedisHashKeys(rhk, key);
         }
 
@@ -1767,7 +1768,8 @@ public class HGroup extends BaseCommand {
             }
 
             var isNew = rhh.get(entry.getKey()) == null;
-            rhh.put(entry.getKey(), entry.getValue());
+            // redis clears the field ttl when the value is overwritten
+            rhh.put(entry.getKey(), entry.getValue(), CompressedValue.NO_EXPIRE);
             if (isNew) {
                 newFieldsCount++;
             }
