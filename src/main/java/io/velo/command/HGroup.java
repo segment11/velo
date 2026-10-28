@@ -1518,10 +1518,6 @@ public class HGroup extends BaseCommand {
         var fieldKey = RedisHashKeys.fieldKey(key, field);
 
         var rhk = getRedisHashKeys(key);
-        // the field cv ttl is kept by the increment, remember it to keep the
-        // cached ttl of the index in sync
-        var oldExpireAt = getExpireAt(slot(fieldKey));
-        var fieldExpireAt = oldExpireAt == null ? CompressedValue.NO_EXPIRE : oldExpireAt;
 
         byte[][] dd = {null, Wal.keyBytes(fieldKey)};
         var dGroup = new DGroup(cmd, dd, socket);
@@ -1542,10 +1538,14 @@ public class HGroup extends BaseCommand {
                 rhk = new RedisHashKeys();
             }
             rhk.add(field);
-            // redis keeps the field ttl on hincrby, so the cached ttl must be kept
-            // in sync with the field cv ttl, otherwise the point reads and the
-            // aggregate commands disagree about the field
-            rhk.putCachedExpireAt(field, fieldExpireAt);
+            // redis keeps the field ttl on hincrby, so the cached ttl of the index
+            // stays unchanged, but an expired field is recreated without a ttl by
+            // the increment, so its stale cached ttl must be cleared, otherwise the
+            // point reads and the aggregate commands disagree about the field
+            var cachedExpireAt = rhk.getCachedExpireAt(field);
+            if (cachedExpireAt != CompressedValue.NO_EXPIRE && cachedExpireAt < System.currentTimeMillis()) {
+                rhk.clearCachedExpireAt(field);
+            }
             saveRedisHashKeys(rhk, key);
         }
 

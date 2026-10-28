@@ -3059,6 +3059,36 @@ httl
         fieldCv.cv().getExpireAt() > System.currentTimeMillis()
     }
 
+    def 'test hincrby clears the stale cached ttl of an expired field'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        // a field with an expired ttl, the field cv is gone but the index still
+        // caches the ttl
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashExpired'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashExpired', 'field'))
+        hGroup.execute('hset hashExpired field 5')
+        hGroup.execute("hpexpireat hashExpired ${System.currentTimeMillis() - 60000} fields 1 field")
+
+        when:
+        def reply = hGroup.execute('hincrby hashExpired field 3')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 3
+
+        // the increment recreates the field without a ttl, so the stale cached ttl
+        // must be cleared, otherwise the field is hidden from the aggregates
+        def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashExpired'), 0, 0)
+        def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
+        savedRHK.getCachedExpireAt('field') == CompressedValue.NO_EXPIRE
+        (hGroup.execute('hlen hashExpired') as IntegerReply).integer == 1
+        (hGroup.execute('hget hashExpired field') as BulkReply).raw == '3'.bytes
+    }
+
     def 'test hincrby on non-numeric value does not clear cached ttl'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
