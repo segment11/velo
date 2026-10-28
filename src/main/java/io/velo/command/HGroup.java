@@ -13,7 +13,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Random;
+import java.util.Set;
 
 /**
  * Handles Redis commands starting with letter 'H'.
@@ -421,14 +425,6 @@ public class HGroup extends BaseCommand {
     }
 
     /**
-     * The split layout stores the hash out of line, the main key cv is never read by the
-     * hash commands, so a key of another type looks like an empty hash. Redis answers
-     * WRONGTYPE for those.
-     *
-     * @param slotWithKeyHash the main key
-     * @return {@link ErrorReply#WRONG_TYPE} if the key exists but is not a hash, otherwise null
-     */
-    /**
      * @return the error reply redis answers for an invalid expire time
      */
     private Reply invalidExpireTime() {
@@ -472,6 +468,14 @@ public class HGroup extends BaseCommand {
         }
     }
 
+    /**
+     * The split layout stores the hash out of line, the main key cv is never read by the
+     * hash commands, so a key of another type looks like an empty hash. Redis answers
+     * WRONGTYPE for those.
+     *
+     * @param slotWithKeyHash the main key
+     * @return {@link ErrorReply#WRONG_TYPE} if the key exists but is not a hash, otherwise null
+     */
     private Reply checkSplitKeyType(SlotWithKeyHash slotWithKeyHash) {
         var shortType = getShortType(slotWithKeyHash);
         if (shortType == -1 || shortType == KeyLoader.typeAsByteHash) {
@@ -979,7 +983,7 @@ public class HGroup extends BaseCommand {
 
         // the field count must match the number of arguments, the comparison is
         // done in long math to avoid an integer overflow
-        if (data.length != fieldsIndex + numFields) {
+        if (data.length != (long) fieldsIndex + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -1424,7 +1428,7 @@ public class HGroup extends BaseCommand {
 
         // the field count must match the number of arguments, the comparison is
         // done in long math to avoid an integer overflow
-        if (data.length != fieldsIndex + numFields) {
+        if (data.length != (long) fieldsIndex + numFields) {
             return ErrorReply.SYNTAX;
         }
 
