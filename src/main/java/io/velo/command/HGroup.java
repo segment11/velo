@@ -4,7 +4,6 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.*;
 import io.velo.acl.AclUsers;
-import io.velo.persist.KeyLoader;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
@@ -2091,23 +2090,30 @@ public class HGroup extends BaseCommand {
             return ErrorReply.KEY_TOO_LONG;
         }
 
+        // the count is the second argument, withvalues is the third one
         int count = 1;
         boolean withValues = false;
-        for (int i = 2; i < data.length; i++) {
-            var arg = new String(data[i]);
-            if ("withvalues".equalsIgnoreCase(arg)) {
-                withValues = true;
-            } else {
-                try {
-                    count = Integer.parseInt(arg);
-                } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+        boolean hasCount = false;
+        if (data.length >= 3) {
+            try {
+                count = Integer.parseInt(new String(data[2]));
+            } catch (NumberFormatException e) {
+                return ErrorReply.VALUE_NOT_POSITIVE;
+            }
+            hasCount = true;
+
+            if (data.length == 4) {
+                if (!"withvalues".equalsIgnoreCase(new String(data[3]))) {
+                    return ErrorReply.SYNTAX;
                 }
+                withValues = true;
+            } else if (data.length > 4) {
+                return ErrorReply.SYNTAX;
             }
         }
 
         if (isUseHH(keyBytes)) {
-            return hrandfield2(count, withValues);
+            return hrandfield2(count, withValues, hasCount);
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -2118,12 +2124,13 @@ public class HGroup extends BaseCommand {
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
-            return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
+            // a missing key replies with an empty array when a count is given
+            return hasCount ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
         var liveFields = rhk.liveFieldsByCache();
         if (liveFields.isEmpty()) {
-            return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
+            return hasCount ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
         int size = liveFields.size();
@@ -2133,6 +2140,11 @@ public class HGroup extends BaseCommand {
         int absCount = Math.abs(count);
 
         ArrayList<Integer> indexes = getRandIndex(count, size, absCount);
+
+        if (!hasCount) {
+            // without a count redis replies with the field itself
+            return new BulkReply(liveFields.get(indexes.getFirst()));
+        }
 
         var replies = new Reply[withValues ? absCount * 2 : absCount];
         int i = 0;
@@ -2151,16 +2163,17 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(replies);
     }
 
-    private Reply hrandfield2(int count, boolean withValues) {
+    private Reply hrandfield2(int count, boolean withValues, boolean hasCount) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
-            return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
+            // a missing key replies with an empty array when a count is given
+            return hasCount ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
         var map = rhh.getMap();
         if (map.isEmpty()) {
-            return withValues ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
+            return hasCount ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
         int size = map.size();
@@ -2170,6 +2183,12 @@ public class HGroup extends BaseCommand {
         int absCount = Math.abs(count);
 
         ArrayList<Integer> indexes = getRandIndex(count, size, absCount);
+
+        if (!hasCount) {
+            // without a count redis replies with the field itself
+            var fields = new ArrayList<String>(map.keySet());
+            return new BulkReply(fields.get(indexes.getFirst()));
+        }
 
         var replies = new Reply[withValues ? absCount * 2 : absCount];
         int i = 0;

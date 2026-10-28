@@ -1319,14 +1319,14 @@ httl
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('a'))
         def reply = hGroup.execute('hrandfield a 1 1')
         then:
-        reply == NilReply.INSTANCE
+        reply == ErrorReply.SYNTAX
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         inMemoryGetSet.remove(slot, 'a')
         reply = hGroup.execute('hrandfield a 1 1')
         then:
-        reply == NilReply.INSTANCE
+        reply == ErrorReply.SYNTAX
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1349,7 +1349,7 @@ httl
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
         reply = hGroup.execute('hrandfield a 1 1')
         then:
-        reply == NilReply.INSTANCE
+        reply == ErrorReply.SYNTAX
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -1360,7 +1360,7 @@ httl
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
         reply = hGroup.execute('hrandfield a 1 1')
         then:
-        reply == NilReply.INSTANCE
+        reply == ErrorReply.SYNTAX
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1383,8 +1383,7 @@ httl
         inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cvKeys)
         reply = hGroup.execute('hrandfield a 1 1')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 1
+        reply == ErrorReply.SYNTAX
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -1395,20 +1394,19 @@ httl
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
         reply = hGroup.execute('hrandfield a 1 1')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 1
+        reply == ErrorReply.SYNTAX
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         // > rhk size
-        reply = hGroup.execute('hrandfield a 1 ' + (rhk.size() + 1))
+        reply = hGroup.execute('hrandfield a ' + (rhk.size() + 1))
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == rhk.size()
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
-        reply = hGroup.execute('hrandfield a 1 ' + (rhk.size() + 1))
+        reply = hGroup.execute('hrandfield a ' + (rhk.size() + 1))
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == rhh.size()
@@ -1464,26 +1462,64 @@ httl
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
-        reply = hGroup.execute('hrandfield a 5 5')
+        reply = hGroup.execute('hrandfield a 5')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 5
 
         when:
-        reply = hGroup.execute('hrandfield a -5 -5')
+        reply = hGroup.execute('hrandfield a -5')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 5
 
         when:
-        reply = hGroup.execute('hrandfield >key -5 -5')
+        reply = hGroup.execute('hrandfield >key -5')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
         when:
         reply = hGroup.execute('hrandfield a a -5')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.VALUE_NOT_POSITIVE
+        // bug 78.14: the count is the second argument and withvalues is the third
+        // one, like redis does
+        when: 'withvalues without a count'
+        reply = hGroup.execute('hrandfield a withvalues')
+        then:
+        reply == ErrorReply.VALUE_NOT_POSITIVE
+
+        when: 'too many arguments'
+        reply = hGroup.execute('hrandfield a 2 withvalues 3')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'a missing key with a count replies with an empty array, split mode'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('missingRand'))
+        reply = hGroup.execute('hrandfield missingRand 3')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when: 'a missing key with a count replies with an empty array, HH mode'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        inMemoryGetSet.remove(slot, 'missingRand')
+        reply = hGroup.execute('hrandfield missingRand 3')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when: 'a missing key without a count replies with nil'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('missingRand'))
+        reply = hGroup.execute('hrandfield missingRand')
+        then:
+        reply == NilReply.INSTANCE
+
+        when: 'without a count the reply is the field itself'
+        reply = hGroup.execute('hrandfield a')
+        then:
+        reply instanceof BulkReply
+
         // bug 78.8: the split layout stores the hash out of line, the type of the
         // main key must be checked, redis answers WRONGTYPE for another type
         when:
