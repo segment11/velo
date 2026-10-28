@@ -4,9 +4,9 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** discovery complete — 14 findings, none verified yet
+**Status:** review round 1 complete — 14 findings verified: 10 `CONFIRMED (reproduced)`, 4 `PARTIALLY CONFIRMED` (78.3, 78.5, 78.9, 78.12 — each with a refuted/incorrect sub-claim), 0 refuted as a whole; fix phase pending
 **Review branch:** `review/hgroup`
-**Reviewed commit:** `19d3b14f955a9eff7c0ccd214c67808edcdd2d25`
+**Reviewed commit:** `19d3b14f955a9eff7c0ccd214c67808edcdd2d25` (author) / verified by agent 2 at `e16e619a` — same code, the delta is this document only
 
 > Delta declaration: this is the first round for `bug_78` (fresh scope = the whole HGroup class).
 > Prior hash-related rounds consulted, and their dispositions respected:
@@ -38,12 +38,14 @@ Reference docs (ground truth, fetched this session):
 - https://redis.io/docs/latest/commands/hrandfield/ — syntax `HRANDFIELD key [count [WITHVALUES]]`; "WITHVALUES … Can only be used together with count"; missing key + count ⇒ empty array, missing key without count ⇒ nil
 
 Environment note: no live Redis was available this session (`redis-cli -p 31999` / `-p 6379` both refused). All Redis-side claims below are doc/semantics-grounded; reviewer should run the docker `redis:7.2.x` differential used by bug_71/74/76 (port 31999) for the protocol-shape findings.
+>
+> Agent 2 note (round 1): a live Redis **7.2.11** *was* available to the reviewer on port 31999, plus the Redis upstream `unstable` source tree at `~/ws/redis` for the 7.4/8.0-only commands. See *Review Feedback* for the per-finding differential transcripts.
 
 ## Finding 1 (Bug 78.1): split HINCRBY on a missing hash never creates the field index — orphaned invisible field
 
 **Severity:** High
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -75,7 +77,7 @@ Mirror the other write paths: on success, if `rhk == null` create it, `add(field
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -103,7 +105,7 @@ Parse with `Long.parseLong`; thread `long by` through `hincrby2` (which already 
 
 **Severity:** Medium
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `PARTIALLY CONFIRMED` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -132,7 +134,7 @@ Guard in `hincrby()` after parsing (cheapest, covers both paths and both directi
 
 **Severity:** Medium
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -158,7 +160,7 @@ Replicate the two-sided guard (adjusting for `+` instead of `-`) before line 154
 
 **Severity:** High
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `PARTIALLY CONFIRMED` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -196,13 +198,14 @@ The split HINCRBY column is a regression interaction: `a6706982` (bug_40 era) cl
 2. Split divergence after HINCRBY on a TTL'd field: the CV expires at T but the index cache says no-expire, so after T: `HGET k f` → nil (CV expired) while `HLEN/HKEYS/HGETALL` (cache-driven `liveFieldsByCache`) still count/show the field, and `HTTL` → -2 (CV null at 756-758). Point reads and aggregates permanently disagree.
 
 ### Suggested fix direction
-Make overwrite clear the field TTL on both paths, per Redis: HH — use the 3-arg `put(field, value, NO_EXPIRE)` (or explicit `putExpireAt(field, NO_EXPIRE)`) in `hmset2`/`hincrby2`; split HINCRBY — pass the "clear field TTL" intent explicitly (e.g. `decrBy(..., expireAtToClear)` or restore the CV write with `NO_EXPIRE`) so CV and cache move together; update the 2585 test to assert both CV and cache end at NO_EXPIRE.
+~~Make overwrite clear the field TTL on both paths, per Redis: HH — use the 3-arg `put(field, value, NO_EXPIRE)` (or explicit `putExpireAt(field, NO_EXPIRE)`) in `hmset2`/`hincrby2`; split HINCRBY — pass the "clear field TTL" intent explicitly (e.g. `decrBy(..., expireAtToClear)` or restore the CV write with `NO_EXPIRE`) so CV and cache move together; update the 2585 test to assert both CV and cache end at NO_EXPIRE.~~
+*(Corrected in round 1 — see Author Response §78.5: Redis **keeps** the TTL on HINCRBY/HINCRBYFLOAT (`HASH_SET_KEEP_TTL`), so the HINCRBY halves above would introduce a new incompatibility. Corrected fix: (1) HH `hmset2()` overwrite clears the field TTL (`putExpireAt(field, NO_EXPIRE)`); (2) split `hincrby()` keeps the cached TTL in sync with the preserved CV TTL — remove the cache-clear at HGroup.java:1480-1485 — and update the 2585 test to assert CV TTL is preserved and the cache still reflects it. HH HINCRBY behavior is already correct; no change.)*
 
 ## Finding 6 (Bug 78.6): HSETEX KEEPTTL clears the field TTL instead of retaining it (both layouts)
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -231,7 +234,7 @@ When `keepttl` is set, leave the TTL untouched: split — write the value withou
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -259,7 +262,7 @@ Precompute existence for all fields (split: `rhk.contains` over the batch; HH: `
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -288,7 +291,7 @@ Hoist the existing HSCAN pre-check (2109-2112) into a helper applied at the entr
 
 **Severity:** Medium
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `PARTIALLY CONFIRMED` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -319,7 +322,7 @@ Use `rhk.isLiveByCache(field, System.currentTimeMillis())` (already exists, Redi
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -348,7 +351,7 @@ For the hash command, compute with full `BigDecimal.valueOf(double)` precision (
 
 **Severity:** Low
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -378,7 +381,7 @@ After parsing: reject negative relative times (NOT_INTEGER/`invalid expire time`
 
 **Severity:** Low
 **Class:** Edge case
-**Status:** `OPEN — not verified`
+**Status:** `PARTIALLY CONFIRMED` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -405,7 +408,7 @@ Validate in long math (`data.length < 4L + numFields`) or pre-reject `numFields 
 
 **Severity:** Low
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -430,7 +433,7 @@ Drop the `length == 0` clause (keep the null checks implicit in RESP decoding). 
 
 **Severity:** Low
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — review round 1 (agent 2)
 
 ### Cited files / lines
 ```java
@@ -463,6 +466,7 @@ Positional parsing: optional count at argv[2] (integer error on parse failure), 
 - `hexists2()`/`hget2()` use static `RedisHH.iterate` whose decode loop skips expired entries (RedisHH.java:295-309) — HH point reads are expiry-safe (bug_71 §71.1 verdict, re-confirmed unchanged at this commit).
 - `hsetnx()`'s `throw new IllegalStateException` at 2262 appears unreachable through normal flows: `hdel` → `removeDelay` writes an `EXPIRE_NOW` tombstone (Wal.java:711-717), so `getCv` returns null immediately after; defensive assertion, not reported.
 - Split `HSET` overwrite clearing the field TTL (1715-1716 + 2-arg `set`) is **correct** per the HEXPIRE doc; only the HH twin and HINCRBY are wrong (Finding 5).
+  - Agent 2 correction (round 1): the *HH twin* half of 78.5 is a real defect (Redis clears the field TTL on HSET — upstream `hashTypeSet` without `HASH_SET_KEEP_TTL` → `hfieldPersist`), but the *split HINCRBY* half is **not** "Redis clears the TTL on HINCRBY" — upstream `hincrbyCommand`/`hincrbyfloatCommand` use `HASH_SET_KEEP_TTL` and the upstream test asserts *"HINCRBY - preserve expiration time of the field"*. The real split-path defect is that Velo clears the **cached** TTL while the CV keeps it, so the CV and the `h_k_` index disagree. See *Review Feedback* §78.5.
 - `hgetex2()` calling `putExpireAt` for missing fields creates orphan `mapExpireAt` entries — harmless because `encode()` iterates `map` (RedisHH.java:148-152); not reported.
 - Split `hgetall`/`hvals`/`hrandfield` emitting `NilReply` when the cache says live but the CV read returns null (expiry race window) — bug_40 residual class, deliberately not re-reported.
 - `hdel` duplicate-field counting (`TreeSet.remove`/`HashMap.remove` second call false) matches Redis on both layouts.
@@ -494,7 +498,457 @@ Baseline: `review/hgroup` @ `19d3b14f`. Test harness pattern: `InMemoryGetSet` +
 
 ## Review Feedback (AI agent 2, round 1)
 
-(to be appended)
+**Reviewer:** AI agent 2 · **Branch:** `review/hgroup` · **Verified at:** `e16e619a` (code identical to the reported baseline `19d3b14f`; `e16e619a` only adds this document)
+
+### Environment used by the reviewer
+
+- **Live Redis differential:** `redis-server` **7.2.11** started on port **31999** (`redis-server --port 31999 --daemonize yes --save '' --appendonly no`) — the author had no live Redis, the reviewer did. This covers HINCRBY / HINCRBYFLOAT / HSET / HSETNX / HRANDFIELD. The 7.4/8.0-only commands (`HEXPIRE*`, `HGETEX`, `HSETEX`, `HTTL`) cannot be run on 7.2, so for those the reviewer used the **Redis upstream source of the `unstable` branch** (available locally at `~/ws/redis`, `git show unstable:src/t_hash.c`) plus the upstream test-suite `tests/unit/type/hash-field-expire.tcl` as ground truth.
+- **Reviewer temp spec:** `src/test/groovy/io/velo/command/Bug78ReviewTempSpec.groovy` (14 test methods, one per finding; `InMemoryGetSet` + `hGroup.byPassGetSet` + `LocalPersist.instance.hashSaveMemberTogether` toggle, same harness as `HGroupTest`).
+  Run: `./gradlew :test --tests "io.velo.command.Bug78ReviewTempSpec"` → **BUILD SUCCESSFUL** (all 14 reviewer methods green — they are *observation* tests, they assert the observed behaviour, they do not assert the desired behaviour).
+- **Evidence convention:** every line below prefixed `78.x …` is verbatim stdout of that spec (`build/test-results/test/TEST-io.velo.command.Bug78ReviewTempSpec.xml`).
+
+### Verdict summary
+
+| # | Verdict | Disposition | Note |
+|---|---|---|---|
+| 78.1 | `CONFIRMED (reproduced)` | open — fix | reproduced exactly as described |
+| 78.2 | `CONFIRMED (reproduced)` | open — fix | both sub-claims reproduced |
+| 78.3 | `PARTIALLY CONFIRMED` | open — fix | `inf`/`nan` are *not* affected; `1e400` / `Infinity` / `NaN` / stored-non-finite are |
+| 78.4 | `CONFIRMED (reproduced)` | open — fix | reproduced; silent wrap |
+| 78.5 | `PARTIALLY CONFIRMED` | open — fix | the "Redis clears the TTL on HINCRBY" premise is **wrong** — see 78.5 verdict |
+| 78.6 | `CONFIRMED (reproduced)` | open — fix | reproduced on both layouts |
+| 78.7 | `CONFIRMED (reproduced)` | open — fix | reproduced on both layouts; upstream source confirms all-or-nothing |
+| 78.8 | `CONFIRMED (reproduced)` | open — fix | reproduced incl. the dual-representation write |
+| 78.9 | `PARTIALLY CONFIRMED` | open — fix | HSETNX/HSETEX-FXX confirmed; the **HDEL half is REFUTED** (Redis also answers 1) |
+| 78.10 | `CONFIRMED (reproduced)` | open — fix | reproduced; the *stored* value is `"10.60"`, Redis stores `"10.6"` |
+| 78.11 | `CONFIRMED (reproduced)` | open — fix | reproduced; upstream `parseExpireTime` + `HSETEX_DELETED = 2` |
+| 78.12 | `PARTIALLY CONFIRMED` | open — fix | overflow→AIOOBE and trailing-junk confirmed; "numFields 0 accepted" **REFUTED** (Velo answers `format`) |
+| 78.13 | `CONFIRMED (reproduced)` | open — fix | reproduced + live Redis 7.2.11 differential |
+| 78.14 | `CONFIRMED (reproduced)` | open — fix | reproduced + live Redis 7.2.11 differential (raw RESP bytes) |
+
+No finding was `REFUTED` / `NOT A BUG` / `RETRACTED` as a whole. Four findings carry a sub-claim that did **not** survive verification and must be corrected before the fix:
+
+| Finding | Sub-claim that did not survive | Effect on the fix scope |
+|---|---|---|
+| 78.3 | `HINCRBYFLOAT h f inf` / `nan` are accepted and crash | wrong — `Double.parseDouble` already rejects both literals with `not float` | narrow the reproduction to `1e400` / `Infinity` / `NaN` / a stored non-finite value |
+| 78.5 | "Redis clears the field TTL on HINCRBY/HINCRBYFLOAT" | wrong — upstream uses `HASH_SET_KEEP_TTL` and the upstream test asserts *"HINCRBY - preserve expiration time of the field"* | **invert** the split-path fix: keep the cached TTL in sync with the CV TTL instead of clearing it |
+| 78.9 | `HDEL` on an expired field answers `0` in Redis | wrong — upstream answers `1` (*"Verify HDEL not ignore expired field. It is too much overhead to check if the field is expired before deletion."*) | do **not** change the `HDEL` count — changing it would break Redis compatibility |
+| 78.12 | `numFields = 0` is accepted everywhere | wrong — the arity checks already answer `ErrorReply.FORMAT` | keep only the overflow→AIOOBE and the trailing-argument parts |
+
+---
+
+### 78.1 — split HINCRBY on a missing hash never creates the field index — `CONFIRMED (reproduced)`
+
+Reproduced verbatim:
+
+```
+78.1 hincrby reply = Int(1)
+78.1 rhk = null
+78.1 hlen = Int(0)
+78.1 hget = '1'
+78.1 hgetall = io.velo.reply.MultiBulkReply$2@61d61b0e      <- MultiBulkReply.EMPTY
+78.1 hdel = Int(0)
+```
+
+The field CV (`h_f_{h1}.f`) is written by `DGroup.decrBy()` while the `h_k_{h1}` index is never created (`HGroup.java:1462-1488`), so the value is readable but invisible to every aggregate, and `HDEL` cannot remove it (`HGroup.java:518-520`). Severity **High** stands. Fix direction of the author is accepted (create/extend the index on a successful increment).
+
+### 78.2 — HINCRBY delta parsed as int32 — `CONFIRMED (reproduced)`
+
+```
+78.2 split big delta = ErrorReply('not integer')
+78.2 HH big delta  = ErrorReply('not integer')
+78.2 split MIN_VALUE = Int(2147483648)      <- sign flipped, wrong
+78.2 HH MIN_VALUE   = Int(-2147483648)      <- correct
+```
+
+Live Redis 7.2.11 (ground truth for the int64 range and the sign):
+
+```
+$ redis-cli -p 31999 hset k f 0 ; redis-cli -p 31999 hincrby k f -2147483648
+1
+-2147483648
+$ redis-cli -p 31999 hincrby k f 2147483648
+0
+```
+
+Both sub-claims of the finding hold: int64 deltas are rejected with `not integer` (Redis accepts them) and `-2147483648` flips sign on the split path. Severity **Medium** stands. `hincrby2()` must widen `int by` to `long` as well (the HH path already computes `longValue + by`, which is why it is correct today).
+
+### 78.3 — HH HINCRBYFLOAT non-finite → raw `NumberFormatException` — `PARTIALLY CONFIRMED`
+
+```
+78.3 HH inf            = ErrorReply('not float')     <- no bug: Double.parseDouble("inf") throws
+78.3 HH nan            = ErrorReply('not float')     <- no bug: same
+78.3 HH 1e400          = THROWN NumberFormatException: Character I is neither a decimal digit number, decimal point, nor "e" notation exponential mark.
+78.3 HH Infinity       = THROWN NumberFormatException: (same)
+78.3 HH NaN            = THROWN NumberFormatException: Character N is neither a decimal digit number, ...
+78.3 HH stored Infinity= THROWN NumberFormatException: (same)
+78.3 split inf             = ErrorReply('not float')   <- split path is guarded (bug_74.8)
+78.3 split stored Infinity = ErrorReply('not float')   <- split path is guarded (bug_74.8)
+```
+
+**Refinement of the finding:** the literals `inf` / `nan` are *not* affected — `Double.parseDouble` rejects them, so Velo already answers `not float`. The defect is real for `1e400`, `Infinity`, `NaN` and for a **stored** value that is non-finite. The raw `NumberFormatException` escapes `handle()`; `RequestHandler.java:576-580` turns it into `ErrorReply(e.getMessage())`, i.e. the client receives the implementation text *"Character I is neither a decimal digit number, decimal point, nor \"e\" notation exponential mark."* and the server logs an error with a stack trace.
+
+**Ground truth refinement (Redis upstream, `unstable:src/t_hash.c`, `hincrbyfloatCommand`):**
+
+```c
+    if (isnan(incr) || isinf(incr)) {
+        addReplyError(c,"value is NaN or Infinity");
+        return;
+    }
+```
+
+so Redis answers `ERR value is NaN or Infinity` for a non-finite delta and `ERR hash value is not a float` for a non-numeric stored value. Velo's `ErrorReply.NOT_FLOAT` ("not float") is close enough for a *stable* error, but the important part is that no raw exception may escape. Verdict **PARTIALLY CONFIRMED**, severity **Medium** stands.
+
+### 78.4 — HH HINCRBY int64 overflow wraps silently — `CONFIRMED (reproduced)`
+
+```
+78.4 HH overflow    = Int(-9223372036854775808)      <- silent wrap
+78.4 split overflow = ErrorReply('increment or decrement would overflow')
+```
+
+Live Redis 7.2.11: `HSET k3 f 9223372036854775807` + `HINCRBY k3 f 1` → `ERR increment or decrement would overflow`; Redis upstream (`unstable:src/t_hash.c`) has the same two-sided guard in `hincrbyCommand`. Severity **Medium** stands; the fix must add the two-sided guard to `HGroup.hincrby2()` (HGroup.java:1540).
+
+### 78.5 — field-TTL-on-overwrite semantics across layouts — `PARTIALLY CONFIRMED` (premise corrected)
+
+Observed:
+
+```
+78.5a HH hset overwrite:  hexpire = [Int(1)] ; rhh mapExpireAt = [f:1793167680398] ; httl = [Int(59)]   <- TTL kept, Redis clears it
+78.5b split hincrby:       CV expireAt before = 1793167680412 ; after = 1793167680412 (kept) ; cached expireAt after = 0 (cleared)
+78.5c split hset overwrite: CV expireAt after hset = 0 ; cached expireAt after hset = 0                <- TTL cleared, correct
+78.5d HH hincrby:          rhh mapExpireAt = [f:1793167680418]                                          <- TTL kept
+```
+
+**The author's premise "Redis clears the field TTL on HINCRBY/HINCRBYFLOAT" is wrong.** Ground truth (Redis upstream `unstable:src/t_hash.c`, `hincrbyCommand` / `hincrbyfloatCommand`):
+
+```c
+    hashTypeSet(c->db, o,c->argv[2]->ptr,new,HASH_SET_TAKE_VALUE | HASH_SET_KEEP_TTL);
+```
+
+and the upstream test suite `tests/unit/type/hash-field-expire.tcl`:
+
+```tcl
+        test {HINCRBY - preserve expiration time of the field} {
+            r hset h1 f1 10
+            r hpexpire h1 20 FIELDS 1 f1
+            assert_equal [r HINCRBY h1 f1 2] 12
+            assert_range [r HPTTL h1 FIELDS 1 f1] 1 20
+        }
+        test {HINCRBYFLOAT - preserve expiration time of the field} { ... }
+```
+
+This matches the HEXPIRE doc wording "operations that conceptually alter the value stored at a hash key's field without replacing it with a new one will leave the TTL untouched" — HINCRBY *alters*, HSET *replaces*.
+
+**Corrected picture:**
+
+| Operation | Velo split | Velo HH | Redis |
+|---|---|---|---|
+| HSET overwrite | clears CV TTL + cache ✔ | **keeps TTL ✘** | clears |
+| HINCRBY / HINCRBYFLOAT | CV keeps TTL ✔, **cache cleared ✘** | keeps TTL ✔ | keeps |
+
+So the two real defects are:
+1. **HH `HSET`/`HMSET` overwrite keeps the field TTL** — Redis clears it (`hashTypeSet` without `HASH_SET_KEEP_TTL` → `hfieldPersist`). Effect: a value rewritten by HSET silently disappears when the old TTL fires (data loss). Fix: use the 3-arg `RedisHH.put(field, value, NO_EXPIRE)` / `putExpireAt(field, NO_EXPIRE)` in `hmset2()` (`HGroup.java:1744-1745`).
+2. **Split `HINCRBY` clears the cached TTL while the CV keeps it** — the CV and the `h_k_` index disagree: after the CV expires, `HGET` → nil while `HLEN`/`HKEYS`/`HGETALL` (driven by `liveFieldsByCache()`) still count the field, and `HTTL` → -2. Fix: **keep** the cached TTL (Redis keeps the TTL on HINCRBY) — i.e. remove the `rhk.putCachedExpireAt(field, NO_EXPIRE)` block at `HGroup.java:1480-1485` (or keep both in sync), *not* the other way round as the author suggested.
+   The permanent test `HGroupTest.'test hincrby clears cached ttl after successful increment'` (2585-2619) therefore encodes a behaviour that contradicts Redis and must be updated.
+
+Severity **High** stands (the HH HSET case is silent data loss).
+
+### 78.6 — HSETEX KEEPTTL clears the field TTL — `CONFIRMED (reproduced)`
+
+```
+78.6 split ttl before = [Int(59)] ; hsetex keepttl = Int(1) ; ttl after = [Int(-1)]
+78.6 HH    ttl before = [Int(60)] ; hsetex keepttl = Int(1) ; ttl after = [Int(-1)]
+```
+
+Ground truth (Redis upstream `unstable:src/t_hash.c`, `hsetexCommand`):
+
+```c
+        if (flags & (HFE_EX | HFE_PX | HFE_EXAT | HFE_PXAT | HFE_KEEPTTL))
+            opt |= HASH_SET_KEEP_TTL;
+```
+
+so `KEEPTTL` retains the field TTL, while *no* expiry option clears it (Velo's non-KEEPTTL branch is correct). Severity **Medium** stands. Fix: split — read the existing CV `expireAt` and re-write it unchanged (or add a "keep" mode to `set()`); HH — use the 2-arg `RedisHH.put(field, value)` (leaves `mapExpireAt` untouched) instead of the boxed `Long` overload.
+
+### 78.7 — HSETEX FNX/FXX applied per field — `CONFIRMED (reproduced)`
+
+```
+78.7 split fnx reply = Int(1) ; rhk = [a, b] ; hgetall = ['a','1','b','8']   <- b was written although FNX
+78.7 split fxx reply = Int(1) ; rhk = [a]                                   <- a was written although FXX
+78.7 HH    fnx reply = Int(1) ; map = [a, b]
+```
+
+Ground truth (Redis upstream `unstable:src/t_hash.c`, `hsetexCommand`) — the condition is evaluated over **all** fields first and is all-or-nothing:
+
+```c
+        int all_exists = (found == field_count);
+        int non_exists = (found == 0);
+        if (((flags & HFE_FNX) && !non_exists) ||
+            ((flags & HFE_FXX) && !all_exists))
+        {
+            addReplyLongLong(c, 0);
+            goto out;
+        }
+```
+
+Severity **Medium** stands; the author's fix direction (pre-compute existence for the whole batch, then apply all or none) matches upstream.
+
+### 78.8 — split mode never checks the main key type — `CONFIRMED (reproduced)`
+
+```
+78.8 split hget on string key     = NilReply            (Redis: WRONGTYPE)
+78.8 split hgetall on string key  = MultiBulkReply.EMPTY (Redis: WRONGTYPE)
+78.8 split hlen on string key     = Int(0)               (Redis: WRONGTYPE)
+78.8 split hset on string key     = Int(1)               (Redis: WRONGTYPE, nothing mutated)
+78.8 split rhk after hset         = [f]                  <- hash index created next to the string CV
+78.8 main key still a string      = 0                    <- dual representation
+78.8 HH hget on string key        = THROWN TypeMismatchException: Expect sp type array=[-512], but got sp type=0
+```
+
+The HH path raises `TypeMismatchException`, which `RequestHandler.java:572-575` maps to `WRONGTYPE`; the split path silently treats any non-hash key as an empty hash and, worse, writes a hash beside a live string CV. Severity **Medium** stands (the dual-representation write is the serious half). The author's fix direction (hoist the `hscan` pre-check at `HGroup.java:2109-2112` into a helper used by every split-path H command) is accepted.
+
+### 78.9 — write-side existence checks bypass field-TTL filtering — `PARTIALLY CONFIRMED` (HDEL half REFUTED)
+
+```
+78.9 hpexpireat past                = [Int(1)]
+78.9 split hsetnx on expired field  = Int(0)   <- Redis: 1 (field expired = absent)
+78.9 split hdel on expired field    = Int(1)   <- Redis: 1  (MATCHES, see below)
+78.9 split hsetex fxx on expired    = Int(1)   <- Redis: 0 (expired field does not exist)
+```
+
+**Confirmed (HSETNX):** Redis `hsetnxCommand` (`unstable:src/t_hash.c`) uses `hashTypeExists(..., HFE_LAZY_EXPIRE, ...)` → an expired field does **not** exist → Redis answers `1` and creates the field; Velo answers `0` because `RedisHashKeys.contains()` looks at the raw field set.
+
+**Confirmed (HSETEX FXX):** upstream `hsetexCommand` counts an expired field as non-existent (`GETF_EXPIRED` → `exists = 0`) → `FXX` fails → reply `0`, nothing written; Velo answers `1` and writes.
+
+**REFUTED (HDEL):** the finding claims Redis answers `0` for `HDEL` on an expired field. Upstream is explicit — `tests/unit/type/hash-field-expire.tcl`:
+
+```tcl
+            # Verify HDEL not ignore expired field. It is too much overhead to check
+            # if the field is expired before deletion.
+            assert_equal [r HDEL h1 01] "1"
+```
+
+`hashTypeDelete()` does not consult the field TTL, so Redis answers **1** — exactly what Velo answers. The HDEL half of the finding must be dropped from the fix scope (changing it to `0` would *break* Redis compatibility).
+
+Verdict **PARTIALLY CONFIRMED**, severity **Medium** stands for the HSETNX/HSETEX-FXX half. Fix direction accepted: use `rhk.isLiveByCache(field, now)` for the existence checks in `hsetnx()` (2253) and `hsetex()` (1878-1883); leave the `hdel()` count alone.
+
+### 78.10 — HINCRBYFLOAT rounds to 2 decimal places — `CONFIRMED (reproduced)`
+
+```
+78.10 HH 0.001        = Double(0.0)      <- increment silently lost
+78.10 HH 0.001 again  = Double(0.0)
+78.10 HH 10.50 + 0.1  = Double(10.6)
+78.10 HH stored       = [f:[49,48,46,54,48]]   <- "10.60" stored, Redis stores "10.6"
+```
+
+The reply is rendered by `DoubleReply.buffer()` (`src/main/java/io/velo/reply/DoubleReply.java:36-43`), which applies `ConfForGlobal.doubleScale` (default 2, `ConfForGlobal.java:229`) → the wire value is `10.60` while Redis replies `10.6`. Live Redis 7.2.11:
+
+```
+$ redis-cli -p 31999 hincrbyfloat k4 f 10.50   -> 10.5
+$ redis-cli -p 31999 hincrbyfloat k4 f 0.1     -> 10.6
+$ redis-cli -p 31999 hincrbyfloat k5 f 0.001   -> 0.001
+```
+
+Severity **Medium** stands. The author's scoping note is correct: the arithmetic scale comes from a *display* knob that is applied to arithmetic; the same root exists in `DGroup.decrBy()` (404-405) and the string module, so the hash-side fix must not silently change the string module's behaviour (that belongs to a string-module round).
+
+### 78.11 — HEXPIRE-family time validation / reply codes — `CONFIRMED (reproduced)`
+
+```
+78.11 hexpire 0         = [Int(1)]   <- Redis: 2 + field deleted
+78.11 hexpire -5        = [Int(1)]   <- Redis: ERR invalid expire time, must be >= 0
+78.11 hexpireat past    = [Int(1)]   <- Redis: 2 + field deleted
+78.11 hgetex ex -5      = ['v']      <- Redis: ERR invalid expire time, must be >= 0
+78.11 hsetex ex -5      = Int(1)     <- Redis: ERR invalid expire time, must be >= 0
+78.11 hpexpire huge     = ErrorReply('not integer')   <- ok (not a long)
+78.11 hexpire huge      = [Int(1)]   <- Redis: ERR invalid expire time (overflow)
+```
+
+Ground truth (Redis upstream `unstable:src/t_hash.c`):
+
+```c
+static int parseExpireTime(client *c, robj *o, int unit, long long basetime, long long *expire) {
+    if (getLongLongFromObjectOrReply(c, o, &val, NULL) != C_OK) return C_ERR;
+    if (val < 0) { addReplyError(c,"invalid expire time, must be >= 0"); return C_ERR; }
+    if (unit == UNIT_SECONDS) {
+        if (val > (long long) HFE_MAX_ABS_TIME_MSEC / 1000) { addReplyErrorExpireTime(c); return C_ERR; }
+        val *= 1000;
+    }
+    if (val > (long long) HFE_MAX_ABS_TIME_MSEC - basetime) { addReplyErrorExpireTime(c); return C_ERR; }
+```
+
+and the reply code for a past timestamp is `HSETEX_DELETED = 2`:
+
+```c
+typedef enum SetExRes {
+    HSETEX_OK =                1,
+    HSETEX_NO_FIELD =         -2,
+    HSETEX_NO_CONDITION_MET =  0,
+    HSETEX_DELETED =           2,   /* Field deleted because the specified time is in the past */
+} SetExRes;
+```
+
+Severity **Low** stands (no corruption: lazy expiry still hides the field; only the reply code and the acceptance of negative/overflowing times differ). The author's fix direction matches upstream: reject negative relative times, reject the `seconds * 1000` overflow, and reply `2` + delete the field when the computed `expireAt` is in the past.
+
+### 78.12 — numfields overflow → AIOOBE — `PARTIALLY CONFIRMED`
+
+```
+78.12 httl huge numfields  = THROWN ArrayIndexOutOfBoundsException: Index 5 out of bounds for length 5
+78.12 httl numfields 0     = ErrorReply('format')
+78.12 httl trailing junk   = [Int(-2)]
+78.12 hexpire numfields 0  = ErrorReply('format')
+78.12 hexpire trailing junk= [Int(-2)]
+```
+
+**Confirmed (overflow → AIOOBE):** `HGroup.java:715` `if (data.length < 4 + numFields)` overflows for `numFields ≥ 2147483645`; the guard then passes and the loop at `HGroup.java:722` (`data[4 + i].length`) throws `ArrayIndexOutOfBoundsException`. In production this surfaces as `RequestHandler.java:576-580` → `ErrorReply("Index 5 out of bounds for length 5")` + an error-log stack trace. Same shape in `hexpire()` (`HGroup.java:912`).
+
+**Confirmed (trailing junk):** upstream requires the field count to match the argument count exactly:
+
+```c
+    if (numFields != (c->argc - numFieldsAt - 1)) {
+        addReplyError(c, "The `numfields` parameter must match the number of arguments");
+        return;
+    }
+```
+
+Velo ignores the extra argument and answers a result array.
+
+**REFUTED ("numFields = 0 is accepted everywhere"):** `httl k fields 0` and `hexpire k 10 fields 0` are rejected by the arity checks (`data.length < 5` / `< 6`) with `ErrorReply.FORMAT` — Velo does *not* accept them. Only the error *message* differs from upstream ("Parameter `numFields` should be greater than 0"); this is cosmetic and must not be listed as a behavioural defect.
+
+Verdict **PARTIALLY CONFIRMED**, severity **Low** stands for the AIOOBE.
+
+### 78.13 — HSET/HMSET/HSETNX reject empty field or empty value — `CONFIRMED (reproduced)`
+
+```
+78.13 hset empty field   = ErrorReply('syntax error')
+78.13 hset empty value   = ErrorReply('syntax error')
+78.13 hsetnx empty value = ErrorReply('syntax error')
+78.13 hsetex empty value = Int(1)          <- the family is internally inconsistent
+```
+
+Live Redis 7.2.11 (the differential the author asked for):
+
+```
+$ redis-cli -p 31999 hset k6 "" v      -> 1
+$ redis-cli -p 31999 hset k6 f ""      -> 1
+$ redis-cli -p 31999 hsetnx k6 g ""    -> 1
+$ redis-cli -p 31999 hgetall k6
+v
+f
+g
+```
+
+Redis accepts empty fields and empty values (they are valid RESP bulk strings). Severity **Low** stands; the author's fix direction (drop the `length == 0` clause) is correct, but the reviewer adds a caveat: the split layout stores the field name inside the derived key `h_f_{key}.{field}` (`RedisHashKeys.fieldKey`, `RedisHashKeys.java:115-117`) — an empty field name yields `h_f_{key}.` which is unambiguous, but the fix must round-trip both an empty field and an empty value in **both** layouts (the HH layout rejects an empty *value* at `RedisHH.put` because `RedisHH.java:60-63` only checks the upper bound — that path is fine; the split path writes the value as a CV, also fine).
+
+### 78.14 — HRANDFIELD option parsing drift — `CONFIRMED (reproduced)`
+
+```
+78.14 hrandfield withvalues only  = ['f', 'v']      <- Redis: ERR value is not an integer or out of range
+78.14 hrandfield extra count      = ['f', 'v']      <- Redis: ERR syntax error
+78.14 hrandfield missing with count = NilReply      <- Redis: *0 (empty array)
+78.14 hrandfield missing no count   = NilReply      <- Redis: $-1 (nil)  ✔ matches
+```
+
+Live Redis 7.2.11:
+
+```
+$ redis-cli -p 31999 hrandfield k7 withvalues        -> ERR value is not an integer or out of range
+$ redis-cli -p 31999 hrandfield k7 3 withvalues 5    -> ERR syntax error
+$ printf 'HRANDFIELD missingkey 3\r\nHRANDFIELD missingkey\r\n' | nc 127.0.0.1 31999 | od -c
+0000000   *   0  \r  \n  $   -   1  \r  \n
+```
+
+i.e. `HRANDFIELD <missing> <count>` → empty array `*0`, `HRANDFIELD <missing>` → nil `$-1`. Upstream source confirms (`unstable:src/t_hash.c`, `hrandfieldWithCountCommand` uses `lookupKeyReadOrReply(..., shared.emptyarray)`, the count-less form uses `shared.null[resp]`).
+
+Velo returns nil for **both** cases (`HGroup.java:1961-1963`, `HGroup.java:1998-2000`), so the "missing key + count" reply type is wrong. Severity **Low** stands; the author's positional-parsing fix direction is accepted.
+
+---
+
+### Recommended fix order
+
+Ordered by severity, blast radius and dependency (one bug = one commit, each with its own RED test):
+
+1. **78.1** (High) — split `HINCRBY` must create/extend the `h_k_` index; otherwise the write is invisible forever. Self-contained, no dependency on the other `hincrby` fixes.
+2. **78.2** (Medium) — widen the `HINCRBY` delta to `long` in `hincrby()`/`hincrby2()`; fixes the protocol rejection *and* the `Integer.MIN_VALUE` sign flip in one change.
+3. **78.3** (Medium) — guard non-finite input/output in `hincrby()`/`hincrby2()` so no raw `NumberFormatException` can escape; also align the error text with upstream (`value is NaN or Infinity`).
+4. **78.4** (Medium) — add the two-sided int64 overflow guard to `hincrby2()`; the split path already has it.
+5. **78.5** (High) — field-TTL semantics: (a) HH `HSET`/`HMSET` overwrite must clear the field TTL, (b) split `HINCRBY` must **keep** the cached TTL in sync with the CV TTL (do **not** clear it — upstream keeps it); update the permanent test `HGroupTest.'test hincrby clears cached ttl after successful increment'`. Do this **after** 78.2-78.4 because it touches the same method.
+6. **78.8** (Medium) — hoist the type pre-check into a helper and apply it to every split-path H command; prevents both the wrong replies and the dual-representation write.
+7. **78.9** (Medium, HSETNX + HSETEX-FXX only) — use `rhk.isLiveByCache(field, now)` for the existence checks. **Do not** change the `HDEL` reply count (Redis answers `1`).
+8. **78.7** (Medium) — make `HSETEX` FNX/FXX all-or-nothing, matching upstream.
+9. **78.6** (Medium) — make `HSETEX KEEPTTL` retain the field TTL on both layouts.
+10. **78.12** (Low) — fix the `numFields` overflow (`data.length < 4L + numFields`) and require an exact argument-count match; do not "fix" the `numFields = 0` case (already an error).
+11. **78.11** (Low) — HEXPIRE-family time validation + reply `2` for past/zero times.
+12. **78.13** (Low) — accept empty field names and empty values in `HSET`/`HMSET`/`HSETNX`; round-trip test on both layouts.
+13. **78.14** (Low) — positional `HRANDFIELD` parsing + empty-array reply for a missing key with a count.
+14. **78.10** (Medium, last) — the arithmetic scale of the `incrbyfloat` family; the root cause is shared with the string module (`DGroup.decrBy`, `IGroup`), so it needs a product decision (global `doubleScale` semantics vs. per-command precision) before it is fixed. Fix the hash side without changing the string module's behaviour.
+
+### Reviewer checklist outcome
+
+All 14 items of the author's *Reviewer checklist* were executed. Every claim in the report was checked against the code at `e16e619a`; two sub-claims did not survive (78.9 HDEL, 78.5 "Redis clears the TTL on HINCRBY"), one sub-claim was wrong in the other direction (78.3 `inf`/`nan` are already rejected), and one sub-claim was already an error (78.12 `numFields = 0`). No new finding was raised by the reviewer that is not already in the report.
+
+## Author Response (AI agent 1, round 1)
+
+**Method:** every reviewer refutation was re-verified independently before agreeing — JDK 21 repro for 78.3, the Redis upstream `unstable` source/test suite at `~/ws/redis` for 78.5/78.9 (`git show unstable:src/t_hash.c`, `git show unstable:tests/unit/type/hash-field-expire.tcl`), and a code re-trace for 78.12. No verdict is agreed on trust.
+
+### Per-finding response
+
+- **78.1, 78.2, 78.4, 78.6, 78.7, 78.8, 78.10, 78.11, 78.13, 78.14** — **AGREE** with `CONFIRMED (reproduced)` as written. No corrections to make; fix directions accepted.
+
+- **78.3 — AGREE with the refinement; my `inf`/`nan` sub-claim was wrong.** My parenthetical "`Double.parseDouble("inf")/("nan") do not throw`" is false: Java accepts only the exact spellings `NaN` / `Infinity` (any case deviation throws). JDK 21 repro:
+
+  ```
+  parseDouble("inf")      throws: For input string: "inf"
+  parseDouble("nan")      throws: For input string: "nan"
+  parseDouble("Infinity") = Infinity
+    BigDecimal.valueOf throws: Character I is neither a decimal digit number, decimal point, nor "e" notation exponential mark.
+  parseDouble("NaN")      = NaN
+    BigDecimal.valueOf throws: Character N is neither a decimal digit number, ...
+  parseDouble("1e400")    = Infinity
+    BigDecimal.valueOf throws: Character I is neither a decimal digit number, ...
+  ```
+
+  This matches the reviewer's transcripts byte-for-byte (`BigDecimal.valueOf(d)` is `new BigDecimal(Double.toString(d))`, hence the `Character I/N …` message, not `Infinite or NaN`). Defect scope is corrected to: delta `1e400` / `Infinity` / `NaN`, and any stored non-finite value. Severity Medium stands.
+
+- **78.5 — AGREE with the premise correction; my "Redis clears the TTL on HINCRBY" reading was inverted.** Independently confirmed in the upstream tree (not from the reviewer's quote):
+
+  ```
+  $ git show unstable:src/t_hash.c | grep -n HASH_SET_KEEP_TTL
+  2499:    hashTypeSet(c->db, o,c->argv[2]->ptr,new,HASH_SET_TAKE_VALUE | HASH_SET_KEEP_TTL);   // hincrbyCommand
+  2557:    hashTypeSet(c->db, o,c->argv[2]->ptr,new,HASH_SET_TAKE_VALUE | HASH_SET_KEEP_TTL);   // hincrbyfloatCommand
+
+  $ git show unstable:tests/unit/type/hash-field-expire.tcl   # lines 901-907
+  test {HINCRBY - preserve expiration time of the field} {
+      r del h1
+      r hset h1 f1 10
+      r hpexpire h1 20 FIELDS 1 f1
+      assert_equal [r HINCRBY h1 f1 2] 12
+      assert_range [r HPTTL h1 FIELDS 1 f1] 1 20
+  }
+  ```
+
+  Also confirmed the HSET side that completes the corrected picture: `hsetCommand` (`t_hash.c:2102+`) passes no `HASH_SET_KEEP_TTL` → HSET **clears**; and `hsetexCommand` (`t_hash.c:2393-2396`) adds `HASH_SET_KEEP_TTL` only when an expiry option (EX/PX/EXAT/PXAT/KEEPTTL) is present. The HEXPIRE doc sentence I leaned on ("commands that … overwrite the contents … including HSET") means literal value replacement (HSET), not arithmetic alteration (HINCRBY) — upstream is unambiguous.
+
+  Consequently I **withdraw my suggested fix direction for the split-HINCRBY half** (it said "clear CV TTL + cache like HSET" — that would have introduced a new Redis incompatibility; Velo's HH path preserving the TTL was already correct, and the split CV-preserving behavior from `fe48c5f1` is correct too). The corrected defects and fixes:
+  1. HH `HSET`/`HMSET` overwrite keeps the field TTL → silent data loss (the High half) — fix `hmset2()` to clear (`putExpireAt(field, NO_EXPIRE)` / 3-arg put).
+  2. Split `HINCRBY`/`HINCRBYFLOAT` clears the cached TTL while the CV keeps it → cache/CV desync — fix by keeping the cache entry in sync with the preserved CV TTL (i.e. remove the `putCachedExpireAt(field, NO_EXPIRE)` block at HGroup.java:1480-1485), and update `HGroupTest.'test hincrby clears cached ttl after successful increment'` (2585-2619) which encodes the desync.
+
+  The finding's *Suggested fix direction* below is amended accordingly.
+
+- **78.9 — AGREE; the HDEL half is retracted.** Upstream is explicit and deliberate:
+
+  ```
+  $ git show unstable:tests/unit/type/hash-field-expire.tcl   # lines 561-563
+  # Verify HDEL not ignore expired field. It is too much overhead to check
+  # if the field is expired before deletion.
+  assert_equal [r HDEL h1 01] "1"
+  ```
+
+  Redis answers 1 for an expired field; Velo answers 1; nothing to fix — changing it would *break* compatibility. 78.9's scope is now HSETNX (2253-2255) and HSETEX FNX/FXX (1878-1883) only.
+
+- **78.12 — AGREE with the refutation as tested, with one residual nuance.** The reviewer is right that `HTTL/HPEXPIRE/HPERSIST/HEXPIRE*/HSETEX k FIELDS 0` are rejected (`data.length < 5` / `< 6` → FORMAT), so my "accepted everywhere" was wrong. However the two equality-checked commands still accept it: `HGETDEL k FIELDS 0` (argc 4 passes `data.length != 4 + numFields` at HGroup.java:1182 with `4 == 4+0`) and `HGETEX k FIELDS 0` (passes HGroup.java:1336 with `4 == 4+0`) both return an **empty array** where Redis errors (HGETDEL argc 4 violates arity -5 → "wrong number of arguments"; upstream separately requires `numfields > 0`). Velo never enforces `CommandEntry.arity` — grep shows no caller outside the registry itself. This folds naturally into the accepted fix ("require exact argument-count match"): add `numFields <= 0` rejection there, or enforce arity centrally. Not a new finding — a scope note for the 78.12 fix.
+
+### Fix order
+
+Accepted as proposed by the reviewer: **78.1 → 78.2 → 78.3 → 78.4 → 78.5 → 78.8 → 78.9 (HSETNX/HSETEX only) → 78.7 → 78.6 → 78.12 → 78.11 → 78.13 → 78.14 → 78.10** (78.10 last, pending the `doubleScale` product decision; hash-side fix must not change string-module behavior). One bug = one commit, TDD first, JaCoCo on changed lines, per the workflow.
 
 ## Fix Log (AI agent 1, round 1 fix phase)
 
@@ -512,17 +966,17 @@ Baseline: `review/hgroup` @ `19d3b14f`. Test harness pattern: `InMemoryGetSet` +
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 78.1 | split HINCRBY on missing hash never creates index | High | Correctness | pending | pending |
-| 78.2 | HINCRBY delta int32 / MIN_VALUE sign flip | Medium | Protocol compat | pending | pending |
-| 78.3 | HH HINCRBYFLOAT non-finite → raw NFE | Medium | Correctness | pending | pending |
-| 78.4 | HH HINCRBY overflow wraps | Medium | Correctness | pending | pending |
-| 78.5 | field TTL on overwrite: layouts diverge, HH HSET keeps TTL, split HINCRBY cache/CV split | High | Correctness | pending | pending |
-| 78.6 | HSETEX KEEPTTL clears TTL | Medium | Protocol compat | pending | pending |
-| 78.7 | HSETEX FNX/FXX per-field, partial writes | Medium | Protocol compat | pending | pending |
-| 78.8 | split mode: no WRONGTYPE; HSET creates dual-representation key | Medium | Protocol compat | pending | pending |
-| 78.9 | write paths use unfiltered index (expired fields "exist") | Medium | Correctness | pending | pending |
-| 78.10 | HINCRBYFLOAT scale-2 rounding loses increments | Medium | Protocol compat | pending | pending |
-| 78.11 | HEXPIRE-family: no negative/zero/past validation, reply 2 missing | Low | Protocol compat | pending | pending |
-| 78.12 | numfields overflow → AIOOBE; 0/trailing args accepted | Low | Edge case | pending | pending |
-| 78.13 | HSET/HMSET/HSETNX reject empty field/value | Low | Protocol compat | pending | pending |
-| 78.14 | HRANDFIELD parsing + missing-key-with-count reply drift | Low | Protocol compat | pending | pending |
+| 78.1 | split HINCRBY on missing hash never creates index | High | Correctness | CONFIRMED (reproduced) | open — fix |
+| 78.2 | HINCRBY delta int32 / MIN_VALUE sign flip | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix |
+| 78.3 | HH HINCRBYFLOAT non-finite → raw NFE | Medium | Correctness | PARTIALLY CONFIRMED (`inf`/`nan` already rejected; `1e400`/`Infinity`/`NaN`/stored-non-finite affected) | open — fix |
+| 78.4 | HH HINCRBY overflow wraps | Medium | Correctness | CONFIRMED (reproduced) | open — fix |
+| 78.5 | field TTL on overwrite: layouts diverge, HH HSET keeps TTL, split HINCRBY cache/CV split | High | Correctness | PARTIALLY CONFIRMED (premise corrected: Redis **keeps** the TTL on HINCRBY; the HH-HSET half and the split cache/CV mismatch half stand) | open — fix |
+| 78.6 | HSETEX KEEPTTL clears TTL | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix |
+| 78.7 | HSETEX FNX/FXX per-field, partial writes | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix |
+| 78.8 | split mode: no WRONGTYPE; HSET creates dual-representation key | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix |
+| 78.9 | write paths use unfiltered index (expired fields "exist") | Medium | Correctness | PARTIALLY CONFIRMED (HSETNX + HSETEX-FXX confirmed; the HDEL half is REFUTED — Redis also answers 1) | open — fix |
+| 78.10 | HINCRBYFLOAT scale-2 rounding loses increments | Medium | Protocol compat | CONFIRMED (reproduced) | open — fix (last; shared root with the string module) |
+| 78.11 | HEXPIRE-family: no negative/zero/past validation, reply 2 missing | Low | Protocol compat | CONFIRMED (reproduced) | open — fix |
+| 78.12 | numfields overflow → AIOOBE; 0/trailing args accepted | Low | Edge case | PARTIALLY CONFIRMED (overflow → AIOOBE and trailing junk confirmed; "numFields 0 accepted" REFUTED — Velo answers `format`) | open — fix |
+| 78.13 | HSET/HMSET/HSETNX reject empty field/value | Low | Protocol compat | CONFIRMED (reproduced) | open — fix |
+| 78.14 | HRANDFIELD parsing + missing-key-with-count reply drift | Low | Protocol compat | CONFIRMED (reproduced) | open — fix |
