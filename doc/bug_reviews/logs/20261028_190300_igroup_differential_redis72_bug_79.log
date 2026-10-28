@@ -1,0 +1,90 @@
+# Bug 79 — IGroup discovery evidence (2026-10-28)
+
+Author-side evidence for `bug_79_igroup_commands_review_round_1.md`.
+Host: same machine as bug_74/bug_78 rounds. JDK 21, Redis 7.2.11 (`/home/kerry/bin/redis-server`).
+
+## 1. JDK 21 repro (`/tmp/opencode/Bug79Repro.java`)
+
+$ java /tmp/opencode/Bug79Repro.java
+by                    = -9223372036854775808
+-by (wraps!)          = -9223372036854775808
+-by == Long.MIN_VALUE = true
+Long.MAX_VALUE + by   = -1
+current=0  -> guard(0 > -1)=true => ERR overflow (expected Redis: -9223372036854775808)
+current=-5 -> guard(-5 > -1)=false => newValue=9223372036854775803 (expected Redis: ERR overflow)
+
+INCRBYFLOAT k 0.001 -> newValue=0.00  reply='0.00'
+INCRBYFLOAT(10.5, 0.1) -> 10.60 (Redis: 10.6)
+
+value_fields='*' -> valueFieldsArray length=1, [0]=*
+map.size()=3 == array.length(1)? false
+subMap={*=null}  -> serialized value={"*":null} for EVERY key
+
+'test1.json'.matches("test*") = false
+'test'.matches("test*")      = true
+'testt'.matches("test*")     = true
+'test.csv'.matches("test.*") = true
+invalid regex throws: PatternSyntaxException: Unclosed character class near index 8
+test[.csv
+        ^
+
+Long.parseLong("+5")   = 5
+Long.parseLong("05")   = 5
+Long.parseLong("-0")   = 0
+Double.parseDouble("1.5d") = 1.5
+Double.parseDouble(" 1.5 ") = 1.5
+
+## 2. Live Redis 7.2.11 differential (port 31991, started for this round)
+
+$ redis-server --version
+Redis server v=7.2.11 sha=d4c381df:0 malloc=jemalloc-5.3.0 bits=64 build=e3db856fd57ff434
+
+# 79.2 — INCRBY delta Long.MIN_VALUE
+$ redis-cli -p 31991 set k1 0 >/dev/null; redis-cli -p 31991 incrby k1 -9223372036854775808
+-9223372036854775808                      <- representable result returned
+$ redis-cli -p 31991 set k2 -5 >/dev/null; redis-cli -p 31991 incrby k2 -9223372036854775808
+ERR increment or decrement would overflow
+$ redis-cli -p 31991 get k2
+-5                                         <- value untouched
+$ redis-cli -p 31991 incrby k2b -9223372036854775807
+ERR increment or decrement would overflow
+
+# 79.1 — INCRBYFLOAT precision / trailing zeros
+$ redis-cli -p 31991 del f1 f2 f3 f4
+$ redis-cli -p 31991 incrbyfloat f1 0.001   -> 0.001
+$ redis-cli -p 31991 incrbyfloat f1 0.001   -> 0.002
+$ redis-cli -p 31991 incrbyfloat f1 0.001   -> 0.003
+$ redis-cli -p 31991 set f2 10.50 >/dev/null; redis-cli -p 31991 incrbyfloat f2 0.1
+10.6                                      <- no trailing zero, full precision
+$ redis-cli -p 31991 set f3 0 >/dev/null; redis-cli -p 31991 incrbyfloat f3 0.1
+0.1
+
+# 79.8 — numeric literal strictness
+$ redis-cli -p 31991 incrby p1 +5    -> ERR value is not an integer or out of range
+$ redis-cli -p 31991 incrby p1 05    -> ERR value is not an integer or out of range
+$ redis-cli -p 31991 incrby p1 -0    -> ERR value is not an integer or out of range
+$ redis-cli -p 31991 incrbyfloat p2 1.5d      -> ERR value is not a valid float
+$ redis-cli -p 31991 incrbyfloat p2 " 1.5 "   -> ERR value is not a valid float
+
+# 79.9 / 79.10 — INFO section matching
+$ redis-cli -p 31991 info SERVER | head -1   -> # Server   (case-insensitive, single section)
+$ redis-cli -p 31991 info Server | head -1   -> # Server
+$ redis-cli --raw -p 31991 info foo          -> (empty output — empty bulk, no sections)
+$ redis-cli --raw -p 31991 info all | grep -c '^#'     -> 13
+$ redis-cli --raw -p 31991 info everything | grep -c '^#' -> 13
+$ redis-cli -p 31991 info server memory | head -2      -> # Server / # Memory (multi-section)
+
+## 3. Velo-side expectations (from code inspection at reviewed commit f7c06ee2)
+
+- INCRBY k -9223372036854775808, current=0  → IGroup.java:153 `-by` == Long.MIN_VALUE →
+  DGroup.java:415-418 guard `longValue > Long.MAX_VALUE + by` (= -1) fires → ERR increment or
+  decrement would overflow (Redis: returns the value).
+- INCRBY k -9223372036854775808, current=-5 → guard does not fire →
+  `longValue - by` wraps → stores +9223372036854775803 and replies with it (Redis: overflow error,
+  value untouched).
+- INCRBYFLOAT k 0.001 → DGroup.java:404-405 `setScale(2, HALF_UP)` on value and delta → 0.00 - (-0.00)
+  = 0.00, stored and replied "0.00" via DoubleReply (DoubleReply.java:36 setScale(2).toPlainString()).
+- ingest json value_fields=* → IGroup.java:352 `["*"]` + 358-366 subMap {"*": null} →
+  value `{"*":null}` for every ingested key.
+- ingest file_pattern=test* → IGroup.java:269 `file.getName().matches("test*")` — Java regex,
+  `test1.json` does not match; `testt` does.
