@@ -982,6 +982,42 @@ Accepted as proposed by the reviewer: **78.1 → 78.2 → 78.3 → 78.4 → 78.5
 | `d5d1c510` + `09a950ce` | the split `HINCRBY` reads the field TTL from the index (`RedisHashKeys.expireAtByField`) instead of the field cv | `docs/plans/2026-05-27-hash-field-ttl-cache-refactor-plan.md` states that the cached TTL must be left unchanged on `HINCRBY`, the index is the source for the aggregate commands and the extra cv read is not needed |
 | `607db5ad` | `checkSplitKeyType` uses `BaseCommand.getShortType` (added by the reviewer of this round) instead of reading the whole cv | the type check only needs the type, the short type byte is enough and it is much cheaper |
 
+### Live differential (Velo vs Redis 7.2.11)
+
+**Setup:** `./gradlew jar` → `build/libs/velo-1.0.0.jar`, started with a dedicated config (`dir=/tmp/opencode/velo-e2e`, `net.listenAddresses=127.0.0.1:41000`) on port **41000**; the reference server is **Redis 7.2.11** on port **31999**. The split storage layout was reached with the `h_not_hh_` key prefix, the compact (HH) layout is the default. The same command was sent to both servers and the replies were compared.
+
+**Result: 38 of 44 cases are byte identical to Redis**, the differences are only error texts and one deliberate divergence (see below).
+
+| Finding | Command | Velo | Redis 7.2.11 |
+|---|---|---|---|
+| 78.1 | `hincrby h_not_hh_e2e1 f 1` → `hlen` → `hgetall` → `hdel` | `1` → `1` → `f,1` → `1` | identical |
+| 78.2 | `hincrby e2e2 f 2147483648` | `2147483648` | identical |
+| 78.2 | `hincrby e2e2 f -2147483648` | `0` | identical |
+| 78.3 | `hincrbyfloat e2e3 f Infinity` | `ERR value is NaN or Infinity` | identical |
+| 78.4 | `hset e2e4 f 9223372036854775807` + `hincrby e2e4 f 1` | `ERR increment or decrement would overflow` | identical |
+| 78.4 | `hset e2e4 f -9223372036854775808` + `hincrby e2e4 f -1` | `ERR increment or decrement would overflow` | identical |
+| 78.8 | `set e2e8 hello` then `hget` / `hgetall` / `hlen` / `hmget` / `hvals` / `hdel` / `hset` / `hsetnx` / `hincrby` / `hrandfield` | `ERR wrong type` for **all ten** commands, the string value is untouched (`get e2e8` → `hello`, `type e2e8` → `string`) | `WRONGTYPE Operation against a key holding the wrong kind of value` for all ten commands |
+| 78.10 | `hincrbyfloat e2e10 f 0.001` twice → `hget` | `0.001` → `0.002` → `0.002` | identical |
+| 78.10 | `hincrbyfloat e2e10b f 10.50` then `+ 0.1` → `hget` | `10.5` → `10.6` → `10.6` | identical |
+| 78.12 | `httl e2e12 fields 2147483645 f` | `ERR syntax error` (no `ArrayIndexOutOfBoundsException`, the server stayed up) | not available in 7.2 |
+| 78.13 | `hset e2e13 "" v`, `hset e2e13 f ""`, `hgetall`, `hlen`, `hsetnx e2e13 g ""` | `1`, `1`, `["", v, f, ""]`, `2`, `1` | identical |
+| 78.14 | `hrandfield e2e14 withvalues` | `ERR value is not an integer or out of range` | identical |
+| 78.14 | `hrandfield e2e14 2 withvalues 3` | `ERR syntax error` | identical |
+| 78.14 | `hrandfield missing14 3` | `*0` (empty array, raw protocol) | identical |
+| 78.14 | `hrandfield missing14` | `$-1` (nil, raw protocol) | identical |
+| 78.14 | `hrandfield e2e14 1` | `f` (a bulk string, not an array) | identical |
+
+**Differences that remain (all are error texts, the behaviour is the same):**
+
+| Case | Velo | Redis 7.2.11 |
+|---|---|---|
+| `hincrby e2e2 f 99999999999999999999` | `ERR not integer` | `ERR value is not an integer or out of range` |
+| `hincrbyfloat e2e3 f NaN` | `ERR value is NaN or Infinity` | `ERR value is not a valid float` |
+| `hincrbyfloat e2e3 f inf` | `ERR not float` | `ERR value is NaN or Infinity` |
+| the wrong type error (78.8) | `-ERR wrong type` | `-WRONGTYPE Operation against a key holding the wrong kind of value` |
+
+**One deliberate divergence:** `HINCRBYFLOAT e2e3 f 1e400` — Redis uses a `long double`, so it accepts the value and answers a 400 digit number, Velo uses a `double`, so it answers `ERR value is NaN or Infinity`. Velo does not have a `long double`, the error is the safe answer.
+
 ### Notes for the re-reviewer
 
 - The `HINCRBYFLOAT` reply of the hash commands changed from a `DoubleReply` to a `BulkReply`, because redis replies with a bulk string (`addReplyBulkCBuffer`) and the `DoubleReply` applied the global `doubleScale` to the value (`10.60` instead of `10.6`). The string module (`INCRBYFLOAT` / `DECRBYFLOAT`) still replies with a `DoubleReply` and still uses `doubleScale`, it was not touched.
