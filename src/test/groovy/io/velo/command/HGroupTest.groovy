@@ -653,6 +653,26 @@ httl
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
         reply == ErrorReply.NOT_FLOAT
+
+        // bug 78.1: split mode must create the hash field index, otherwise the
+        // written field is invisible to every aggregate command
+        when: 'split mode, the hash key does not exist yet'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashNew'))
+        inMemoryGetSet.remove(slot, RedisHashKeys.fieldKey('hashNew', 'field'))
+        reply = hGroup.execute('hincrby hashNew field 1')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        // the field index is created
+        def newKeysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashNew'), 0, 0)
+        newKeysCv != null
+        RedisHashKeys.decode(newKeysCv.cv().getCompressedData(), false).contains('field')
+        // and all the aggregate commands see the field
+        (hGroup.execute('hlen hashNew') as IntegerReply).integer == 1
+        (hGroup.execute('hgetall hashNew') as MultiBulkReply).replies.length == 2
+        // and the field can be removed again
+        (hGroup.execute('hdel hashNew field') as IntegerReply).integer == 1
     }
 
     def 'test hkeys'() {

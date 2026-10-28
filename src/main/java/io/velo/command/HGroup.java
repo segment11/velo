@@ -1478,10 +1478,16 @@ public class HGroup extends BaseCommand {
         }
 
         if (reply instanceof IntegerReply || reply instanceof DoubleReply) {
-            if (oldCachedExpireAt != CompressedValue.NO_EXPIRE && rhk != null) {
-                rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
-                saveRedisHashKeys(rhk, key);
+            // the field index must exist, otherwise the written field is invisible
+            // to every aggregate command, like hlen, hgetall, hkeys and hdel
+            if (rhk == null) {
+                rhk = new RedisHashKeys();
             }
+            rhk.add(field);
+            if (oldCachedExpireAt != CompressedValue.NO_EXPIRE) {
+                rhk.putCachedExpireAt(field, CompressedValue.NO_EXPIRE);
+            }
+            saveRedisHashKeys(rhk, key);
         }
 
         return reply;
