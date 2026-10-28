@@ -48,6 +48,15 @@ hpttl
 httl
 '''.readLines().collect { it.trim() }.findAll { it }
 
+    /**
+     * Puts a string value at the given key, so the hash commands see a key of another type.
+     */
+    private static void putStringKey(InMemoryGetSet inMemoryGetSet, short slot, String key) {
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.compressedData = 'hello'.bytes
+        inMemoryGetSet.put(slot, key, 0, cv)
+    }
+
     def 'test parse slot'() {
         given:
         def data2 = new byte[2][]
@@ -226,6 +235,14 @@ httl
         reply = hGroup.execute('hdel a >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hdel wrongTypeKey field')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hello'() {
@@ -369,6 +386,14 @@ httl
         reply = hGroup.execute('hexists a >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hexists wrongTypeKey field')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hget'() {
@@ -460,6 +485,14 @@ httl
         reply = hGroup.execute('hstrlen a >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hget wrongTypeKey field')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hgetall'() {
@@ -553,6 +586,14 @@ httl
         reply = hGroup.execute('hgetall >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hgetall wrongTypeKey')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hincrby'() {
@@ -791,6 +832,14 @@ httl
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 9L
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hincrby wrongTypeKey field 1')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hkeys'() {
@@ -899,6 +948,14 @@ httl
         reply = hGroup.execute('hkeys >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hkeys wrongTypeKey')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hmget'() {
@@ -973,6 +1030,14 @@ httl
         reply = hGroup.execute('hmget a >key field1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hmget wrongTypeKey field')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hmset'() {
@@ -1158,6 +1223,14 @@ httl
         def splitTtlAfter = (hGroup.execute('httl hashTtl fields 1 field') as MultiBulkReply).replies[0]
         then:
         (splitTtlAfter as IntegerReply).integer == -1
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hmset wrongTypeKey field value')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hset returns newly added field count'() {
@@ -1385,6 +1458,14 @@ httl
         reply = hGroup.execute('hrandfield a a -5')
         then:
         reply == ErrorReply.NOT_INTEGER
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hrandfield wrongTypeKey')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hscan'() {
@@ -1733,6 +1814,14 @@ httl
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
 
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hgetdel wrongTypeKey fields 1 field')
+        then:
+        reply == ErrorReply.WRONG_TYPE
         cleanup:
         LocalPersist.instance.hashSaveMemberTogether = false
     }
@@ -1934,6 +2023,14 @@ httl
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] == NilReply.INSTANCE
 
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hgetex wrongTypeKey fields 1 field')
+        then:
+        reply == ErrorReply.WRONG_TYPE
         cleanup:
         LocalPersist.instance.hashSaveMemberTogether = false
     }
@@ -2107,6 +2204,14 @@ httl
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
 
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hsetex wrongTypeKey fields 1 field value')
+        then:
+        reply == ErrorReply.WRONG_TYPE
         cleanup:
         LocalPersist.instance.hashSaveMemberTogether = false
     }
@@ -2170,6 +2275,14 @@ httl
         reply = hGroup.execute('hsetnx a field _0')
         then:
         reply == ErrorReply.SYNTAX
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hsetnx wrongTypeKey field value')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hvals'() {
@@ -2254,6 +2367,14 @@ httl
         reply = hGroup.execute('hvals >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hvals wrongTypeKey')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test httl'() {
@@ -2399,6 +2520,14 @@ httl
         reply = hGroup.execute('httl a fields 1 >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('httl wrongTypeKey fields 1 field')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hexpire'() {
@@ -2588,6 +2717,14 @@ httl
         reply = hGroup.execute('hexpire a 10 fields 1 >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+        // bug 78.8: the split layout stores the hash out of line, the type of the
+        // main key must be checked, redis answers WRONGTYPE for another type
+        when:
+        LocalPersist.instance.hashSaveMemberTogether = false
+        putStringKey(inMemoryGetSet, slot, 'wrongTypeKey')
+        reply = hGroup.execute('hexpire wrongTypeKey 10 fields 1 field')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test hexpire writes cache and persists to cv storage'() {

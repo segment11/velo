@@ -425,6 +425,24 @@ public class HGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
+    /**
+     * Checks the type of the main key for the split storage layout.
+     * <p>
+     * The split layout stores the hash out of line, the main key cv is never read by the
+     * hash commands, so a key of another type looks like an empty hash. Redis answers
+     * WRONGTYPE for those.
+     *
+     * @param slotWithKeyHash the main key
+     * @return {@link ErrorReply#WRONG_TYPE} if the key exists but is not a hash, otherwise null
+     */
+    private Reply checkSplitKeyType(SlotWithKeyHash slotWithKeyHash) {
+        var mainKeyCv = getCv(slotWithKeyHash);
+        if (mainKeyCv != null && !CompressedValue.isHash(mainKeyCv.getDictSeqOrSpType())) {
+            return ErrorReply.WRONG_TYPE;
+        }
+        return null;
+    }
+
     private RedisHashKeys getRedisHashKeys(String key) {
         var keysKey = RedisHashKeys.keysKey(key);
 
@@ -513,6 +531,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -647,6 +669,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
@@ -730,6 +756,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -927,6 +957,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -1057,6 +1091,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
@@ -1110,6 +1148,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -1197,6 +1239,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -1351,6 +1397,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -1459,6 +1509,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
@@ -1588,6 +1642,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
 
         var rhk = getRedisHashKeys(key);
@@ -1664,6 +1722,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
 
         var replies = new Reply[fields.size()];
@@ -1722,6 +1784,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -1891,6 +1957,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -1983,6 +2053,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -2131,11 +2205,9 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        // Split mode only reads the h_k_ index, so the main key type is never checked and any other
-        // type would look like an empty hash. Check it up front, Redis answers WRONGTYPE for those.
-        var mainKeyCv = getCv(slotWithKeyHash);
-        if (mainKeyCv != null && !CompressedValue.isHash(mainKeyCv.getDictSeqOrSpType())) {
-            return ErrorReply.WRONG_TYPE;
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
         }
 
         if (isUseHH(keyBytes)) {
@@ -2270,6 +2342,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
@@ -2328,6 +2404,10 @@ public class HGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var typeReply = checkSplitKeyType(slotWithKeyHash);
+        if (typeReply != null) {
+            return typeReply;
+        }
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
         if (rhk == null) {
