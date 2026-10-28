@@ -1688,6 +1688,12 @@ httl
         then:
         reply == ErrorReply.NOT_INTEGER
 
+        // bug 78.12: the number of fields must be greater than 0
+        when:
+        reply = hGroup.execute('hgetdel hashA FIELDS 0')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
         when:
         reply = hGroup.execute('hgetdel hashA FIELDS 1 field extra')
         then:
@@ -1851,6 +1857,12 @@ httl
 
         when: 'test numFields invalid integer'
         reply = hGroup.execute('hgetex hashA FIELDS abc')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        // bug 78.12: the number of fields must be greater than 0
+        when:
+        reply = hGroup.execute('hgetex hashA FIELDS 0')
         then:
         reply == ErrorReply.NOT_INTEGER
 
@@ -2046,8 +2058,7 @@ httl
         when:
         def reply = hGroup.execute('hsetex hashA FIELDS 2 field1 value1 field2 value2')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         // Verify fields were set
         def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
@@ -2063,7 +2074,7 @@ httl
         inMemoryGetSet.remove(slot, 'hashA')
         reply = hGroup.execute('hsetex hashA FIELDS 2 field1 value1 field2 value2')
         then:
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         and:
         def rhhCv = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
@@ -2081,17 +2092,21 @@ httl
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
+        // bug 78.12: the number of fields must be greater than 0
+        when:
+        reply = hGroup.execute('hsetex hashA FIELDS 0')
+        then:
+        reply == ErrorReply.FORMAT
+
         when: 'test fnx option - field does not exist so should set'
         reply = hGroup.execute('hsetex hashA fnx FIELDS 1 newfield newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test fxx option - field exists so should set'
         reply = hGroup.execute('hsetex hashA fxx FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         // bug 78.9: an expired field does not exist, redis answers 1 for fnx and
         // 0 for fxx
@@ -2102,8 +2117,7 @@ httl
         hGroup.execute('hset hashFnx field value')
         reply = hGroup.execute('hsetex hashFnx fnx FIELDS 1 field value2')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply == IntegerReply.REPLY_0
         (hGroup.execute('hget hashFnx field') as BulkReply).raw == 'value'.bytes
 
         when: 'split mode, the field exists and is live, fxx sets it'
@@ -2113,8 +2127,7 @@ httl
         hGroup.execute('hset hashFxx field value')
         reply = hGroup.execute('hsetex hashFxx fxx FIELDS 1 field value2')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
         (hGroup.execute('hget hashFxx field') as BulkReply).raw == 'value2'.bytes
 
         when: 'split mode, the field is expired and fnx is used'
@@ -2125,8 +2138,7 @@ httl
         hGroup.execute("hpexpireat hashExpired ${System.currentTimeMillis() - 60000} fields 1 field")
         reply = hGroup.execute('hsetex hashExpired fnx FIELDS 1 field value2')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
         (hGroup.execute('hget hashExpired field') as BulkReply).raw == 'value2'.bytes
         (hGroup.execute('hlen hashExpired') as IntegerReply).integer == 1
 
@@ -2137,8 +2149,7 @@ httl
         hGroup.execute("hpexpireat hashExpired ${System.currentTimeMillis() - 60000} fields 1 field")
         reply = hGroup.execute('hsetex hashExpired fxx FIELDS 1 field value2')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply == IntegerReply.REPLY_0
         hGroup.execute('hget hashExpired field') == NilReply.INSTANCE
 
         // bug 78.7: fnx and fxx are hash level conditions, all the fields are set
@@ -2151,8 +2162,7 @@ httl
         hGroup.execute('hset hashFnxAll a 1')
         reply = hGroup.execute('hsetex hashFnxAll fnx FIELDS 2 a 9 b 8')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply == IntegerReply.REPLY_0
         (hGroup.execute('hget hashFnxAll a') as BulkReply).raw == '1'.bytes
         hGroup.execute('hget hashFnxAll b') == NilReply.INSTANCE
 
@@ -2163,8 +2173,7 @@ httl
         hGroup.execute('hset hashFxxAll a 1')
         reply = hGroup.execute('hsetex hashFxxAll fxx FIELDS 2 a 9 b 8')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply == IntegerReply.REPLY_0
         (hGroup.execute('hget hashFxxAll a') as BulkReply).raw == '1'.bytes
         hGroup.execute('hget hashFxxAll b') == NilReply.INSTANCE
 
@@ -2174,8 +2183,7 @@ httl
         hGroup.execute('hset hashFnxAllHH a 1')
         reply = hGroup.execute('hsetex hashFnxAllHH fnx FIELDS 2 a 9 b 8')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply == IntegerReply.REPLY_0
         (hGroup.execute('hget hashFnxAllHH a') as BulkReply).raw == '1'.bytes
         hGroup.execute('hget hashFnxAllHH b') == NilReply.INSTANCE
 
@@ -2184,8 +2192,7 @@ httl
         hGroup.execute('hset hashFxxAllHH a 1')
         reply = hGroup.execute('hsetex hashFxxAllHH fxx FIELDS 2 a 9 b 8')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply == IntegerReply.REPLY_0
         (hGroup.execute('hget hashFxxAllHH a') as BulkReply).raw == '1'.bytes
         hGroup.execute('hget hashFxxAllHH b') == NilReply.INSTANCE
 
@@ -2194,8 +2201,7 @@ httl
         inMemoryGetSet.remove(slot, RedisHashKeys.keysKey('hashFxxNone'))
         reply = hGroup.execute('hsetex hashFxxNone fxx FIELDS 1 field value')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply == IntegerReply.REPLY_0
         hGroup.execute('hget hashFxxNone field') == NilReply.INSTANCE
 
         when: 'HH mode, fxx on a key that does not exist sets nothing'
@@ -2203,8 +2209,7 @@ httl
         inMemoryGetSet.remove(slot, 'hashFxxNoneHH')
         reply = hGroup.execute('hsetex hashFxxNoneHH fxx FIELDS 1 field value')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply == IntegerReply.REPLY_0
         hGroup.execute('hget hashFxxNoneHH field') == NilReply.INSTANCE
 
         when: 'test EX option invalid integer'
@@ -2257,66 +2262,56 @@ httl
         when: 'test keepttl option'
         reply = hGroup.execute('hsetex hashA keepttl FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test normal mode with EX option'
         reply = hGroup.execute('hsetex hashA EX 3600 FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test normal mode with PX option'
         reply = hGroup.execute('hsetex hashA PX 3600000 FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test normal mode with PXAT option'
         def pxatTime = System.currentTimeMillis() + 3600000
         reply = hGroup.execute('hsetex hashA PXAT ' + pxatTime + ' FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test normal mode with EXAT option'
         def exatTime = ((System.currentTimeMillis() / 1000) as long) + 3600
         reply = hGroup.execute('hsetex hashA EXAT ' + exatTime + ' FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test HH mode with EX option'
         reply = hGroup.execute('hsetex hashA EX 3600 FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test HH mode with PX option'
         reply = hGroup.execute('hsetex hashA PX 3600000 FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test HH mode with PXAT option'
         pxatTime = System.currentTimeMillis() + 3600000
         reply = hGroup.execute('hsetex hashA PXAT ' + pxatTime + ' FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test HH mode with EXAT option'
         exatTime = ((System.currentTimeMillis() / 1000) as long) + 3600
         reply = hGroup.execute('hsetex hashA EXAT ' + exatTime + ' FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         when: 'test HH mode with keepttl option'
         reply = hGroup.execute('hsetex hashA keepttl FIELDS 1 field1 newvalue')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply == IntegerReply.REPLY_1
 
         // bug 78.6: keepttl retains the ttl of the field, like redis does
         when: 'split mode, keepttl keeps the field ttl'
@@ -2691,6 +2686,18 @@ httl
         then:
         reply == ErrorReply.FORMAT
 
+        // bug 78.12: the numfields argument must not overflow and the field count
+        // must match the number of arguments
+        when:
+        reply = hGroup.execute('httl a fields 2147483645 field0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('httl a fields 3 field0 field1 field2 extra')
+        then:
+        reply == ErrorReply.SYNTAX
+
         when:
         reply = hGroup.execute('httl >key fields 1 field0')
         then:
@@ -2885,6 +2892,18 @@ httl
 
         when:
         reply = hGroup.execute('hexpire a 10 fields 3 field0 field1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        // bug 78.12: the numfields argument must not overflow and the field count
+        // must match the number of arguments
+        when:
+        reply = hGroup.execute('hexpire a 10 fields 2147483647 field0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = hGroup.execute('hexpire a 10 fields 1 field0 extra')
         then:
         reply == ErrorReply.SYNTAX
 

@@ -737,8 +737,9 @@ public class HGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        // check if we have enough fields
-        if (data.length < 4 + numFields) {
+        // the field count must match the number of arguments, the comparison is
+        // done in long math to avoid an integer overflow
+        if (data.length != 4L + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -938,8 +939,9 @@ public class HGroup extends BaseCommand {
         }
         fieldsIndex++;
 
-        // check if we have enough fields
-        if (data.length < fieldsIndex + numFields) {
+        // the field count must match the number of arguments, the comparison is
+        // done in long math to avoid an integer overflow
+        if (data.length != (long) fieldsIndex + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -1217,11 +1219,13 @@ public class HGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (numFields < 0) {
+        if (numFields <= 0) {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (data.length != 4 + numFields) {
+        // the field count must match the number of arguments, the comparison is
+        // done in long math to avoid an integer overflow
+        if (data.length != 4L + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -1375,11 +1379,13 @@ public class HGroup extends BaseCommand {
         }
         fieldsIndex++;
 
-        if (numFields < 0) {
+        if (numFields <= 0) {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (data.length != fieldsIndex + numFields) {
+        // the field count must match the number of arguments, the comparison is
+        // done in long math to avoid an integer overflow
+        if (data.length != (long) fieldsIndex + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -1934,11 +1940,13 @@ public class HGroup extends BaseCommand {
         }
         idx++;
 
-        if (numFields < 0) {
+        if (numFields <= 0) {
             return ErrorReply.NOT_INTEGER;
         }
 
-        if (data.length != idx + numFields * 2) {
+        // the field count must match the number of arguments, the comparison is
+        // done in long math to avoid an integer overflow
+        if (data.length != (long) idx + numFields * 2L) {
             return ErrorReply.SYNTAX;
         }
 
@@ -1972,10 +1980,10 @@ public class HGroup extends BaseCommand {
                 // an expired field does not exist, redis creates it again
                 var fieldExists = rhk != null && rhk.contains(field) && rhk.isLiveByCache(field, now);
                 if (fnx && fieldExists) {
-                    return new IntegerReply(0);
+                    return IntegerReply.REPLY_0;
                 }
                 if (fxx && !fieldExists) {
-                    return new IntegerReply(0);
+                    return IntegerReply.REPLY_0;
                 }
             }
         }
@@ -2009,7 +2017,7 @@ public class HGroup extends BaseCommand {
         }
 
         saveRedisHashKeys(rhk, key);
-        return new IntegerReply(1);
+        return IntegerReply.REPLY_1;
     }
 
     private Reply hsetex2(LinkedHashMap<String, byte[]> fieldValues, boolean fnx, boolean fxx,
@@ -2024,10 +2032,10 @@ public class HGroup extends BaseCommand {
                 // an expired field does not exist, redis creates it again
                 var fieldExists = rhh != null && rhh.get(field) != null;
                 if (fnx && fieldExists) {
-                    return new IntegerReply(0);
+                    return IntegerReply.REPLY_0;
                 }
                 if (fxx && !fieldExists) {
-                    return new IntegerReply(0);
+                    return IntegerReply.REPLY_0;
                 }
             }
         }
@@ -2049,7 +2057,7 @@ public class HGroup extends BaseCommand {
         }
 
         saveRedisHH(rhh, slotWithKeyHash);
-        return new IntegerReply(1);
+        return IntegerReply.REPLY_1;
     }
 
     private Reply hrandfield() {
