@@ -1866,6 +1866,19 @@ httl
         then:
         reply == ErrorReply.NOT_INTEGER
 
+        // bug 78.11: the expire time must be validated
+        when:
+        reply = hGroup.execute('hgetex hashA EX -5 FIELDS 1 field1')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
+
+        when:
+        reply = hGroup.execute('hgetex hashA PX -5 FIELDS 1 field1')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
+
         when: 'test key too long'
         reply = hGroup.execute('hgetex >key FIELDS 1 field1')
         then:
@@ -2097,6 +2110,19 @@ httl
         reply = hGroup.execute('hsetex hashA FIELDS 0')
         then:
         reply == ErrorReply.FORMAT
+
+        // bug 78.11: the expire time must be validated
+        when:
+        reply = hGroup.execute('hsetex hashA EX -5 FIELDS 1 field1 value1')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
+
+        when:
+        reply = hGroup.execute('hsetex hashA EXAT -5 FIELDS 1 field1 value1')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
 
         when: 'test fnx option - field does not exist so should set'
         reply = hGroup.execute('hsetex hashA fnx FIELDS 1 newfield newvalue')
@@ -2924,6 +2950,86 @@ httl
         reply = hGroup.execute('hexpire wrongTypeKey 10 fields 1 field')
         then:
         reply == ErrorReply.WRONG_TYPE
+
+        // bug 78.11: the time must be validated and a time in the past deletes
+        // the field and answers 2, like redis does
+        when: 'a negative relative time'
+        reply = hGroup.execute('hexpire b -5 fields 1 field0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
+
+        when: 'a time that overflows'
+        reply = hGroup.execute('hexpire b 9999999999999999 fields 1 field0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
+
+        when: 'a negative absolute time'
+        reply = hGroup.execute('hexpireat b -1 fields 1 field0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
+
+        when: 'a millisecond time that overflows'
+        reply = hGroup.execute('hpexpire b 9223372036854775807 fields 1 field0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
+
+        when: 'an absolute time that overflows'
+        reply = hGroup.execute('hexpireat b 9223372036854775807 fields 1 field0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('invalid expire time')
+
+        when: 'a time in the past deletes the field and answers 2, split mode'
+        LocalPersist.instance.hashSaveMemberTogether = false
+        def cvKeysB = Mock.prepareCompressedValueList(1)[0]
+        cvKeysB.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def rhkB = new RedisHashKeys()
+        rhkB.add('field0')
+        cvKeysB.compressedData = rhkB.encode()
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('b'), 0, cvKeysB)
+        def cvFieldB = Mock.prepareCompressedValueList(1)[0]
+        inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('b', 'field0'), 0, cvFieldB)
+        reply = hGroup.execute('hexpireat b 1 fields 1 field0')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as IntegerReply).integer == 2
+        hGroup.execute('hget b field0') == NilReply.INSTANCE
+        hGroup.execute('hlen b') == IntegerReply.REPLY_0
+
+        when: 'a time in the past deletes the field and answers 2, HH mode'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        def cvRhhB = Mock.prepareCompressedValueList(1)[0]
+        cvRhhB.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def rhhB = new RedisHH()
+        rhhB.put('field0', ' '.bytes)
+        cvRhhB.compressedData = rhhB.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvRhhB)
+        reply = hGroup.execute('hexpireat b 1 fields 1 field0')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as IntegerReply).integer == 2
+        hGroup.execute('hget b field0') == NilReply.INSTANCE
+        hGroup.execute('hlen b') == IntegerReply.REPLY_0
+
+        when: 'HH mode, the condition is not met'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        def cvRhhC = Mock.prepareCompressedValueList(1)[0]
+        cvRhhC.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def rhhC = new RedisHH()
+        rhhC.put('field0', ' '.bytes, System.currentTimeMillis() + 10000)
+        cvRhhC.compressedData = rhhC.encode()
+        inMemoryGetSet.put(slot, 'c', 0, cvRhhC)
+        reply = hGroup.execute('hexpire c 20 nx fields 1 field0')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_0
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
     }
 
     def 'test hexpire writes cache and persists to cv storage'() {

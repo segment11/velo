@@ -14,11 +14,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Handles Redis commands starting with letter 'H'.
@@ -435,6 +431,54 @@ public class HGroup extends BaseCommand {
      * @param slotWithKeyHash the main key
      * @return {@link ErrorReply#WRONG_TYPE} if the key exists but is not a hash, otherwise null
      */
+    /**
+     * The error reply for an invalid expire time, like redis answers it.
+     *
+     * @return the error reply
+     */
+    private Reply invalidExpireTime() {
+        return new ErrorReply("invalid expire time in '" + cmd + "' command");
+    }
+
+    /**
+     * Computes the expire time of the hash field ttl options.
+     *
+     * @param option    the option name, ex, px, exat or pxat
+     * @param timeValue the option value in seconds or milliseconds
+     * @param now       the current time in milliseconds
+     * @return the expire time in milliseconds, or -1 if the value is not valid
+     */
+    private long computeFieldExpireAt(String option, long timeValue, long now) {
+        if (timeValue < 0) {
+            // a negative time is not valid
+            return -1;
+        }
+        switch (option) {
+            case "ex" -> {
+                if (timeValue > (Long.MAX_VALUE - now) / 1000) {
+                    return -1;
+                }
+                return now + timeValue * 1000;
+            }
+            case "px" -> {
+                if (timeValue > Long.MAX_VALUE - now) {
+                    return -1;
+                }
+                return now + timeValue;
+            }
+            case "exat" -> {
+                if (timeValue > Long.MAX_VALUE / 1000) {
+                    return -1;
+                }
+                return timeValue * 1000;
+            }
+            default -> {
+                // pxat, the value is an absolute time in milliseconds
+                return timeValue;
+            }
+        }
+    }
+
     private Reply checkSplitKeyType(SlotWithKeyHash slotWithKeyHash) {
         var mainKeyCv = getCv(slotWithKeyHash);
         if (mainKeyCv != null && !CompressedValue.isHash(mainKeyCv.getDictSeqOrSpType())) {
@@ -676,8 +720,7 @@ public class HGroup extends BaseCommand {
         var key = slotWithKeyHash.rawKey();
         var field = new String(fieldBytes);
         var fieldKey = RedisHashKeys.fieldKey(key, field);
-        var fieldCv = getCv(slot(fieldKey));
-        return fieldCv != null ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
+        return exists(slot(fieldKey)) ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0;
 
 //        var rhk = getRedisHashKeys(keyBytes);
 //        if (rhk == null) {
@@ -891,11 +934,12 @@ public class HGroup extends BaseCommand {
             return ErrorReply.NOT_INTEGER;
         }
 
-        long expireAt;
-        if (isMilliseconds) {
-            expireAt = isAt ? timeValue : System.currentTimeMillis() + timeValue;
-        } else {
-            expireAt = isAt ? timeValue * 1000 : System.currentTimeMillis() + timeValue * 1000;
+        final long now = System.currentTimeMillis();
+        var timeOption = isAt ? (isMilliseconds ? "pxat" : "exat") : (isMilliseconds ? "px" : "ex");
+        var expireAt = computeFieldExpireAt(timeOption, timeValue, now);
+        if (expireAt < 0) {
+            // a negative or an overflowing time is not valid
+            return invalidExpireTime();
         }
 
         // parse options (NX | XX | GT | LT)
@@ -941,7 +985,7 @@ public class HGroup extends BaseCommand {
 
         // the field count must match the number of arguments, the comparison is
         // done in long math to avoid an integer overflow
-        if (data.length != (long) fieldsIndex + numFields) {
+        if (data.length != fieldsIndex + numFields) {
             return ErrorReply.SYNTAX;
         }
 
@@ -955,7 +999,7 @@ public class HGroup extends BaseCommand {
         }
 
         if (isUseHH(keyBytes)) {
-            return hexpire2(expireAt, isNx, isXx, isGt, isLt, fields);
+            return hexpire2(expireAt, now, isNx, isXx, isGt, isLt, fields);
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -998,6 +1042,15 @@ public class HGroup extends BaseCommand {
                 continue;
             }
 
+            if (expireAt <= now) {
+                // the time is in the past, the field is deleted and redis answers 2
+                removeDelay(fieldSlotWithKeyHash);
+                rhk.remove(field);
+                ttlCacheModified = true;
+                replies[i] = new IntegerReply(2);
+                continue;
+            }
+
             // set expiration
             fieldCv.setSeq(snowFlake.nextId());
             fieldCv.setExpireAt(expireAt);
@@ -1035,7 +1088,8 @@ public class HGroup extends BaseCommand {
         return false;
     }
 
-    private Reply hexpire2(long expireAt, boolean isNx, boolean isXx, boolean isGt, boolean isLt, ArrayList<String> fields) {
+    private Reply hexpire2(long expireAt, long now, boolean isNx, boolean isXx, boolean isGt, boolean isLt,
+                           ArrayList<String> fields) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rhh = getRedisHH(slotWithKeyHash);
         if (rhh == null) {
@@ -1061,6 +1115,13 @@ public class HGroup extends BaseCommand {
             var fieldExpireAt = rhh.getExpireAt(field);
             // check conditions
             if (skipSetExpireAt(expireAt, isNx, isXx, isGt, isLt, replies, i, fieldExpireAt)) {
+                continue;
+            }
+
+            if (expireAt <= now) {
+                // the time is in the past, the field is deleted and redis answers 2
+                rhh.remove(field);
+                replies[i] = new IntegerReply(2);
                 continue;
             }
 
@@ -1324,38 +1385,22 @@ public class HGroup extends BaseCommand {
             fieldsIndex++;
         } else {
             hasExpireOption = true;
-            if ("ex".equalsIgnoreCase(new String(data[fieldsIndex]))) {
+            var option = new String(data[fieldsIndex]).toLowerCase();
+            if ("ex".equals(option) || "px".equals(option) || "exat".equals(option) || "pxat".equals(option)) {
+                long timeValue;
                 try {
-                    long seconds = Long.parseLong(new String(data[fieldsIndex + 1]));
-                    expireAt = System.currentTimeMillis() + seconds * 1000;
+                    timeValue = Long.parseLong(new String(data[fieldsIndex + 1]));
                 } catch (NumberFormatException e) {
                     return ErrorReply.NOT_INTEGER;
                 }
-                fieldsIndex += 2;
-            } else if ("px".equalsIgnoreCase(new String(data[fieldsIndex]))) {
-                try {
-                    long ms = Long.parseLong(new String(data[fieldsIndex + 1]));
-                    expireAt = System.currentTimeMillis() + ms;
-                } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                var computedExpireAt = computeFieldExpireAt(option, timeValue, System.currentTimeMillis());
+                if (computedExpireAt < 0) {
+                    // a negative or an overflowing time is not valid
+                    return invalidExpireTime();
                 }
+                expireAt = computedExpireAt;
                 fieldsIndex += 2;
-            } else if ("exat".equalsIgnoreCase(new String(data[fieldsIndex]))) {
-                try {
-                    long unixSec = Long.parseLong(new String(data[fieldsIndex + 1]));
-                    expireAt = unixSec * 1000;
-                } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
-                }
-                fieldsIndex += 2;
-            } else if ("pxat".equalsIgnoreCase(new String(data[fieldsIndex]))) {
-                try {
-                    expireAt = Long.parseLong(new String(data[fieldsIndex + 1]));
-                } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
-                }
-                fieldsIndex += 2;
-            } else if ("persist".equalsIgnoreCase(new String(data[fieldsIndex]))) {
+            } else if ("persist".equals(option)) {
                 fieldsIndex += 1;
             } else {
                 return ErrorReply.SYNTAX;
@@ -1882,43 +1927,23 @@ public class HGroup extends BaseCommand {
         boolean hasExpireOption = false;
         boolean keepttl = false;
 
-        var expOption = new String(data[idx]);
-        if ("ex".equalsIgnoreCase(expOption)) {
+        var expOption = new String(data[idx]).toLowerCase();
+        if ("ex".equals(expOption) || "px".equals(expOption) || "exat".equals(expOption) || "pxat".equals(expOption)) {
+            long timeValue;
             try {
-                long seconds = Long.parseLong(new String(data[idx + 1]));
-                expireAt = System.currentTimeMillis() + seconds * 1000;
-                hasExpireOption = true;
+                timeValue = Long.parseLong(new String(data[idx + 1]));
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
-            idx += 2;
-        } else if ("px".equalsIgnoreCase(expOption)) {
-            try {
-                long ms = Long.parseLong(new String(data[idx + 1]));
-                expireAt = System.currentTimeMillis() + ms;
-                hasExpireOption = true;
-            } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+            var computedExpireAt = computeFieldExpireAt(expOption, timeValue, System.currentTimeMillis());
+            if (computedExpireAt < 0) {
+                // a negative or an overflowing time is not valid
+                return invalidExpireTime();
             }
+            expireAt = computedExpireAt;
+            hasExpireOption = true;
             idx += 2;
-        } else if ("exat".equalsIgnoreCase(expOption)) {
-            try {
-                long unixSec = Long.parseLong(new String(data[idx + 1]));
-                expireAt = unixSec * 1000;
-                hasExpireOption = true;
-            } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
-            }
-            idx += 2;
-        } else if ("pxat".equalsIgnoreCase(expOption)) {
-            try {
-                expireAt = Long.parseLong(new String(data[idx + 1]));
-                hasExpireOption = true;
-            } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
-            }
-            idx += 2;
-        } else if ("keepttl".equalsIgnoreCase(expOption)) {
+        } else if ("keepttl".equals(expOption)) {
             keepttl = true;
             idx++;
         }
