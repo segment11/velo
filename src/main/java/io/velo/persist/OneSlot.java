@@ -1673,6 +1673,64 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     /**
+     * Gets the short type byte of a key without reading the whole value.
+     *
+     * @param key         the key
+     * @param bucketIndex the bucket index
+     * @param keyHash     the key hash
+     * @return the short type byte, see {@link KeyLoader#transferToShortType(int)}, or -1 if the
+     *         key does not exist
+     */
+    public byte getShortType(String key, int bucketIndex, long keyHash) {
+        checkCurrentThreadId();
+
+        var isExpiredFlagArray = new boolean[1];
+        var cvEncodedFromWal = getFromWal(key, bucketIndex, isExpiredFlagArray);
+        if (isExpiredFlagArray[0]) {
+            return -1;
+        }
+
+        if (cvEncodedFromWal != null) {
+            kvWalHitTotal++;
+            kvWalCvEncodedLengthTotal += cvEncodedFromWal.length;
+
+            // write batch kv is the newest
+            if (CompressedValue.isDeleted(cvEncodedFromWal)) {
+                return -1;
+            }
+            var spType = CompressedValue.onlyReadSpType(cvEncodedFromWal);
+            return KeyLoader.transferToShortType(spType);
+        }
+
+        // from lru cache
+        var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
+        var lru = kvByWalGroupIndexLRU.get(walGroupIndex);
+        var cvEncodedBytesFromLRU = lru.get(key);
+        if (cvEncodedBytesFromLRU != null) {
+            kvLRUHitTotal++;
+            kvLRUCvEncodedLengthTotal += cvEncodedBytesFromLRU.length;
+
+            var spType = CompressedValue.onlyReadSpType(cvEncodedBytesFromLRU);
+            return KeyLoader.transferToShortType(spType);
+        }
+
+        kvLRUMissTotal++;
+
+        var valueBytesWithExpireAtAndSeq = keyLoader.getValueXByKey(bucketIndex, key, keyHash);
+        if (valueBytesWithExpireAtAndSeq == null) {
+            return -1;
+        }
+        var valueBytes = valueBytesWithExpireAtAndSeq.valueBytes();
+        if (PersistValueMeta.isPvm(valueBytes)) {
+            var pvm = PersistValueMeta.decode(valueBytes);
+            return pvm.shortType;
+        } else {
+            // short string or number
+            return KeyLoader.typeAsByteString;
+        }
+    }
+
+    /**
      * Result of a get, holding either a Netty byte buffer of encoded compressed-value bytes
      * or a decoded in-memory compressed value (for short values).
      *
@@ -2653,7 +2711,7 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
      * Performs all fallible promotion work while the slot remains externally fenced.
      *
      * @param fileIndex immutable binlog file index captured for the transition epoch
-     * @param offset immutable binlog offset captured for the transition epoch
+     * @param offset    immutable binlog offset captured for the transition epoch
      * @throws IOException if binlog rebasing or durable metadata clearing fails
      */
     public void prepareAsMaster(int fileIndex, long offset) throws IOException {
@@ -2715,8 +2773,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     /**
      * Fences writes first, then performs the fallible durable work needed for demotion.
      *
-     * @param host upstream master host
-     * @param port upstream master port
+     * @param host           upstream master host
+     * @param port           upstream master port
      * @param openReplStream true to create an upstream replication stream
      * @throws IOException if fencing, binlog movement, pair changes, or configuration persistence fails
      */

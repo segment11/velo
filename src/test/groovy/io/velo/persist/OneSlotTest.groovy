@@ -2418,4 +2418,64 @@ class OneSlotTest extends Specification {
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
+
+    def 'test get short type'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        def key = 'short-type-key'
+        def sKey = BaseCommand.slot(key, slotNumber)
+
+        when: 'the key does not exist'
+        then:
+        oneSlot.getShortType(key, sKey.bucketIndex(), sKey.keyHash()) == -1
+
+        when: 'the key holds a string'
+        def cv = new CompressedValue()
+        cv.keyHash = sKey.keyHash()
+        cv.compressedData = 'hello'.bytes
+        oneSlot.put(key, sKey.bucketIndex(), cv)
+        then:
+        oneSlot.getShortType(key, sKey.bucketIndex(), sKey.keyHash()) == KeyLoader.typeAsByteString
+
+        when: 'the key holds a hash'
+        def cvHash = new CompressedValue()
+        cvHash.keyHash = sKey.keyHash()
+        cvHash.compressedData = 'hello'.bytes
+        cvHash.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        oneSlot.put(key, sKey.bucketIndex(), cvHash)
+        then:
+        oneSlot.getShortType(key, sKey.bucketIndex(), sKey.keyHash()) == KeyLoader.typeAsByteHash
+
+        when: 'the key is removed'
+        oneSlot.removeDelay(key, sKey.bucketIndex(), sKey.keyHash())
+        then:
+        oneSlot.getShortType(key, sKey.bucketIndex(), sKey.keyHash()) == -1
+
+        when: 'the keys are in the key buckets file, the wal is cleared'
+        def keyList = batchPut(oneSlot)
+        oneSlot.getWalByGroupIndex(0).clear()
+        oneSlot.getWalByBucketIndex(0).clear()
+        oneSlot.getWalByBucketIndex(1).clear()
+
+        then: 'the key loader holds the value'
+        def loaderKey = keyList[0]
+        def sLoaderKey = BaseCommand.slot(loaderKey, slotNumber)
+        oneSlot.getShortType(loaderKey, sLoaderKey.bucketIndex(), sLoaderKey.keyHash()) == KeyLoader.typeAsByteString
+
+        when: 'the key is read, so it is in the lru cache'
+        def lruKey = keyList[1]
+        def sLruKey = BaseCommand.slot(lruKey, slotNumber)
+        oneSlot.get(lruKey, sLruKey.bucketIndex(), sLruKey.keyHash())
+        then:
+        oneSlot.getShortType(lruKey, sLruKey.bucketIndex(), sLruKey.keyHash()) == KeyLoader.typeAsByteString
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
 }

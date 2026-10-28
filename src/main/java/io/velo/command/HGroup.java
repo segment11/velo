@@ -4,6 +4,7 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.*;
 import io.velo.acl.AclUsers;
+import io.velo.persist.KeyLoader;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
@@ -479,11 +480,12 @@ public class HGroup extends BaseCommand {
     }
 
     private Reply checkSplitKeyType(SlotWithKeyHash slotWithKeyHash) {
-        var mainKeyCv = getCv(slotWithKeyHash);
-        if (mainKeyCv != null && !CompressedValue.isHash(mainKeyCv.getDictSeqOrSpType())) {
-            return ErrorReply.WRONG_TYPE;
+        var shortType = getShortType(slotWithKeyHash);
+        if (shortType == -1 || shortType == KeyLoader.typeAsByteHash) {
+            // the key does not exist or it is a hash
+            return null;
         }
-        return null;
+        return ErrorReply.WRONG_TYPE;
     }
 
     private RedisHashKeys getRedisHashKeys(String key) {

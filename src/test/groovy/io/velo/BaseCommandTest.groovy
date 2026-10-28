@@ -1180,4 +1180,47 @@ class BaseCommandTest extends Specification {
         then:
         reply == null
     }
+
+    def 'test get short type'() {
+        given:
+        def data2 = new byte[2][0]
+        data2[0] = 'get'.bytes
+        data2[1] = 'key'.bytes
+
+        def c = new SubCommand('get', data2, null)
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())
+        c.init(requestHandler, new Request(data2, false, false))
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        def key = 'short-type-key'
+        def sKey = BaseCommand.slot(key, slotNumber)
+        c.byPassGetSet = inMemoryGetSet
+
+        when: 'the key does not exist'
+        then:
+        c.getShortType(sKey) == -1
+
+        when: 'the key holds a value'
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.keyHash = sKey.keyHash()
+        inMemoryGetSet.put(slot, key, sKey.bucketIndex(), cv)
+        then:
+        c.getShortType(sKey) == KeyLoader.typeAsByteString
+
+        when: 'the key is read from the slot'
+        c.byPassGetSet = null
+        oneSlot.put(key, sKey.bucketIndex(), cv)
+        then:
+        c.getShortType(sKey) == KeyLoader.typeAsByteString
+
+        cleanup:
+        localPersist.cleanUp()
+    }
+
 }

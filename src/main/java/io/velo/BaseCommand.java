@@ -725,6 +725,28 @@ public abstract class BaseCommand {
     }
 
     /**
+     * Gets the short type byte of a key without reading the whole value.
+     *
+     * @param slotWithKeyHash the precomputed slot and hash information
+     * @return the short type byte, see {@link io.velo.persist.KeyLoader#transferToShortType(int)},
+     * or -1 if the key does not exist
+     */
+    public byte getShortType(SlotWithKeyHash slotWithKeyHash) {
+        if (byPassGetSet != null) {
+            var cv = getCv(slotWithKeyHash);
+            if (cv == null) {
+                return -1;
+            }
+            var spType = cv.getDictSeqOrSpType();
+            return KeyLoader.transferToShortType(spType);
+        } else {
+            var slot = slotWithKeyHash.slot();
+            var oneSlot = localPersist.oneSlot(slot);
+            return oneSlot.getShortType(slotWithKeyHash.rawKey, slotWithKeyHash.bucketIndex, slotWithKeyHash.keyHash);
+        }
+    }
+
+    /**
      * Gets the CompressedValue for a key and precomputed slot and hash information.
      *
      * @param s the precomputed slot and hash information
