@@ -1520,8 +1520,8 @@ public class HGroup extends BaseCommand {
         var rhk = getRedisHashKeys(key);
         // the field cv ttl is kept by the increment, remember it to keep the
         // cached ttl of the index in sync
-        var oldFieldCv = getCv(slot(fieldKey));
-        var fieldExpireAt = oldFieldCv == null ? CompressedValue.NO_EXPIRE : oldFieldCv.getExpireAt();
+        var oldExpireAt = getExpireAt(slot(fieldKey));
+        var fieldExpireAt = oldExpireAt == null ? CompressedValue.NO_EXPIRE : oldExpireAt;
 
         byte[][] dd = {null, Wal.keyBytes(fieldKey)};
         var dGroup = new DGroup(cmd, dd, socket);
