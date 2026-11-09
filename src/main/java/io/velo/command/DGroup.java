@@ -349,7 +349,17 @@ public class DGroup extends BaseCommand {
         });
     }
 
-    Reply decrBy(long by, double byFloat, boolean isByFloat) {
+    private record LoadedNumber(long longValue, double doubleValue, long expireAt, SlotWithKeyHash slotWithKeyHash) {
+    }
+
+    /**
+     * Load the current numeric value for the incr/decr family. Shared by {@link #decrBy(long, double, boolean)}
+     * and {@link #incrBy(long)}.
+     *
+     * @param isByFloat whether the caller is on the float path
+     * @return an {@link ErrorReply} on validation failure, otherwise the loaded {@link LoadedNumber}
+     */
+    private Object loadNumberForIncrDecr(boolean isByFloat) {
         var keyBytes = data[1];
         if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
             return ErrorReply.KEY_TOO_LONG;
@@ -394,16 +404,60 @@ public class DGroup extends BaseCommand {
             }
         }
 
+        return new LoadedNumber(longValue, doubleValue, expireAt, slotWithKeyHash);
+    }
+
+    /**
+     * Increment path for INCR/INCRBY. Takes the true increment and guards with the addition-shaped
+     * check like redis t_string.c incrDecrCommand does, so a Long.MIN_VALUE delta is never negated
+     * (bug 79.2). DECR* keeps the subtraction-shaped {@link #decrBy(long, double, boolean)}.
+     *
+     * @param by the increment
+     * @return the reply
+     */
+    Reply incrBy(long by) {
+        var loaded = loadNumberForIncrDecr(false);
+        if (loaded instanceof ErrorReply errorReply) {
+            return errorReply;
+        }
+        var numberValue = (LoadedNumber) loaded;
+
+        long longValue = numberValue.longValue();
+        if (by > 0) {
+            if (longValue > Long.MAX_VALUE - by) {
+                return ErrorReply.INCR_DECR_OVERFLOW;
+            }
+        } else if (by < 0) {
+            if (longValue < Long.MIN_VALUE - by) {
+                return ErrorReply.INCR_DECR_OVERFLOW;
+            }
+        }
+        long newValue = longValue + by;
+        setNumber(newValue, numberValue.slotWithKeyHash(), numberValue.expireAt());
+        return new IntegerReply(newValue);
+    }
+
+    Reply decrBy(long by, double byFloat, boolean isByFloat) {
+        var loaded = loadNumberForIncrDecr(isByFloat);
+        if (loaded instanceof ErrorReply errorReply) {
+            return errorReply;
+        }
+        var numberValue = (LoadedNumber) loaded;
+
+        long longValue = numberValue.longValue();
+        double doubleValue = numberValue.doubleValue();
+        var slotWithKeyHash = numberValue.slotWithKeyHash();
+
         if (isByFloat) {
             if (!Double.isFinite(byFloat) || !Double.isFinite(doubleValue)) {
                 // infinity and nan are not valid float values
-                return NOT_NUMBER_REPLY;
+                return ErrorReply.NOT_FLOAT;
             }
             // like redis incrbyfloat, compute with the full decimal precision of the operands,
             // do not quantize to number.doubleScale (bug 79.1); the reply formatting strips trailing zeros
             var newValue = BigDecimal.valueOf(doubleValue).subtract(BigDecimal.valueOf(byFloat));
 
-            setNumber(newValue.doubleValue(), slotWithKeyHash, expireAt);
+            setNumber(newValue.doubleValue(), slotWithKeyHash, numberValue.expireAt());
             return new DoubleReply(newValue);
         } else {
             if (by > 0) {
@@ -418,7 +472,7 @@ public class DGroup extends BaseCommand {
                 }
             }
             long newValue = longValue - by;
-            setNumber(newValue, slotWithKeyHash, expireAt);
+            setNumber(newValue, slotWithKeyHash, numberValue.expireAt());
             return new IntegerReply(newValue);
         }
     }

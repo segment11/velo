@@ -131,7 +131,7 @@ public class IGroup extends BaseCommand {
             dGroup.from(this);
             dGroup.setSlotWithKeyHashListParsed(this.slotWithKeyHashListParsed);
 
-            return dGroup.decrBy(-1, 0, false);
+            return dGroup.incrBy(1);
         }
 
         if ("incrby".equals(cmd)) {
@@ -150,7 +150,8 @@ public class IGroup extends BaseCommand {
             dGroup.from(this);
             dGroup.setSlotWithKeyHashListParsed(this.slotWithKeyHashListParsed);
 
-            return dGroup.decrBy(-by, 0, false);
+            // plumb the true increment, negating by would wrap for Long.MIN_VALUE (bug 79.2)
+            return dGroup.incrBy(by);
         }
 
         if ("incrbyfloat".equals(cmd)) {

@@ -187,6 +187,50 @@ class IGroupTest extends Specification {
         reply = iGroup.execute('incrby a abc')
         then:
         reply == ErrorReply.NOT_INTEGER
+
+        when: 'incrby on a double value key'
+        def cvDouble = new CompressedValue()
+        cvDouble.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_DOUBLE
+        cvDouble.compressedData = java.nio.ByteBuffer.allocate(8).putDouble(1.5d).array()
+        inMemoryGetSet.put(slot, 'dbl', 0, cvDouble)
+        reply = iGroup.execute('incrby dbl 1')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+        and: 'the double value is not changed'
+        inMemoryGetSet.getBuf(slot, 'dbl', 0, 0L).cv().numberValue().doubleValue() == 1.5d
+
+        when: 'incrby with a zero delta'
+        reply = iGroup.execute('incrby a 0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 3000000010L
+
+        when: 'incrby with the Long.MIN_VALUE delta on zero, the negation in the old path wrapped'
+        def cvZero = new CompressedValue()
+        cvZero.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_LONG
+        cvZero.compressedData = java.nio.ByteBuffer.allocate(8).putLong(0L).array()
+        inMemoryGetSet.put(slot, 'lm', 0, cvZero)
+        reply = iGroup.execute('incrby lm -9223372036854775808')
+        then: 'redis replies the representable result, no false overflow'
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == Long.MIN_VALUE
+        inMemoryGetSet.getBuf(slot, 'lm', 0, 0L).cv().numberValue().longValue() == Long.MIN_VALUE
+
+        when: 'incrby with the Long.MIN_VALUE delta on a negative value'
+        def cvNeg = new CompressedValue()
+        cvNeg.dictSeqOrSpType = CompressedValue.SP_TYPE_NUM_LONG
+        cvNeg.compressedData = java.nio.ByteBuffer.allocate(8).putLong(-5L).array()
+        inMemoryGetSet.put(slot, 'lneg', 0, cvNeg)
+        reply = iGroup.execute('incrby lneg -9223372036854775808')
+        then: 'overflow is reported like redis, the stored value is not wrapped'
+        reply == ErrorReply.INCR_DECR_OVERFLOW
+        inMemoryGetSet.getBuf(slot, 'lneg', 0, 0L).cv().numberValue().longValue() == -5L
+
+        when: 'control, a negative delta that underflows is still rejected'
+        reply = iGroup.execute('incrby lneg -9223372036854775807')
+        then:
+        reply == ErrorReply.INCR_DECR_OVERFLOW
+        inMemoryGetSet.getBuf(slot, 'lneg', 0, 0L).cv().numberValue().longValue() == -5L
     }
 
     def 'test incrbyfloat'() {
