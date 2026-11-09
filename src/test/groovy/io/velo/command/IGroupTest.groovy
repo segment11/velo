@@ -343,6 +343,43 @@ class IGroupTest extends Specification {
         reply = iGroup.execute('info')
         then:
         infoHeaders(reply) == ['# Server', '# Clients', '# Memory', '# Replication', '# CPU', '# Cluster', '# Keyspace']
+
+        when: 'an unknown section returns an empty reply like redis 7.2'
+        reply = iGroup.execute('info foo')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == ''
+
+        when: 'all returns every section including keyspace'
+        reply = iGroup.execute('info all')
+        then:
+        infoHeaders(reply) == ['# Server', '# Clients', '# Memory', '# Replication', '# CPU', '# Cluster', '# Keyspace']
+
+        when: 'everything matches all'
+        reply = iGroup.execute('info everything')
+        then:
+        infoHeaders(reply) == ['# Server', '# Clients', '# Memory', '# Replication', '# CPU', '# Cluster', '# Keyspace']
+
+        when: 'default returns the default set'
+        reply = iGroup.execute('info default')
+        then:
+        infoHeaders(reply) == ['# Server', '# Clients', '# Memory', '# Replication', '# CPU', '# Cluster', '# Keyspace']
+
+        when: 'an unknown name in a multi-section request is ignored like redis'
+        reply = iGroup.execute('info server foo')
+        then:
+        infoHeaders(reply) == ['# Server']
+
+        when: 'only unknown names produce an empty reply'
+        reply = iGroup.execute('info foo bar')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == ''
+
+        when: 'all in a multi-section request expands to every section'
+        reply = iGroup.execute('info cpu all')
+        then:
+        infoHeaders(reply) == ['# Server', '# Clients', '# Memory', '# Replication', '# CPU', '# Cluster', '# Keyspace']
     }
 
     def 'test ingest'() {

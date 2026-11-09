@@ -75,16 +75,25 @@ class InfoCommand extends BaseCommand {
         } else if ('keyspace' == section) {
             return new StringOrReply(keyspace())
         } else {
-            // Unknown or empty section. Redis returns the default content (all standard sections)
-            // rather than erroring or emitting a placeholder. Iterating the known `sections` array
-            // (which never reaches this branch) also avoids the StringIndexOutOfBoundsException that
-            // `section[0]` / `section.substring(1)` threw for an empty section argument.
-            def sb = new StringBuilder()
-            for (knownSection in sections) {
-                sb << getOneSection(knownSection).s << '\r\n'
-            }
-            return new StringOrReply(sb.toString())
+            // Unknown section. Redis 7.2 emits nothing for it: genRedisInfoString only renders
+            // sections whose (case-insensitive) name matches a known section, so a request
+            // containing only unknown names produces an empty reply (bug 79.10).
+            return new StringOrReply('')
         }
+    }
+
+    /**
+     * Every section Velo can produce, including keyspace. Used for the no-argument form and
+     * for the all/everything/default keywords, which redis handles first-class.
+     */
+    private AsyncReply allSectionsWithKeyspace() {
+        List<StringOrReply> infoList = []
+        for (section in sections) {
+            infoList << getOneSection(section)
+        }
+
+        def prefixContent = infoList.collect { it.s }.join('\r\n')
+        return keyspace(prefixContent)
     }
 
     @Override
@@ -92,6 +101,10 @@ class InfoCommand extends BaseCommand {
         // redis matches section names case-insensitively (upstream server.c dictCStrKeyCaseCompare)
         if (data.length == 2) {
             def section = new String(data[1]).toLowerCase()
+            if (section in ['all', 'everything', 'default']) {
+                return allSectionsWithKeyspace()
+            }
+
             def stringOrReply = getOneSection(section)
             if (stringOrReply.s != null) {
                 return new BulkReply(stringOrReply.s.bytes)
@@ -99,15 +112,10 @@ class InfoCommand extends BaseCommand {
                 return stringOrReply.reply
             }
         } else if (data.length == 1) {
-            List<StringOrReply> infoList = []
-            for (section in sections) {
-                infoList << getOneSection(section)
-            }
-
-            def prefixContent = infoList.collect { it.s }.join('\r\n')
-            return keyspace(prefixContent)
+            return allSectionsWithKeyspace()
         } else {
             boolean hasKeyspace = false
+            boolean hasAll = false
             List<StringOrReply> infoList = []
             for (int i = 1; i < data.length; i++) {
                 def bytes = data[i]
@@ -117,11 +125,24 @@ class InfoCommand extends BaseCommand {
                 }
 
                 def section = new String(bytes).toLowerCase()
+                if (section in ['all', 'everything', 'default']) {
+                    hasAll = true
+                    continue
+                }
                 if ('keyspace' == section) {
                     hasKeyspace = true
                     continue
                 }
-                infoList << getOneSection(section)
+                def stringOrReply = getOneSection(section)
+                if (stringOrReply.s == '') {
+                    // unknown section, redis ignores it in a multi-section request
+                    continue
+                }
+                infoList << stringOrReply
+            }
+
+            if (hasAll) {
+                return allSectionsWithKeyspace()
             }
 
             def prefixContent = infoList.collect { it.s }.join('\r\n')
