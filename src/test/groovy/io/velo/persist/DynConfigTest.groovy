@@ -199,6 +199,7 @@ class DynConfigTest extends Specification {
         config.update('type_hash_max_size', '513')
         config.update('type_list_max_size', '514')
         config.update('repl_connect_timeout_millis', '6000')
+        config.update('keys.matchMaxCount', '200')
 
         then:
         TrainSampleJob.keyPrefixOrSuffixGroupList == ['key:', 'xxx:']
@@ -210,12 +211,14 @@ class DynConfigTest extends Specification {
         RedisHashKeys.HASH_MAX_SIZE == (short) 513
         RedisList.LIST_MAX_SIZE == (short) 514
         config.getLongValue('repl_connect_timeout_millis', 1L) == 6000L
+        config.get('keys.matchMaxCount') == 200
 
         and:
         def json = new ObjectMapper().readValue(tmpFile, HashMap)
         json[BigKeyTopK.KEY_IN_DYN_CONFIG] == 100
         json['type_hash_max_size'] == 513
         json['repl_connect_timeout_millis'] == 6000L
+        json['keys.matchMaxCount'] == 200
 
         when:
         config.update('type_hash_max_size', '0')
@@ -226,6 +229,15 @@ class DynConfigTest extends Specification {
         RedisHashKeys.HASH_MAX_SIZE == (short) 513
         config.get('type_hash_max_size') == (short) 513
         new ObjectMapper().readValue(tmpFile, HashMap)['type_hash_max_size'] == 513
+
+        when:
+        config.update('keys.matchMaxCount', 'abc')
+
+        then:
+        def e2 = thrown(IllegalArgumentException)
+        e2.message.contains('keys.matchMaxCount')
+        config.get('keys.matchMaxCount') == 200
+        new ObjectMapper().readValue(tmpFile, HashMap)['keys.matchMaxCount'] == 200
 
         cleanup:
         tmpFile.delete()
