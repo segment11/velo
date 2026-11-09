@@ -5,6 +5,7 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.DictMap
 import io.velo.MultiWorkerServer
+import io.velo.SocketInspector
 import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.mock.InMemoryGetSet
@@ -282,6 +283,66 @@ class IGroupTest extends Specification {
         then:
         smallReply instanceof DoubleReply
         new String((smallReply as DoubleReply).buffer().asArray()) == "\$4\r\n1000\r\n"
+    }
+
+    private static List<String> infoHeaders(Reply reply) {
+        if (reply instanceof AsyncReply) {
+            reply = (Reply) (reply as AsyncReply).settablePromise.getResult()
+        }
+        if (reply instanceof BulkReply) {
+            return (reply as BulkReply).asString().readLines().findAll { it.startsWith('#') }
+        }
+        return []
+    }
+
+    def 'test info'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def iGroup = new IGroup(null, null, null)
+        iGroup.byPassGetSet = inMemoryGetSet
+        iGroup.from(BaseCommand.mockAGroup())
+
+        def loader = CachedGroovyClassLoader.instance
+        def classpath = Utils.projectPath('/dyn/src')
+        loader.init(GroovyClassLoader.getClass().classLoader, classpath, null)
+
+        and:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        MultiWorkerServer.STATIC_GLOBAL_V.socketInspector = new SocketInspector()
+
+        when: 'a lowercase section name'
+        def reply = iGroup.execute('info server')
+        then:
+        reply instanceof BulkReply
+        infoHeaders(reply) == ['# Server']
+
+        when: 'redis matches section names case-insensitively'
+        reply = iGroup.execute('info SERVER')
+        then:
+        reply instanceof BulkReply
+        infoHeaders(reply) == ['# Server']
+
+        when:
+        reply = iGroup.execute('info MEMORY')
+        then:
+        infoHeaders(reply) == ['# Memory']
+
+        when: 'the keyspace section is matched case-insensitively too'
+        reply = iGroup.execute('info KEYSPACE')
+        then:
+        infoHeaders(reply) == ['# Keyspace']
+
+        when: 'multi-argument sections are matched case-insensitively'
+        reply = iGroup.execute('info SERVER KEYSPACE')
+        then:
+        infoHeaders(reply) == ['# Server', '# Keyspace']
+
+        when: 'no argument returns all sections including keyspace'
+        reply = iGroup.execute('info')
+        then:
+        infoHeaders(reply) == ['# Server', '# Clients', '# Memory', '# Replication', '# CPU', '# Cluster', '# Keyspace']
     }
 
     def 'test ingest'() {

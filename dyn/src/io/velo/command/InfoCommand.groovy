@@ -89,8 +89,9 @@ class InfoCommand extends BaseCommand {
 
     @Override
     Reply handle() {
+        // redis matches section names case-insensitively (upstream server.c dictCStrKeyCaseCompare)
         if (data.length == 2) {
-            def section = new String(data[1])
+            def section = new String(data[1]).toLowerCase()
             def stringOrReply = getOneSection(section)
             if (stringOrReply.s != null) {
                 return new BulkReply(stringOrReply.s.bytes)
@@ -115,7 +116,7 @@ class InfoCommand extends BaseCommand {
                     continue
                 }
 
-                def section = new String(bytes)
+                def section = new String(bytes).toLowerCase()
                 if ('keyspace' == section) {
                     hasKeyspace = true
                     continue
