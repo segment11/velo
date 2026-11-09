@@ -5,7 +5,6 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
-import io.velo.SnowFlake;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.OneSlot;
 import io.velo.persist.ScanCursor;
@@ -99,14 +98,16 @@ public class KGroup extends BaseCommand {
         }
         final int matchMaxCount = maxCount;
 
-        // snapshot: only keys existing when the scan began participate, same as SCAN, see bug 70.7
-        long beginScanSeq = SnowFlake.asBeginScanSeqEpoch();
+        // KEYS has no cursor and no resume, so unlike SCAN it takes no snapshot boundary:
+        // every key visible in the wal or the key buckets at scan time is returned, including
+        // keys written in the same millisecond as this call, see bug 80 re-review 3
+        final long scanAllSeq = Long.MAX_VALUE;
 
         // iterate the real keyspace (wal first, then key buckets) on each slot worker thread
         var oneSlots = localPersist.initializedOneSlots();
         var promises = new ArrayList<Promise<ArrayList<String>>>(oneSlots.size());
         for (var oneSlot : oneSlots) {
-            promises.add(oneSlot.asyncCall(() -> collectMatchedKeys(oneSlot, pattern, matchMaxCount, beginScanSeq)));
+            promises.add(oneSlot.asyncCall(() -> collectMatchedKeys(oneSlot, pattern, matchMaxCount, scanAllSeq)));
         }
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
@@ -150,17 +151,17 @@ public class KGroup extends BaseCommand {
      * @param oneSlot      the slot to iterate
      * @param pattern      the glob pattern
      * @param maxCount     the max number of matched keys to return
-     * @param beginScanSeq the scan begin seq for the snapshot semantics
+     * @param scanSeqLimit the seq limit for the scan filters, Long.MAX_VALUE means no limit
      * @return the matched keys, at most maxCount
      */
-    private static ArrayList<String> collectMatchedKeys(OneSlot oneSlot, String pattern, int maxCount, long beginScanSeq) {
+    private static ArrayList<String> collectMatchedKeys(OneSlot oneSlot, String pattern, int maxCount, long scanSeqLimit) {
         var keys = new ArrayList<String>();
 
         // scan wal first
         var scanCursor = new ScanCursor(oneSlot.slot(), 0, (short) 0, (short) 0, (byte) 0, (byte) 0);
         while (!scanCursor.isWalIterateEnd() && keys.size() < maxCount) {
             var wal = oneSlot.getWalByGroupIndex(scanCursor.walGroupIndex());
-            var r = wal.scan(scanCursor.walSkipCount(), KeyLoader.typeAsByteIgnore, pattern, maxCount - keys.size(), beginScanSeq);
+            var r = wal.scan(scanCursor.walSkipCount(), KeyLoader.typeAsByteIgnore, pattern, maxCount - keys.size(), scanSeqLimit);
             keys.addAll(r.keys());
             scanCursor = r.scanCursor();
         }
@@ -173,7 +174,7 @@ public class KGroup extends BaseCommand {
         short keyBucketsSkipCount = 0;
         while (keys.size() < maxCount) {
             var r = keyLoader.scan(walGroupIndex, splitIndex, bucketIndex, keyBucketsSkipCount,
-                    KeyLoader.typeAsByteIgnore, pattern, maxCount - keys.size(), beginScanSeq);
+                    KeyLoader.typeAsByteIgnore, pattern, maxCount - keys.size(), scanSeqLimit);
             keys.addAll(r.keys());
 
             var next = r.scanCursor();

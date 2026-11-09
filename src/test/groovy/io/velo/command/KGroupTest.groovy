@@ -95,6 +95,18 @@ class KGroupTest extends Specification {
         then:
         keysOf(kGroup, 'keys user') == []
 
+        when: 'a key written in the same millisecond as the keys call must be returned, see bug 80 re-review 3'
+        int sameMsMiss = 0
+        20.times {
+            def key = 'sms:' + it
+            kGroup.set(key, 'v'.bytes)
+            if (keysOf(kGroup, 'keys ' + key) != [key]) {
+                sameMsMiss++
+            }
+        }
+        then:
+        sameMsMiss == 0
+
         when: 'result is capped by keys.matchMaxCount, default 100'
         150.times {
             kGroup.set('q:' + it, ('q:' + it).bytes)
