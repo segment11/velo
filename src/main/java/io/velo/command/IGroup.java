@@ -320,12 +320,14 @@ public class IGroup extends BaseCommand {
         int finalKeyFieldIndex = keyFieldIndex;
         MessageType finalSchema = schema;
         return localPersist.doSthInSlots(oneSlot -> {
-            oneSlot.setBulkLoad(true);
-
             // put number + skip number
             int[] r = new int[2];
 
             for (var file : list) {
+                // re-arm bulk load for every file, the per-file finally below resets the flag
+                // so only the first file would be bulk-loaded without this (bug 79.6)
+                oneSlot.setBulkLoad(true);
+
                 if (isCsv || isJson) {
                     var objectMapper = new ObjectMapper();
                     try (var br = new BufferedReader(new FileReader(file))) {

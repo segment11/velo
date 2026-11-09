@@ -551,6 +551,16 @@ class IGroupTest extends Specification {
         (reply as ErrorReply).message.contains('not match any file')
 
         when:
+        // one ingest over multiple files re-arms bulk load per file, all rows land
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=*.csv file_format=csv ' +
+                'key_field_index=0 key_prefix=multi_ value_fields_indexes=0,1,2')
+        then:
+        reply instanceof AsyncReply
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 102 skip: 0".bytes
+        inMemoryGetSet.getBuf(slot, 'multi_0', 0, 0) != null
+        inMemoryGetSet.getBuf(slot, 'multi_1', 0, 0) != null
+
+        when:
         // key field not exists
         reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.json file_format=json ' +
                 'key_field=name1 key_prefix=test_ value_fields=name,age')
