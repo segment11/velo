@@ -22,7 +22,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Set;
@@ -275,9 +277,18 @@ public class IGroup extends BaseCommand {
             return new ErrorReply("dir: " + dirPath + " is empty");
         }
 
+        // file_pattern is a shell glob, not a raw java regex — the documented form
+        // file_pattern=test* must match test1.json (bug 79.4)
+        PathMatcher pathMatcher;
+        try {
+            pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + filePattern);
+        } catch (IllegalArgumentException e) {
+            return new ErrorReply("file_pattern: " + filePattern + " is not a valid glob pattern, cause: " + e.getMessage());
+        }
+
         ArrayList<File> list = new ArrayList<>();
         for (var file : files) {
-            if (file.getName().matches(filePattern)) {
+            if (pathMatcher.matches(java.nio.file.Path.of(file.getName()))) {
                 list.add(file);
             }
         }

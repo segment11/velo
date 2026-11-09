@@ -523,6 +523,34 @@ class IGroupTest extends Specification {
         inMemoryGetSet.getBuf(slot, 'oo_1', 0, 0) == null
 
         when:
+        // the documented glob form matches files like a shell glob
+        new File(dir, 'globtest1.json').withPrintWriter { w ->
+            w.println('{"name":"g1","age":1}')
+        }
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=globtest*.json file_format=json ' +
+                'key_field=name key_prefix=gg_ value_fields=*')
+        then:
+        reply instanceof AsyncReply
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 1 skip: 0".bytes
+        new String(inMemoryGetSet.getBuf(slot, 'gg_g1', 0, 0).cv().getCompressedData()) == '{"name":"g1","age":1}'
+
+        when:
+        // an invalid pattern is a descriptive error, not a raw java exception leak
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=glob[.json file_format=json ' +
+                'key_field=name key_prefix=xx_ value_fields=*')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('file_pattern')
+
+        when:
+        // a pattern that matches nothing reports the pattern
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=zzz*.json file_format=json ' +
+                'key_field=name key_prefix=xx_ value_fields=*')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('not match any file')
+
+        when:
         // key field not exists
         reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.json file_format=json ' +
                 'key_field=name1 key_prefix=test_ value_fields=name,age')
