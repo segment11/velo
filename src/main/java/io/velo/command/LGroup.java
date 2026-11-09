@@ -1079,7 +1079,9 @@ public class LGroup extends BaseCommand {
 
         var startEnd = IndexStartEndReset.reset(start, end, size);
         if (!startEnd.valid()) {
-            return ErrorReply.INVALID_INTEGER;
+            // redis: an empty range empties the list, the reply is still OK
+            removeDelay(slotWithKeyHash);
+            return OKReply.INSTANCE;
         }
 
         // keep index from start to stop

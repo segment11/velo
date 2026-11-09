@@ -1106,7 +1106,19 @@ class LGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = lGroup.execute('ltrim a -100 -90')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        // bug 82.2: an empty range empties the list, redis replies OK and drops the key
+        reply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L) == null
+
+        when:
+        // bug 82.2: a start index at the end of the list is an empty range too
+        resetRedisList(rl, 3)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = lGroup.execute('ltrim a 3 3')
+        then:
+        reply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'a', 0, 0L) == null
 
         when:
         reply = lGroup.execute('ltrim a a 9')
