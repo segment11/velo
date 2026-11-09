@@ -357,6 +357,40 @@ Fix-phase verification (agent 2, same session, pre-commit):
 - Semantics spot-check against Redis 7.2 glob: `user:*` ≠ `user`/`userr` (colon required), `h?llo` ≠ `hllo` (5-char pattern) — the rewritten expectations encode Redis semantics, verified against `stringMatchLen` (the Redis `stringmatchlen` port) via `KeyLoader.isKeyMatch`.
 - Accept: the rewrite + knob registration + doc note. Commit pending (maintainer has not requested commit).
 
+### Re-review 2 (AI agent 2, post-commit — commits `d8e41ddd`, `db9564fc`, `eaf416db`)
+
+**Method:** independent re-derivation — diff review against the agreed design + focused suites + JaCoCo re-inspection + live Redis 7.2.11 differential. No reliance on the pre-commit re-review's claims.
+
+**Static verification of the rewrite (KGroup.java 69-196):**
+
+- `ScanCursor` construction matches the record order `(slot, walGroupIndex, walSkipCount, keyBucketsSkipCount, splitIndex, bucketIndex)` (ScanCursor.java:6-7); the bucket resume loop feeds back exactly `walGroupIndex/splitIndex/bucketIndex/keyBucketsSkipCount` in `KeyLoader.scan`'s parameter order (KeyLoader.java:726-733), mirroring SGroup.java:727-728.
+- WAL loop terminates: `Wal.scan` always advances — in-group (`nextTimeSkipCount ≥ snapshotKeys.size()` → group+1) or END sentinel (Wal.java:458-479). No `onceScanMaxLoopCount` needed (full iteration by design; progress guaranteed).
+- Bucket loop terminates: `KeyLoader.scan` early-return advances split/group (KeyLoader.java:767-776), exhaustion returns `END` or a next-slot cursor via `scanNextSlotCursor` (782-797); both flavors are caught by KGroup's `next == END || next.slot() != oneSlot.slot()` break — **all 4 branches of that check JaCoCo-covered**.
+- Reactor affinity does **not** regress vs bug_52 F2: the dropped `Promise.ofFuture` bounce is inherited per-slot — `asyncCall` on a reactor returns `Promise.ofFuture(slotWorkerEventloop.submit(...))` (OneSlot.java:736-738), so every constituent promise completes on the request reactor; `Promises.toList(...).whenComplete` and `finalPromise.set(...)` therefore also run there, where `transferAsyncReply`'s `promise.map` subscribed (MultiWorkerServer.java:694-710).
+- WAL/bucket dedup + snapshot: per-WAL-group `inWalKeys` (KeyLoader.java:746, the bug_13 fix) skips bucket entries shadowed by WAL; both phases filter `seq > beginScanSeq` (Wal.java:416, KeyLoader.java:685) and tombstones/expired (Wal.java:433, KeyLoader.java:653). One `beginScanSeq` shared by all slots.
+- Cap: per-slot budget `matchMaxCount`, aggregate trimmed in slot order; knob read via `instanceof Integer` (the old `(String)` cast hazard gone); `firstOneSlot()` null-guarded (LocalPersist.java:651, cluster-no-slots → default 100).
+
+**Focused tests (this session, independent run):** `./gradlew :test --tests "io.velo.command.KGroupTest" --tests "io.velo.persist.DynConfigTest" --tests "io.velo.command.SGroupTest"` → **BUILD SUCCESSFUL** (KGroupTest 4 methods incl. the rewritten `test keys`; DynConfigTest incl. new knob normalize/reject cases; SGroupTest green = shared SCAN machinery untouched).
+
+**JaCoCo (this session, `scripts/jacoco_cover.py`):** `io.velo.command.KGroup` 90-185 → **50/57 lines, 7/11 branch lines fully covered**; not-covered 117-119 + partial 94/116/161/174 are fault-injection / cluster-no-slots / loop-entry flavors only. `io.velo.persist.DynConfig` 155-175 → covered (5/5).
+
+**Live Redis 7.2.11 differential** (port 16380, same 9 keys as the test):
+
+```
+PAT[user:*] => user:1,user:2,          PAT[*] => app.log,appXlog,hello,hllo,hxllo,user,user:1,user:2,userr,
+PAT[user*]   => user,user:1,user:2,userr,   PAT[user] => user,
+PAT[h?llo] => hello,hxllo,             PAT[nonexistent] =>,
+PAT[hllo]  => hllo,                    PAT[foo[] =>,          (no error)
+PAT[h[ax]llo] => hxllo,                PAT[] =>,              (empty array)
+PAT[h[eo]llo] => hello,                PAT[app.log] => app.log,
+PAT[app?log] => app.log,appXlog,
+```
+
+**13/13 patterns identical to the rewritten `KGroupTest` expectations.**
+
+**Verdict: fix ACCEPTED.** All seven findings verified fixed at `d8e41ddd`/`db9564fc`; the TDD-red waiver is recorded with the maintainer's decision; follow-ups (non-blocking): `KeyAnalysisHandler.prefixMatch` now has zero callers (dead code, cleanup candidate); stale "commit pending" wording in the pre-commit re-review superseded by this section.
+
+
 ## Residual Risk
 
 - Uncovered defensive branches in KGroup.java: `firstOneSlot == null` (94), the `whenComplete` exception translation (116-119), one cursor-flavor branch (174) — reachable only via fault injection / cluster-with-no-slots; noted, not blocking.
