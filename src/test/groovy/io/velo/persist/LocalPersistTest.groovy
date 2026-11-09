@@ -56,10 +56,8 @@ class LocalPersistTest extends Specification {
 
         when:
         localPersist.startIndexHandlerPool()
-        localPersist.asSlaveFirstSlotFetchedExistsAllDone = true
         then:
         localPersist.indexHandlerPool != null
-        localPersist.asSlaveFirstSlotFetchedExistsAllDone
 
         cleanup:
         Thread.sleep(100)
