@@ -736,6 +736,7 @@ public class LGroup extends BaseCommand {
                     if (rank == 0) {
                         return LPOS_RANK_ZERO;
                     }
+                    i++; // skip the option value
                 }
                 case "count" -> {
                     if (i + 1 >= data.length) {
@@ -750,6 +751,7 @@ public class LGroup extends BaseCommand {
                         return ErrorReply.INVALID_INTEGER;
                     }
                     countProvided = true;
+                    i++; // skip the option value
                 }
                 case "maxlen" -> {
                     if (i + 1 >= data.length) {
@@ -763,6 +765,11 @@ public class LGroup extends BaseCommand {
                     if (maxlen < 0) {
                         return ErrorReply.INVALID_INTEGER;
                     }
+                    i++; // skip the option value
+                }
+                default -> {
+                    // redis only accepts RANK, COUNT and MAXLEN
+                    return ErrorReply.SYNTAX;
                 }
             }
         }

@@ -662,6 +662,18 @@ class LGroupTest extends Specification {
         (reply as ErrorReply).message.contains("RANK can't be zero")
 
         when:
+        // bug 82.5: redis rejects an unknown option name
+        reply = lGroup.execute('lpos a a foo 1')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // bug 82.5: redis also rejects a trailing argument that is not an option
+        reply = lGroup.execute('lpos a a rank 1 2')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
         reply = lGroup.execute('lpos a a count a')
         then:
         reply == ErrorReply.NOT_INTEGER
