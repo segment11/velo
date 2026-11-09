@@ -12,6 +12,7 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.rdb.RDBParser
 import io.velo.reply.*
 import io.velo.type.RedisHashKeys
 import org.rocksdb.Options
@@ -232,6 +233,38 @@ class IGroupTest extends Specification {
         then:
         reply == ErrorReply.INCR_DECR_OVERFLOW
         inMemoryGetSet.getBuf(slot, 'lneg', 0, 0L).cv().numberValue().longValue() == -5L
+
+        when: 'java-only integer literals are rejected like redis string2ll'
+        reply = iGroup.execute('incrby s1 +5')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = iGroup.execute('incrby s1 05')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = iGroup.execute('incrby s1 -0')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        reply = iGroup.execute('incrby s1 1.0')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when: 'redis canonical integers still work'
+        reply = iGroup.execute('incrby s1 0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0L
+
+        when:
+        reply = iGroup.execute('incrby s1 -5')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == -5L
     }
 
     def 'test incrbyfloat'() {
@@ -283,6 +316,50 @@ class IGroupTest extends Specification {
         then:
         smallReply instanceof DoubleReply
         new String((smallReply as DoubleReply).buffer().asArray()) == "\$4\r\n1000\r\n"
+
+        when: 'java-only float literals are rejected like redis string2ld'
+        reply = iGroup.execute('incrbyfloat d1 1.5d')
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when:
+        def dataSpace = new byte[3][]
+        dataSpace[1] = 'd2'.bytes
+        dataSpace[2] = ' 1.5 '.bytes
+        iGroup.cmd = 'incrbyfloat'
+        iGroup.data = dataSpace
+        iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incrbyfloat', dataSpace, iGroup.slotNumber)
+        reply = iGroup.handle()
+        then:
+        reply == ErrorReply.NOT_FLOAT
+
+        when: 'strtold-shaped literals redis accepts must stay accepted'
+        dataSpace[2] = '+1.5'.bytes
+        iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incrbyfloat', dataSpace, iGroup.slotNumber)
+        reply = iGroup.handle()
+        then:
+        reply instanceof DoubleReply
+
+        when:
+        dataSpace[2] = '.5'.bytes
+        iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incrbyfloat', dataSpace, iGroup.slotNumber)
+        reply = iGroup.handle()
+        then:
+        reply instanceof DoubleReply
+
+        when:
+        dataSpace[2] = '05'.bytes
+        iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incrbyfloat', dataSpace, iGroup.slotNumber)
+        reply = iGroup.handle()
+        then:
+        reply instanceof DoubleReply
+
+        when:
+        dataSpace[2] = '-0'.bytes
+        iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incrbyfloat', dataSpace, iGroup.slotNumber)
+        reply = iGroup.handle()
+        then:
+        reply instanceof DoubleReply
     }
 
     private static List<String> infoHeaders(Reply reply) {
@@ -380,6 +457,30 @@ class IGroupTest extends Specification {
         reply = iGroup.execute('info cpu all')
         then:
         infoHeaders(reply) == ['# Server', '# Clients', '# Memory', '# Replication', '# CPU', '# Cluster', '# Keyspace']
+    }
+
+    def 'test redis literal helpers'() {
+        expect: 'the integer rule is redis string2ll'
+        _IGroup.isRedisFloatString('1.5'.bytes)
+        !_IGroup.isRedisFloatString('1.5d'.bytes)
+        !_IGroup.isRedisFloatString(' 1.5 '.bytes)
+        _IGroup.isRedisFloatString('+1.5'.bytes)
+        _IGroup.isRedisFloatString('.5'.bytes)
+        _IGroup.isRedisFloatString('05'.bytes)
+        _IGroup.isRedisFloatString('-0'.bytes)
+        _IGroup.isRedisFloatString('1e3'.bytes)
+        _IGroup.isRedisFloatString('1.5e-2'.bytes)
+        !_IGroup.isRedisFloatString('0x10'.bytes)
+        !_IGroup.isRedisFloatString(''.bytes)
+
+        RDBParser.isRedisIntegerString('123'.bytes)
+        RDBParser.isRedisIntegerString('-123'.bytes)
+        RDBParser.isRedisIntegerString('0'.bytes)
+        !RDBParser.isRedisIntegerString('+5'.bytes)
+        !RDBParser.isRedisIntegerString('05'.bytes)
+        !RDBParser.isRedisIntegerString('-0'.bytes)
+        !RDBParser.isRedisIntegerString('1.0'.bytes)
+        !RDBParser.isRedisIntegerString(''.bytes)
     }
 
     def 'test ingest'() {

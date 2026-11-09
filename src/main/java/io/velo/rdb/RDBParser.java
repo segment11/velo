@@ -520,12 +520,13 @@ public class RDBParser {
     /**
      * Checks whether the bytes are a canonical decimal integer, the same rule as redis string2ll().
      * A leading '+', leading zeros and '-0' are not integers for redis, so they must not use the
-     * rdb integer encoding, or restore would decode a different value.
+     * rdb integer encoding, or restore would decode a different value. Also used by the command
+     * layer to validate incrby-family deltas (bug 79.8).
      *
      * @param data the string bytes
      * @return true if the bytes are a canonical integer
      */
-    private static boolean isRedisIntegerString(byte[] data) {
+    public static boolean isRedisIntegerString(byte[] data) {
         if (data.length == 0) {
             return false;
         }

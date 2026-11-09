@@ -7,6 +7,7 @@ import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.ingest.ParquetGroupToValue;
 import io.velo.persist.Wal;
+import io.velo.rdb.RDBParser;
 import io.velo.reply.*;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.example.data.Group;
@@ -17,6 +18,7 @@ import org.apache.parquet.schema.MessageTypeParser;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -141,6 +143,11 @@ public class IGroup extends BaseCommand {
                 return ErrorReply.FORMAT;
             }
 
+            // redis parses the delta with string2ll semantics, java-only literals like +5, 05, -0 are
+            // rejected (bug 79.8)
+            if (!RDBParser.isRedisIntegerString(data[2])) {
+                return ErrorReply.NOT_INTEGER;
+            }
             long by;
             try {
                 by = Long.parseLong(new String(data[2]));
@@ -161,6 +168,11 @@ public class IGroup extends BaseCommand {
                 return ErrorReply.FORMAT;
             }
 
+            // redis parses the delta with string2ld/strtold semantics: no surrounding whitespace,
+            // no trailing java suffix like d/f, while +1.5, .5, 05, 1e3 stay accepted (bug 79.8)
+            if (!isRedisFloatString(data[2])) {
+                return ErrorReply.NOT_FLOAT;
+            }
             double by;
             try {
                 by = Double.parseDouble(new String(data[2]));
@@ -192,6 +204,10 @@ public class IGroup extends BaseCommand {
 
     private final CachedGroovyClassLoader cl = CachedGroovyClassLoader.getInstance();
 
+    private static final java.util.regex.Pattern FLOAT_LITERAL_PATTERN =
+            java.util.regex.Pattern.compile("[+-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?");
+
+
     private Reply info() {
         var scriptText = RefreshLoader.getScriptText("/dyn/src/io/velo/script/InfoCommandHandle.groovy");
 
@@ -207,6 +223,19 @@ public class IGroup extends BaseCommand {
         }
 
         return pair.substring(index + 1);
+    }
+
+    /**
+     * The decimal float literal forms redis string2ld()/strtold() accepts: an optional sign,
+     * digits with an optional fraction, and an optional decimal exponent. Surrounding whitespace
+     * and java-only suffixes like 1.5d are not valid float values for redis (bug 79.8).
+     *
+     * @param data the string bytes
+     * @return true if the bytes are a canonical float literal
+     */
+    @VisibleForTesting
+    static boolean isRedisFloatString(byte[] data) {
+        return FLOAT_LITERAL_PATTERN.matcher(new String(data)).matches();
     }
 
     private Reply ingest() {
