@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** all 7 findings CONFIRMED (reproduced) by agent 2; fix phase complete — `keys()` rewritten on the SCAN machinery per maintainer decision (TDD red step waived), (fix commit d8e41ddd); **re-review 3 (independent, post-commit): NOT ACCEPTED — blocking same-millisecond exclusion defect (see "Re-review 3")**
+**Status:** all 7 findings CONFIRMED (reproduced) by agent 2; fix phase complete — `keys()` rewritten on the SCAN machinery per maintainer decision (TDD red step waived), (fix commit d8e41ddd); re-review 3 (independent, post-commit) found a blocking same-millisecond exclusion defect; **re-review 4: 80.8-80.11 fixed in `512b44fb`/`616ef7ac`/`f25391f3`/`198b52b4` and independently verified — ACCEPTED, bug 80 closable**
 **Review branch:** `review/kgroup`
 **Reviewed commit:** `2dc770d709507d8ca437d6172094b4ea8e9bf4db`
 
@@ -426,17 +426,17 @@ For SCAN this exclusion is acceptable — the Redis SCAN contract explicitly per
 | same, with `Thread.sleep(2)` between write and read | 0 / 100 misses |
 | same, with `Thread.sleep(5)` between write and read | 0 / 100 misses |
 
-Live differential against the real server (build of `d8e41ddd`) vs stock Redis 7.2, using an atomic script so the write and the read land in the same millisecond:
+**Live differential against the real server (build of `d8e41ddd`) vs stock Redis 7.2.** 200 `SET`+`KEYS` pairs are pipelined in a single socket write, so the write and the read of each pair are handled back-to-back on the slot worker and frequently land in the same millisecond; the replies are parsed as RESP and each pair's `KEYS` reply is counted:
 
 ```
-# Velo (:7399)          redis-cli eval "redis.call('set',KEYS[1],'v'); return redis.call('keys',KEYS[1])" 1 s:1
-(empty)  x8
-
-# Redis 7.2 (:6399)     same script
-s:1 s:2 s:3 ... s:8
+# Velo pre-fix (:7399)    KEYS replies ->  67 FOUND, 133 EMPTY   (400/400 replies parsed)
+# Velo fixed  (:7399)     KEYS replies -> 200 FOUND,   0 EMPTY   (400/400 replies parsed)
+# Redis 7.2   (:6399)     KEYS replies -> 200 FOUND,   0 EMPTY   (400/400 replies parsed)
 ```
 
-**Why the committed test does not catch it.** The plain two-command CLI path (`redis-cli set` then `redis-cli keys`) *passes* — the network round-trip crosses a millisecond boundary — and the rewritten `KGroupTest.'test keys'` likewise separates every write from its assertion by a `Thread.sleep` or by intervening work. The defect only bites when the write and the KEYS land in the same millisecond: Lua scripts, pipelined batches, tight client loops, or high write throughput.
+> **Correction (added in re-review 4).** An earlier draft of this section cited a `redis-cli eval "redis.call('set',...); return redis.call('keys',...)"` differential as the live evidence. **That evidence was invalid**: Velo does not implement `EVAL` (`REDIS_COMMANDS_NOT_IMPLEMENTED.md:134` lists `EVAL`/`EVALSHA` as not implemented), so the empty reply was the unknown-command response, not the same-millisecond exclusion — it looked identical before *and* after the fix. The pipelined-burst probe above is the valid live differential; it was constructed and run in re-review 4, where it separates the pre-fix build (67/200) from the fixed build (200/200). The underlying defect and the unit-level measurements were unaffected by this error and remain valid.
+
+**Why the committed test does not catch it.** The plain two-command CLI path (`redis-cli set` then `redis-cli keys`) *passes* — the network round-trip crosses a millisecond boundary — and the rewritten `KGroupTest.'test keys'` likewise separates every write from its assertion by a `Thread.sleep` or by intervening work. The defect only bites when the write and the KEYS are handled within the same millisecond on the slot worker: pipelined batches, tight client loops, or high write throughput.
 
 **Root cause confirmed by experiment.** Temporarily replacing the boundary with an unbounded value (`long beginScanSeq = Long.MAX_VALUE;`) drops the miss rate to **0 / 200**. The temporary edit was reverted; the working tree is unmodified at review time.
 
@@ -496,7 +496,7 @@ The committed `KGroupTest` cannot fail on the blocking defect because every asse
 
 > **Superseded in part by "Re-review 3"** (independent post-commit review): the same-millisecond exclusion is a *confirmed defect*, not acceptable residual risk, and the cap "slot-order bias" bullet is re-classified there as systematic starvation of high-numbered slots (S1). Read those sections before acting on the bullets below.
 
-- Uncovered defensive branches in KGroup.java: `firstOneSlot == null` (94), the `whenComplete` exception translation (116-119), one cursor-flavor branch (174) — reachable only via fault injection / cluster-with-no-slots; noted, not blocking.
+- Uncovered defensive branches in KGroup.java: the `whenComplete` exception translation and one cursor-flavor branch — reachable only via fault injection; noted, not blocking. **[Stale entry corrected in re-review 4:** the `firstOneSlot == null` branch listed here no longer exists — `f25391f3` removed the per-slot knob read entirely, so `KGroup.keys()` no longer calls `firstOneSlot()` at all.]
 - Per-slot budget = `matchMaxCount` for every slot in parallel, then the aggregate is trimmed to `matchMaxCount` in slot order — a slot-order bias when the cap is hit (acceptable: KEYS result order is unspecified in Redis, and the cap is a documented safety valve). **[Re-review 3, S1: re-classified as Medium — not merely ordering, but systematic starvation of higher-numbered slots; 50 of 77 slot-1 keys dropped in a 2-slot / 150-key / cap-100 measurement.]**
 - KEYS is O(N) per call over all slots (Redis-equivalent complexity class; runs on slot workers so other slots are unaffected; the cap bounds the reply size but not the scan work when matches are sparse — same as before for SCAN).
 - The key-analysis RocksDB store itself is untouched (still sampled, still wiped by the periodic task) — it now only feeds `KeyAnalysisTask` statistics, no longer any command path. The `prefixMatch` anomaly recorded above lives there.
@@ -520,10 +520,10 @@ The committed `KGroupTest` cannot fail on the blocking defect because every asse
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 80.8 | KEYS silently omits keys written in the same millisecond as the scan (timestamp-epoch `beginScanSeq` inherited from SCAN; Redis KEYS has no snapshot contract) | **High / blocking** | Correctness / Redis compat | CONFIRMED (reproduced; 193/200 and 401/500 miss rates; live Redis 7.2 differential) | fixed in `512b44fb` (boundary dropped, red/green + JaCoCo) |
-| 80.9 | Cap trim in slot order starves high-numbered slots (each slot collects up to the cap independently, then the aggregate is trimmed) | Medium | Correctness / operability | CONFIRMED (reproduced; 50 of 77 slot-1 keys dropped) | fixed in `616ef7ac` (round-robin interleave, red/green + JaCoCo) |
-| 80.10 | `keys.matchMaxCount` read from `firstOneSlot()` but written to all slots; null in cluster mode → silent revert to 100 | Medium | Correctness / operability | CONFIRMED (static) | fixed in `f25391f3` (global static `ConfForGlobal.keysMatchMaxCount` set by `apply()`) |
-| 80.11 | `DynConfig.apply()` for the knob is a no-op that logs one warning per slot per set | Low | Operability / log noise | CONFIRMED (static) | fixed in `f25391f3` (`apply()` sets the global; the per-slot log line matches the `max_connections` precedent) |
+| 80.8 | KEYS silently omits keys written in the same millisecond as the scan (timestamp-epoch `beginScanSeq` inherited from SCAN; Redis KEYS has no snapshot contract) | **High / blocking** | Correctness / Redis compat | CONFIRMED (reproduced; 193/200 and 401/500 miss rates; live Redis 7.2 differential) | fixed in `512b44fb` — **re-review 4: ACCEPTED** (live differential 67/200 → 200/200, matches Redis 7.2) |
+| 80.9 | Cap trim in slot order starves high-numbered slots (each slot collects up to the cap independently, then the aggregate is trimmed) | Medium | Correctness / operability | CONFIRMED (reproduced; 50 of 77 slot-1 keys dropped) | fixed in `616ef7ac` (round-robin interleave) — **re-review 4: ACCEPTED** (73/27 → 50/50) |
+| 80.10 | `keys.matchMaxCount` read from `firstOneSlot()` but written to all slots; null in cluster mode → silent revert to 100 | Medium | Correctness / operability | CONFIRMED (static) | fixed in `f25391f3` (global static `ConfForGlobal.keysMatchMaxCount` set by `apply()`) — **re-review 4: ACCEPTED** |
+| 80.11 | `DynConfig.apply()` for the knob is a no-op that logs one warning per slot per set | Low | Operability / log noise | CONFIRMED (static) | fixed in `f25391f3` + `198b52b4` (`apply()` sets the global; log unified via `logSet`) — **re-review 4: ACCEPTED** |
 
 ### Response to Re-review 3 (fix agent)
 
@@ -537,3 +537,85 @@ Agreed with all four findings before fixing — the blocking 80.8 was independen
 Incident note: while the 80.10 fix was being verified, a concurrent agent injected `as int` coercions into `KGroupTest.groovy` (GroovyCastException: "Cannot coerce a map to Integer"); reverted before commit `f25391f3`. Fix agents should hold the pen exclusively during a fix phase.
 
 All suites re-verified after the three commits: `KGroupTest`, `DynConfigTest`, `SGroupTest`, `CommandRegistryPopulationTest`, `CategoryTest` green.
+
+### Re-review 4 (independent verification of the 80.8-80.11 fixes — commits `512b44fb`, `616ef7ac`, `f25391f3`, `198b52b4`)
+
+**Method:** diff review of each fix commit; independent re-reproduction over the real persist layer (scratch spec, deleted after evidence capture); live end-to-end differential against the real server (build of the fixed tree) and stock Redis 7.2 using a **pipelined SET+KEYS burst** with a proper RESP reply parser; regression sweep over the `io.velo.command.*` and `io.velo.persist.*` suites; pre-fix vs post-fix build comparison on the live probe.
+
+**Verdict: ACCEPTED — all four findings verified fixed.** 80.8 is fixed end-to-end (live differential 67/200 → 200/200, matching Redis 7.2 exactly). 80.9 is fixed and the fairness contract is now pinned by a permanent test. 80.10 and 80.11 are fixed with the knob correctly promoted to a global. No new defect introduced by the four commits. Two cosmetic residuals are noted below, neither blocking.
+
+#### Verification per finding
+
+**80.8 — same-millisecond exclusion — FIXED (`512b44fb`).**
+
+The fix drops the snapshot boundary entirely: `beginScanSeq` → `final long scanAllSeq = Long.MAX_VALUE` (`KGroup.java:101-105`), threaded through `collectMatchedKeys` into both `wal.scan(...)` and `keyLoader.scan(...)`. This is review 3's option 1 and is the correct choice — KEYS has no cursor, so no boundary is needed.
+
+The three filter sites all become no-ops, as intended:
+- `Wal.java:416` — `seq <= Long.MAX_VALUE` is always true → every WAL key enters the snapshot.
+- `KeyLoader.java:685` — `seq > Long.MAX_VALUE` is never true → no bucket entry is skipped.
+- `Wal.inWalKeysFormScan(Long.MAX_VALUE)` (`Wal.java:372-387`) now returns **all** WAL-resident keys, so the WAL-shadow suppression of bucket copies is retained — and, as a side benefit, the pre-existing `<` (strict) vs `<=` asymmetry that could emit a key twice at the exact boundary is now moot, since the WAL phase and the shadow set use the same inclusive rule.
+
+No overflow or sign hazard: `seq` is a positive `long`, and the boundary is only ever used in comparisons, never arithmetic.
+
+*Independent re-measurement (scratch spec, real persist layer):* write-then-`KEYS` with no sleep → **0 / 300 misses** (pre-fix: 193/200).
+
+*Live end-to-end differential* — 200 `SET`+`KEYS` pairs pipelined in one socket write, replies parsed as RESP:
+
+| Build | KEYS replies |
+|---|---|
+| pre-fix (`d8e41ddd`) | **67 FOUND / 133 EMPTY** |
+| fixed (`512b44fb`..`2b6c6b8f`) | **200 FOUND / 0 EMPTY** |
+| stock Redis 7.2 | **200 FOUND / 0 EMPTY** |
+
+The fixed build is byte-for-byte equivalent to Redis on this probe.
+
+*Duplicate-key regression check:* a key rewritten so that a new WAL entry shadows an older bucket copy → **0 / 300 duplicates**. Static reason why this is safe rather than lucky: the WAL→bucket persist (`OneSlot.doPersist` → `putValueToWal`, `OneSlot.java:2243-2258`) is reached only through `OneSlot.put`/`removeDelay`, both of which call `checkCurrentThreadId()`, and `collectMatchedKeys` runs on that same slot worker thread via `asyncCall` — so the persist cannot interleave between the WAL phase and the key-bucket phase of one `keys()` call.
+
+**80.9 — cap fairness — FIXED (`616ef7ac`).**
+
+The trim is replaced by a round-robin interleave over the per-slot lists (`KGroup.java:123-141`): each round takes one key from every slot that still has one, so no slot can be starved by an earlier slot's surplus. Termination is sound — every round either adds at least one key (bounded by the finite lists) or sets `added=false` and breaks; the cap check breaks out of the inner loop.
+
+*Independent re-measurement* (150 keys over 2 slots, cap 100):
+
+| | slot 0 | slot 1 | total |
+|---|---|---|---|
+| pre-fix | 73 | 27 | 100 (50 slot-1 keys dropped) |
+| fixed | **50** | **50** | 100 |
+
+Round-robin is also the right *shape* for the contract: a slot that has fewer matches simply contributes fewer, and the reply stays within the cap. Redis does not specify `KEYS` result order, so interleaving slots in the reply is acceptable.
+
+**80.10 — knob read/write scope — FIXED (`f25391f3`).**
+
+The knob is promoted to a global: `ConfForGlobal.keysMatchMaxCount` (a `volatile int`, default 100) is set by `DynConfig.apply()` and read directly by `KGroup.keys()`. The per-slot `firstOneSlot()` read, the `instanceof Integer` hazard and the cluster-mode null fallback are all gone.
+
+*Independent re-measurement:* setting the knob on slot 0 only → global becomes 200; setting it on slot 1 only → global becomes 300. Last apply wins, and the value is no longer scoped to whichever slot happens to be first.
+
+The `volatile` is the right primitive here — `KGroup.keys()` reads the field from a random worker thread while `apply()` writes it from a slot worker thread.
+
+Persistence across restart is preserved: `DynConfig` still writes the value into the slot's `dyn-config.json`, and the `DynConfig` constructor re-applies every persisted key on slot init (`DynConfig.java:420-435`), so the global is restored at startup.
+
+**80.11 — `apply()` no-op / log noise — FIXED (`f25391f3`, tidied in `198b52b4`).**
+
+`apply()` now performs a real action (sets the global) instead of only logging, and the per-item log lines were unified through one private `logSet(...)` helper (`DynConfig.java:44-47`), which also removes the message-format drift between `SUPPORTED_ITEMS[...].apply()` and `AfterUpdateCallbackInner.afterUpdate()` (e.g. `"Dyn config for global set max_connections=..."` vs `"Dyn config set max_connections=..."`).
+
+The remaining "one log line per slot" behaviour is inherent to `DynConfig`'s per-slot fan-out and matches the pre-existing `max_connections` precedent exactly — the same global is set once per slot with the same log line. Accepted.
+
+#### Regression sweep
+
+- `./gradlew :test --tests "io.velo.command.KGroupTest" --tests "io.velo.persist.DynConfigTest" --tests "io.velo.command.SGroupTest" --tests "io.velo.command.CategoryTest" --tests "io.velo.command.CommandRegistryPopulationTest"` → **BUILD SUCCESSFUL**.
+- `./gradlew :test --tests "io.velo.command.*" --tests "io.velo.persist.*"` → 4 failures: `InfoCommandTest > test handle`, `LGroupTest > test lpush`, `ConstsTest > test download and start zookeeper`, `LocalPersistTest > test all`. **Verified pre-existing**: the same 4 fail identically with the pre-fix sources restored (`git checkout b862fa18 -- KGroup.java ConfForGlobal.java DynConfig.java KGroupTest.groovy`), so they are unrelated to this fix series. `ConstsTest`'s zookeeper case is an environment dependency. The `Bug71ReviewTempSpec` / `Bug77ReReviewTempSpec` failures in the same run are leftover scratch specs from earlier bug-80 rounds, not tracked files.
+- `SnowFlake` import removed from `KGroup.java` by `512b44fb` — no remaining reference; `KGroup.DEFAULT_MATCH_MAX_COUNT` was removed with it and has no other referents (grep clean).
+
+#### Residuals (non-blocking, no action required for acceptance)
+
+1. **Cap work/memory amplification is unchanged.** The round-robin fixes *which* keys are returned, but each slot still collects up to `matchMaxCount` matches before the aggregate is assembled, so the aggregate holds up to `slots × matchMaxCount` strings and the scan work is still `slots × matchMaxCount` in the worst case. A per-slot fair share of `ceil(cap / slots)` would bound the memory, at the cost of a slot with more matches not being fully drained — a design choice for the owner, not a defect. KEYS is O(N) per call either way, matching Redis's complexity class.
+2. **`DynConfigTest` leaves `ConfForGlobal.keysMatchMaxCount` at 200.** The knob is now a process-global static, and `DynConfigTest.'test supported config items normalize and validate values'` sets it without restoring it. Contained today by `forkEvery = 1` (one JVM per test class), and consistent with that same test's handling of the other globals it sets (`RedisZSet.ZSET_MEMBER_MAX_LENGTH`, `RedisHashKeys.HASH_MAX_SIZE`, …), which are also not restored. Worth a `cleanup:` reset if that file is ever touched again, but it is not a new class of problem.
+3. **Per-slot JSON copies of a global knob.** `keys.matchMaxCount` is global but still persisted in every slot's `dyn-config.json`, so `manage dyn-config` writes N files for one global and startup re-applies it N times. This is a property of `DynConfig`'s slot-scoped design, shared by `max_connections`; the value is idempotent, so it is harmless.
+
+#### Note on the reviewer's earlier evidence
+
+The `redis-cli eval` differential quoted in re-review 3 was invalid — Velo does not implement `EVAL` (`REDIS_COMMANDS_NOT_IMPLEMENTED.md:134`), so the empty reply was the unknown-command response and looked identical before and after the fix. Re-review 3's live-evidence paragraph has been corrected in place, with the valid pipelined-burst differential substituted. The re-review 3 **defect analysis, mechanism and unit-level measurements were unaffected** and stand.
+
+#### Disposition
+
+80.8, 80.9, 80.10, 80.11 — **fixed and independently verified**; the four commits are accepted. Bug 80 can be closed once the follow-ups in "Required follow-ups" items 1-3 of re-review 3 are reflected in the closed state.

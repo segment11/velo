@@ -89,7 +89,7 @@
 - [√] EXPIRE
 - [√] EXPIREAT
 - [√] EXPIRETIME
-- [√] KEYS (result capped by dyn config `keys.matchMaxCount`, default 100)
+- [√] KEYS (result capped by the global dyn config `keys.matchMaxCount`, default 100; the cap is shared round-robin across slots)
 - [x] MIGRATE
 - [x] MOVE
 - [x] OBJECT
