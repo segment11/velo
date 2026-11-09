@@ -1,0 +1,26 @@
+=== Redis 7.2.11 differential for io.velo.command.LGroup (bug 82) ===
+server: Redis server v=7.2.11 sha=d4c381df:0 malloc=jemalloc-5.3.0 bits=64 build=e3db856fd57ff434
+
+--- LTRIM negative end (list a = [a,b,c]) ---
+LTRIM a 0 -1  -> OK ; exists=1 ; lrange=a,b,c,
+LTRIM a 1 -1  -> OK ; exists=1 ; lrange=b,c,
+LTRIM a -2 -1 -> OK ; exists=1 ; lrange=b,c,
+LTRIM a 3 3   -> OK ; exists=0
+LTRIM a -100 -90 -> OK ; exists=0
+LTRIM a 0 2   -> OK ; exists=1 ; lrange=a,b,c,
+
+--- LPOS (list k = [x,y,x,x]) ---
+LPOS k x RANK 0 -> (error) ERR RANK can't be zero: use 1 to start from the first match, 2 from the second ... or use negative to start from the end of the list
+LPOS k x FOO 1  -> (error) ERR syntax error
+LPOS k x COUNT -1 -> (error) ERR COUNT can't be negative
+LPOS k x MAXLEN -1 -> (error) ERR MAXLEN can't be negative
+LPOS k x RANK 2 COUNT 2 -> 1) (integer) 2
+2) (integer) 3
+
+--- LINDEX out of range ---
+LINDEX k 40000 -> (nil)
+LINDEX k 100   -> (nil)
+LSET k 40000 v -> (error) ERR index out of range
+
+--- LASTSAVE unit ---
+LASTSAVE -> 1794227223 ; date +%s -> 1794227223 ; date +%s%3N -> 1794227223650

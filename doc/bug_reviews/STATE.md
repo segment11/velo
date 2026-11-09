@@ -5,7 +5,7 @@ Single source of truth for report id allocation and module coverage.
 
 ## next_bug_id
 
-82
+83
 
 ## Allocated
 
@@ -24,6 +24,7 @@ Single source of truth for report id allocation and module coverage.
 | 79 | IGroup commands (incr/incrby/incrbyfloat/info/ingest/ingest_sst) | 1 | fix phase complete: 10/10 fixed, one commit each (`8eea029f`, `adf61d28`, `366c5052`, `10be2caf`, `2d650b14`, `da05d94b`, `961283c5`, `6aed7708`, `cd819dd7`, `e596fe5e`) + contract test `97098721`; re-review pending; follow-up: `DECRBY` with `Long.MIN_VALUE` delta is a separate DGroup bug (see report *Additional observations*) |
 | 80 | KGroup commands (keys) | 1 | round 1 rewrite accepted (`d8e41ddd`+`db9564fc`); independent re-review 3 then found 80.8-80.11 (same-ms exclusion, cap slot starvation, knob scope, log noise) — all 4 fixed with red/green + JaCoCo: `512b44fb`, `616ef7ac`, `f25391f3`, log extraction `198b52b4`; **independent re-review 4 ACCEPTED all four** (live pipelined differential: pre-fix 67/200 keys found vs fixed 200/200, matching Redis 7.2) — closable |
 | 81 | GGroup/LGroup commands (getex zero TTL, lpushx/rpushx with a pending blocker) | 1 | 2/2 CONFIRMED (reproduced against live Redis 7.2) and fixed in 2 commits: 81.1 `ccec81b8` (getex rejects a zero TTL), 81.2 `ce727d3e` (lpushx/rpushx keep the key-exists check under a pending blocker; also fixes the LGroupTest static-BlockingList leak); residual: GETEX negative-TTL message text still differs from Redis |
+| 82 | LGroup commands (class LGroup) | 1 | fix phase complete — 6/6 CONFIRMED (reproduced, agent-2 temp Spock spec + live Redis 7.2.11 differential, logs `20261109_201500_lgroup_differential_redis72_bug_82.log` / `20261109_204643_lgroup_review_agent2_bug_82.log`) and fixed in 6 commits, one per bug: 82.1 `1957a4e5` (LTRIM with a negative `end` deleted the whole list — High), 82.2 `1f0e2dad` (LTRIM empty range now empties the list + OK), 82.3 `2cf0b4e2` (LASTSAVE replies seconds), 82.4 `69d10da5` (LPOS rejects RANK 0), 82.5 `195d89b5` (LPOS rejects unknown option names), 82.6 `a1a08492` (LINDEX out-of-range index replies nil); re-review pending |
 
 ## Module coverage (latest round per module)
 
@@ -44,6 +45,7 @@ Single source of truth for report id allocation and module coverage.
 | IGroup (incr/incrby/incrbyfloat/info/ingest/ingest_sst) | bug_79 round 1 | fix phase complete — 10/10 fixed (RED→GREEN+JaCoCo per commit, one commit each); re-review pending; follow-up: DGroup `DECRBY` `Long.MIN_VALUE` delta divergence; hash module proven untouched (HGroupTest 57/57) |
 | KGroup (keys) | bug_80 round 1 | 80.1-80.7 fixed by rewrite (accepted with Redis 7.2.11 differential); 80.8-80.11 from independent re-review 3 also fixed (`512b44fb`, `616ef7ac`, `f25391f3`, `198b52b4`) and **independently re-reviewed + ACCEPTED in re-review 4**; residual: prefixMatch dead code (cleanup candidate), defensive exception branches uncovered |
 | GGroup/LGroup commands (getex zero TTL, lpushx/rpushx with a pending blocker) | bug_81 round 1 | 2/2 fixed (81.1 `ccec81b8`, 81.2 `ce727d3e`, RED→GREEN+JaCoCo each); residual: GETEX negative-TTL message text differs from Redis |
+| LGroup commands (class LGroup) | bug_82 round 1 | 6/6 fixed (82.1 `1957a4e5`, 82.2 `1f0e2dad`, 82.3 `2cf0b4e2`, 82.4 `69d10da5`, 82.5 `195d89b5`, 82.6 `a1a08492`; RED→GREEN+JaCoCo each, `LGroupTest.groovy:1094-1100` updated); re-review pending |
 | types / config / metrics / cluster / net / compression / commands (string/hash/list/set/zset/geo/hll) | see doc/bug_reviews/ | check reports |
 
 ## Known id collisions (historical, do not propagate)

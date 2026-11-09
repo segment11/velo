@@ -1,0 +1,41 @@
+=== Redis 7.2.11 differential for bug 82 agent-2 verification ===
+redis_version:7.2.11
+--- 82.1 LTRIM negative end (k=[a,b,c]) ---
+LTRIM k 0 -1 -> OK ; exists=1 ; lrange=a,b,c,
+LTRIM k 1 -1 -> OK ; exists=1 ; lrange=b,c,
+LTRIM k 2 -1 -> OK ; exists=1 ; lrange=c,
+LTRIM k 1 2 -> OK ; exists=1 ; lrange=b,c,
+--- 82.2 LTRIM out-of-range (k=[a,b,c]) ---
+LTRIM k 3 3 -> OK ; exists=0
+LTRIM k 3 10 -> OK ; exists=0
+LTRIM k -100 -90 -> OK ; exists=0
+--- 82.3 LASTSAVE unit ---
+lastsave=1794227322 ; date +%s=1794228366 ; date ms=1794228366287
+--- 82.4 LPOS RANK 0 (k2=[y,x,x]) ---
+ERR RANK can't be zero: use 1 to start from the first match, 2 from the second ... or use negative to start from the end of the list
+
+--- 82.5 LPOS unknown option ---
+FOO 1 -> ERR syntax error
+RANG 2 -> ERR syntax error
+COUNT 2 RANK 1 -> 1 2 
+--- 82.6 LINDEX out of range (k=[a,b,c]) ---
+LINDEX k 40000 -> 
+LINDEX k 32767 -> 
+LINDEX k 100 -> 
+=== Velo side: temp Spock spec Bug82ReviewVerifySpec (commit 7d8ce05a) ===
+
+=== Velo side: temp Spock spec Bug82ReviewVerifySpec at commit 7d8ce05a (each PASS = buggy behavior reproduced) ===
+tests=13 failures=0 errors=0
+82.1 ltrim negative end deletes the whole list -> PASS (bug reproduced)
+82.1b ltrim 1 -1 keeps tail on redis, deletes on velo -> PASS (bug reproduced)
+82.1c control: positive end unaffected -> PASS (bug reproduced)
+82.2 ltrim out-of-range range errors instead of emptying [cmd: ltrim k 3 3, #0] -> PASS (bug reproduced)
+82.2 ltrim out-of-range range errors instead of emptying [cmd: ltrim k 3 10, #1] -> PASS (bug reproduced)
+82.2 ltrim out-of-range range errors instead of emptying [cmd: ltrim k -100 -90, #2] -> PASS (bug reproduced)
+82.3 lastsave returns millis -> PASS (bug reproduced)
+82.4 lpos rank 0 behaves like rank 1 -> PASS (bug reproduced)
+82.5 lpos unknown option silently ignored [cmd: lpos k x FOO 1, #0] -> PASS (bug reproduced)
+82.5 lpos unknown option silently ignored [cmd: lpos k x RANG 2, #1] -> PASS (bug reproduced)
+82.6 lindex index >= 32767 errors instead of nil [cmd: lindex k 40000, expected: ErrorReply{message='list size too long'}, #0] -> PASS (bug reproduced)
+82.6 lindex index >= 32767 errors instead of nil [cmd: lindex k 32767, expected: ErrorReply{message='list size too long'}, #1] -> PASS (bug reproduced)
+82.6 lindex index >= 32767 errors instead of nil [cmd: lindex k 100, expected: <io.velo.reply.NilReply@1bbc1b90>, #2] -> PASS (bug reproduced)
