@@ -1,11 +1,9 @@
 package io.velo.reply;
 
 import io.activej.bytebuf.ByteBuf;
-import io.velo.ConfForGlobal;
 import org.jetbrains.annotations.TestOnly;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 
 /**
  * RESP3 double reply backed by a BigDecimal for precision.
@@ -31,17 +29,28 @@ public class DoubleReply implements Reply {
         return value.doubleValue();
     }
 
+    /**
+     * Format like redis does for incrbyfloat-family replies: the decimal value as-is,
+     * with trailing zeros stripped and no scientific notation. The number.doubleScale
+     * config is not applied here (bug 79.1).
+     */
+    private String toRedisFormat() {
+        var stripped = value.stripTrailingZeros();
+        if (stripped.scale() < 0) {
+            // a value like 1E+3 is 1000
+            stripped = stripped.setScale(0);
+        }
+        return stripped.toPlainString();
+    }
+
     @Override
     public ByteBuf buffer() {
-        var scaled = value.setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP);
-        var str = scaled.toPlainString();
-        return new BulkReply(str).buffer();
+        return new BulkReply(toRedisFormat()).buffer();
     }
 
     @Override
     public ByteBuf bufferAsResp3() {
-        var scaled = value.setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP);
-        var str = scaled.toPlainString();
+        var str = toRedisFormat();
         int len = 1 + str.length() + 2; // 1 byte for the marker, length of the string, 2 bytes for CRLF
 
         var bytes = new byte[len];

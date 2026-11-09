@@ -48,9 +48,9 @@ class RESPReplyTest extends Specification {
         new IntegerReply(100).integer == 100
         new IntegerReply(100).buffer().asArray() == ":100\r\n".bytes
         new IntegerReply(100).bufferAsHttp().asArray() == "100".bytes
-        new DoubleReply(new BigDecimal(1.1)).buffer().asArray() == "\$4\r\n1.10\r\n".bytes
-        new DoubleReply(new BigDecimal(1.1)).bufferAsResp3().asArray() == ",1.10\r\n".bytes
-        new DoubleReply(new BigDecimal(1.1)).doubleValue() == 1.1d
+        new DoubleReply(BigDecimal.valueOf(1.1)).buffer().asArray() == "\$3\r\n1.1\r\n".bytes
+        new DoubleReply(BigDecimal.valueOf(1.1)).bufferAsResp3().asArray() == ",1.1\r\n".bytes
+        new DoubleReply(BigDecimal.valueOf(1.1)).doubleValue() == 1.1d
         BoolReply.T.buffer().asArray() == "\$4\r\ntrue\r\n".bytes
         BoolReply.F.buffer().asArray() == "\$5\r\nfalse\r\n".bytes
         BoolReply.T.bufferAsResp3().asArray() == "#t\r\n".bytes
@@ -96,9 +96,9 @@ class RESPReplyTest extends Specification {
                 BoolReply.T,
                 new DoubleReply(1.0)
         ]
-        new MultiBulkReply(replies).buffer().asArray() == '*3\r\n$5\r\nbulk1\r\n$4\r\ntrue\r\n$4\r\n1.00\r\n'.bytes
-        new MultiBulkReply(replies).bufferAsResp3().asArray() == '*3\r\n+bulk1\r\n#t\r\n,1.00\r\n'.bytes
-        new MultiBulkReply(replies).bufferAsResp3().asArray() == '*3\r\n+bulk1\r\n#t\r\n,1.00\r\n'.bytes
+        new MultiBulkReply(replies).buffer().asArray() == '*3\r\n$5\r\nbulk1\r\n$4\r\ntrue\r\n$1\r\n1\r\n'.bytes
+        new MultiBulkReply(replies).bufferAsResp3().asArray() == '*3\r\n+bulk1\r\n#t\r\n,1\r\n'.bytes
+        new MultiBulkReply(replies).bufferAsResp3().asArray() == '*3\r\n+bulk1\r\n#t\r\n,1\r\n'.bytes
         new MultiBulkReply(replies).bufferAsHttp() != null
 
         when:

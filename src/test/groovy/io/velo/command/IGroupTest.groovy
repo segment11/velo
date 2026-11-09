@@ -208,6 +208,36 @@ class IGroupTest extends Specification {
         and: 'the value is still a double'
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().dictSeqOrSpType == CompressedValue.SP_TYPE_NUM_DOUBLE
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == 10.5d
+
+        when: 'incrbyfloat on an empty key with a sub-cent delta, three times'
+        def smallReply = iGroup.execute('incrbyfloat b 0.001')
+        then: 'the reply is not quantized to number.doubleScale, like redis 0.001'
+        smallReply instanceof DoubleReply
+        new String((smallReply as DoubleReply).buffer().asArray()) == "\$5\r\n0.001\r\n"
+
+        when:
+        smallReply = iGroup.execute('incrbyfloat b 0.001')
+        then:
+        new String((smallReply as DoubleReply).buffer().asArray()) == "\$5\r\n0.002\r\n"
+
+        when:
+        smallReply = iGroup.execute('incrbyfloat b 0.001')
+        then:
+        new String((smallReply as DoubleReply).buffer().asArray()) == "\$5\r\n0.003\r\n"
+        and: 'the stored value keeps the precision, the increment is not lost'
+        inMemoryGetSet.getBuf(slot, 'b', 0, 0L).cv().numberValue().doubleValue() == 0.003d
+
+        when: 'incrbyfloat strips trailing zeros like redis does'
+        reply = iGroup.execute('incrbyfloat a 0.1')
+        then:
+        reply instanceof DoubleReply
+        new String((reply as DoubleReply).buffer().asArray()) == "\$4\r\n10.6\r\n"
+
+        when: 'incrbyfloat with an exponent literal, the reply is plain'
+        smallReply = iGroup.execute('incrbyfloat c 1e3')
+        then:
+        smallReply instanceof DoubleReply
+        new String((smallReply as DoubleReply).buffer().asArray()) == "\$4\r\n1000\r\n"
     }
 
     def 'test ingest'() {

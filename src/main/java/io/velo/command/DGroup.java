@@ -6,7 +6,6 @@ import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
-import io.velo.ConfForGlobal;
 import io.velo.persist.OneSlot;
 import io.velo.persist.Wal;
 import io.velo.rdb.RDBParser;
@@ -17,7 +16,6 @@ import io.velo.type.RedisList;
 import io.velo.type.RedisZSet;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Set;
@@ -401,8 +399,9 @@ public class DGroup extends BaseCommand {
                 // infinity and nan are not valid float values
                 return NOT_NUMBER_REPLY;
             }
-            var newValue = BigDecimal.valueOf(doubleValue).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP)
-                    .subtract(BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, RoundingMode.HALF_UP));
+            // like redis incrbyfloat, compute with the full decimal precision of the operands,
+            // do not quantize to number.doubleScale (bug 79.1); the reply formatting strips trailing zeros
+            var newValue = BigDecimal.valueOf(doubleValue).subtract(BigDecimal.valueOf(byFloat));
 
             setNumber(newValue.doubleValue(), slotWithKeyHash, expireAt);
             return new DoubleReply(newValue);
