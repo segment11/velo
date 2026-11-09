@@ -210,6 +210,108 @@ class RDBParserTest extends Specification {
         callback.result as byte[] == 'hello world'.bytes
     }
 
+    def 'test is redis integer string'() {
+        when: 'canonical integers are accepted'
+        def valid = RDBParser.isRedisIntegerString('123'.bytes)
+        then:
+        valid
+
+        when:
+        valid = RDBParser.isRedisIntegerString('-123'.bytes)
+        then:
+        valid
+
+        when: 'zero is the only accepted form starting with 0'
+        valid = RDBParser.isRedisIntegerString('0'.bytes)
+        then:
+        valid
+
+        when: 'the long range boundaries are canonical forms, the range check belongs to the caller'
+        valid = RDBParser.isRedisIntegerString('9223372036854775807'.bytes)
+        then:
+        valid
+
+        when:
+        valid = RDBParser.isRedisIntegerString('-9223372036854775808'.bytes)
+        then:
+        valid
+
+        when: 'a beyond-range literal is still a canonical form, parseLong rejects the range'
+        valid = RDBParser.isRedisIntegerString('9223372036854775808'.bytes)
+        then:
+        valid
+
+        when: 'a leading plus is a java-only literal'
+        def invalid = RDBParser.isRedisIntegerString('+5'.bytes)
+        then:
+        !invalid
+
+        when: 'leading zeros are not canonical'
+        invalid = RDBParser.isRedisIntegerString('05'.bytes)
+        then:
+        !invalid
+
+        when: 'negative zero is not canonical'
+        invalid = RDBParser.isRedisIntegerString('-0'.bytes)
+        then:
+        !invalid
+
+        when: 'zero followed by more chars is not canonical'
+        invalid = RDBParser.isRedisIntegerString('0x10'.bytes)
+        then:
+        !invalid
+
+        when: 'a lone minus sign is not an integer'
+        invalid = RDBParser.isRedisIntegerString('-'.bytes)
+        then:
+        !invalid
+
+        when: 'a double minus is not an integer'
+        invalid = RDBParser.isRedisIntegerString('--5'.bytes)
+        then:
+        !invalid
+
+        when: 'a float literal is not an integer'
+        invalid = RDBParser.isRedisIntegerString('1.0'.bytes)
+        then:
+        !invalid
+
+        when: 'an exponent literal is not an integer'
+        invalid = RDBParser.isRedisIntegerString('1e5'.bytes)
+        then:
+        !invalid
+
+        when: 'a hex literal is not an integer'
+        invalid = RDBParser.isRedisIntegerString('0x10'.bytes)
+        then:
+        !invalid
+
+        when: 'trailing garbage is not an integer'
+        invalid = RDBParser.isRedisIntegerString('12a'.bytes)
+        then:
+        !invalid
+
+        when: 'surrounding whitespace is not an integer'
+        invalid = RDBParser.isRedisIntegerString(' 1'.bytes)
+        then:
+        !invalid
+
+        when:
+        invalid = RDBParser.isRedisIntegerString('1 '.bytes)
+        then:
+        !invalid
+
+        when: 'an empty string is not an integer'
+        invalid = RDBParser.isRedisIntegerString(''.bytes)
+        then:
+        !invalid
+
+        when: 'letters are not an integer'
+        invalid = RDBParser.isRedisIntegerString('abc'.bytes)
+        then:
+        !invalid
+    }
+
     def 'test dump types'() {
         given:
         def parser = new RDBParser()
