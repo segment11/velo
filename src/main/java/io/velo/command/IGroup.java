@@ -497,8 +497,9 @@ public class IGroup extends BaseCommand {
         }
 
         RocksDB db;
-        try {
-            db = RocksDB.open(new Options(), dirPath);
+        try (var options = new Options()) {
+            // options is native memory, it must be closed on every path (bug 79.7)
+            db = RocksDB.open(options, dirPath);
             log.info("open rocks db success, dir={}", dirPath);
         } catch (RocksDBException e) {
             log.error("open rocks db error, dir={}", dirPath, e);
@@ -526,7 +527,7 @@ public class IGroup extends BaseCommand {
 
         log.warn("Ingest sst start, set bulk load to true");
 
-        return localPersist.doSthInSlots(oneSlot -> {
+        var replyFromSlots = localPersist.doSthInSlots(oneSlot -> {
             oneSlot.setBulkLoad(true);
 
             // put number + skip number
@@ -549,11 +550,11 @@ public class IGroup extends BaseCommand {
                         it.next();
                     }
                 }
-            } finally {
-                oneSlot.resetWritePositionAfterBulkLoad();
-            }
-            return r;
-        }, resultList -> {
+             } finally {
+                 oneSlot.resetWritePositionAfterBulkLoad();
+             }
+             return r;
+         }, resultList -> {
             db.close();
             log.info("close rocks db, dir={}", dirPath);
 
@@ -568,5 +569,15 @@ public class IGroup extends BaseCommand {
 
             return new MultiBulkReply(replies);
         });
+
+        // a failing slot worker skips the aggregate function above, close the db on that path too (bug 79.7)
+        var asyncReply = (AsyncReply) replyFromSlots;
+        asyncReply.getSettablePromise().whenComplete((r, e) -> {
+            if (e != null) {
+                db.close();
+                log.info("close rocks db after error, dir={}", dirPath);
+            }
+        });
+        return asyncReply;
     }
 }

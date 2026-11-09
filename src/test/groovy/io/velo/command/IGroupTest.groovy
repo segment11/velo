@@ -707,7 +707,26 @@ class IGroupTest extends Specification {
         then:
         reply instanceof ErrorReply
 
+        when: 'a failing slot worker must not leak the rocks db handle'
+        iGroup.byPassGetSet = new InMemoryGetSet() {
+            @Override
+            void put(short slot, String key, int bucketIndex, CompressedValue cv) {
+                throw new RuntimeException('boom')
+            }
+        }
+        reply = iGroup.execute('ingest_sst dir=' + dir.absolutePath)
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getException() != null
+        and: 'the dir can be reopened, the handle was closed on the failure path'
+        def reopenedDb = RocksDB.open(new Options(), dir.absolutePath)
+        reopenedDb != null
+
         cleanup:
+        if (reopenedDb != null) {
+            reopenedDb.close()
+        }
+        iGroup.byPassGetSet = inMemoryGetSet
         new File('/tmp/xxx_x').deleteDir()
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
