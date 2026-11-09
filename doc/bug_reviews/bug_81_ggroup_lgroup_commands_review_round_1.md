@@ -265,8 +265,8 @@ Each bug = one commit, TDD first (failing test → minimal fix → focused test 
 
 | Bug | Failing test evidence | Fix commit | Focused test | JaCoCo |
 |---|---|---|---|---|
-| 81.1 | RED: `GGroupTest.'test getex'` failed at `GGroupTest.groovy:307` — `getex z ex 0` answered a `BulkReply` instead of an `ErrorReply` | *pending* | `./gradlew :test --tests "io.velo.command.GGroupTest"` → BUILD SUCCESSFUL (30 tests, 0 failures) | `GGroup.java` 310-340 → 22/22 lines, 8/8 branch lines fully covered, including the new `x == 0` guard |
-| 81.2 | *not started* | | | |
+| 81.1 | RED: `GGroupTest.'test getex'` failed at `GGroupTest.groovy:307` — `getex z ex 0` answered a `BulkReply` instead of an `ErrorReply` | `ccec81b8` | `./gradlew :test --tests "io.velo.command.GGroupTest"` → BUILD SUCCESSFUL (30 tests, 0 failures) | `GGroup.java` 310-340 → 22/22 lines, 8/8 branch lines fully covered, including the new `x == 0` guard |
+| 81.2 | RED: `LGroupTest.'test lpush'` failed at `LGroupTest.groovy:773` — `lpushx missingKey a` answered `1` instead of `REPLY_0` while a client was blocked on the key | *pending* | `./gradlew :test --tests "io.velo.command.LGroupTest"` → BUILD SUCCESSFUL (41 tests, 0 failures); `RGroupTest`, `BlockingListTest`, `BGroupTest`, `GGroupTest` green | `LGroup.java` 848-862 → 7/7 lines, 3/3 branch lines fully covered, including both sides of the new `needKeyExist` guard |
 
 **81.1 fix detail.** `GGroup.getex()` now rejects a zero TTL with the existing `invalidExpireTime()` helper
 (`GGroup.java:286-288`), which returns exactly the Redis message `invalid expire time in 'getex' command`:
@@ -290,13 +290,55 @@ The permanent `GGroupTest` cases cover all four spellings plus the "the key is l
 lower-severity divergence (the command is still rejected and the key is still untouched — no data impact). It is
 recorded under *Additional observations* rather than folded into this commit, to keep the change minimal per bug.
 
+**81.2 fix detail.** `LGroup.lpush()` now decides the "push only if the key exists" question **before** the
+blocking-list delivery, so a client waiting on the key can no longer make a non-existent key look like an
+existing one:
+
+```java
+var key = Wal.keyString(keyBytes);
+if (needKeyExist) {
+    // lpushx / rpushx push only if the key exists. A client blocked on the key does
+    // not make it exist, redis answers 0 and creates nothing, so the check must run
+    // before the blocking list delivery hands the value over.
+    if (getRedisList(slotWithKeyHashListParsed.getFirst()) == null) {
+        return IntegerReply.REPLY_0;
+    }
+}
+var afterPopValueBytesArray = BlockingList.setReplyIfBlockingListExist(key, addFirst, valueBytesArr, this);
+```
+
+The check has to run **before** `setReplyIfBlockingListExist()`, otherwise the value has already been handed to
+the blocked client by the time the existence is known — which is exactly the bug. `RPUSHX` reaches the same method
+through `RGroup.java:241-245`, so the single guard covers both spellings.
+
+Placing the guard here also keeps the wrong-type behaviour unchanged: `getRedisList()` raises
+`TypeMismatchException` for a key that holds a non-list value, exactly as the `addToList()` path did, so
+`LPUSHX` on a string key still answers `WRONGTYPE`.
+
+**Test isolation (part of the 81.2 commit).** `BlockingList` is entirely static, and `test lmove` leaves a
+never-completing waiter registered for key `a`, which the later `test lpush` inherited — that is what made
+`LGroupTest > test lpush` fail before this round. The 81.2 commit clears the registry in `test lmove`'s cleanup,
+so the class no longer depends on execution order, and the new 81.2 cases register their own waiter on a
+dedicated key and are therefore self-contained.
+
+The permanent cases cover: `LPUSHX` on a missing key with a waiter pending (answers `0`, the key is not created,
+the waiter is not woken), the same for `RPUSHX`, and the complementary case where the key **does** exist
+(`LPUSHX` pushes and wakes the waiter) so the new guard's fall-through path is covered too.
+
 ## Residual Risk
 
-- _to be filled by the fix agent_
+- `LPUSHX`/`RPUSHX` on a key that exists but holds a **non-list** value still answers `WRONGTYPE` through
+  `TypeMismatchException` — unchanged by the 81.2 fix (the new guard calls the same `getRedisList()` the
+  `addToList()` path called), but the guard now runs *before* the blocking-list delivery, so a wrong-type key
+  with a pending waiter answers `WRONGTYPE` instead of silently handing the value to the waiter. That is the
+  Redis behaviour, but it is a behaviour change on that path and is not covered by a dedicated case.
+- The negative-TTL message divergence for `GETEX` (see *Additional observations*) is left in place deliberately.
+- `BlockingList` remains entirely static; the 81.2 commit only stops the test suite from leaking waiters
+  between methods. Production code still shares one registry per process, which is by design.
 
 ## Summary
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 81.1 | `GETEX` accepts a zero TTL — `EX 0`/`PX 0` expire the key at once, `EXAT 0`/`PXAT 0` clear the TTL and make it permanent; Redis rejects all four | High | Correctness / Redis protocol compatibility | CONFIRMED (reproduced, live Redis 7.2 differential) | OPEN |
-| 81.2 | `LPUSHX`/`RPUSHX` skip the "key must exist" check when a blocking client is pending on the key — Velo answers `1` and creates the key, Redis answers `0` and creates nothing | High | Correctness / Redis protocol compatibility | CONFIRMED (reproduced, live Redis 7.2 differential) | OPEN |
+| 81.1 | `GETEX` accepts a zero TTL — `EX 0`/`PX 0` expire the key at once, `EXAT 0`/`PXAT 0` clear the TTL and make it permanent; Redis rejects all four | High | Correctness / Redis protocol compatibility | CONFIRMED (reproduced, live Redis 7.2 differential) | fixed (`ccec81b8`) — red/green + JaCoCo |
+| 81.2 | `LPUSHX`/`RPUSHX` skip the "key must exist" check when a blocking client is pending on the key — Velo answers `1` and creates the key, Redis answers `0` and creates nothing | High | Correctness / Redis protocol compatibility | CONFIRMED (reproduced, live Redis 7.2 differential) | fixed — red/green + JaCoCo |

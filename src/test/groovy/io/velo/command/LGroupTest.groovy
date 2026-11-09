@@ -416,6 +416,9 @@ class LGroupTest extends Specification {
         reply instanceof AsyncReply
 
         cleanup:
+        // the blocking list registry is static, drop the waiter this test left pending
+        // so a later test method is not affected by it
+        BlockingList.clearBlockingListPromisesForAllKeys()
         localPersist.cleanUp()
     }
 
@@ -752,13 +755,53 @@ class LGroupTest extends Specification {
 
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
-        SettablePromise<Reply> finalPromise3 = new SettablePromise<>()
+        SettablePromise<Reply> finalPromise3 = new SettablePromise<Reply>()
         BlockingList.addBlockingListPromiseByKey('a', finalPromise3, null, true)
         inMemoryGetSet.remove(slot, 'a')
         reply = lGroup.execute('lpush a a')
         then:
         reply == IntegerReply.REPLY_1
         finalPromise3.isComplete()
+
+        when: 'a blocking client waits on a key that does not exist, lpushx must not create it'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        SettablePromise<Reply> lpushxPromise = new SettablePromise<Reply>()
+        BlockingList.addBlockingListPromiseByKey('missingKey', lpushxPromise, null, true)
+        inMemoryGetSet.remove(slot, 'missingKey')
+        reply = lGroup.execute('lpushx missingKey a')
+        then:
+        reply == IntegerReply.REPLY_0
+        // the key must not be created and the waiting client must not be woken
+        inMemoryGetSet.getBuf(slot, 'missingKey', 0, 0L) == null
+        !lpushxPromise.isComplete()
+
+        when: 'the same for rpushx'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        SettablePromise<Reply> rpushxPromise = new SettablePromise<Reply>()
+        BlockingList.addBlockingListPromiseByKey('missingKey2', rpushxPromise, null, true)
+        inMemoryGetSet.remove(slot, 'missingKey2')
+        reply = rGroup.execute('rpushx missingKey2 a')
+        then:
+        reply == IntegerReply.REPLY_0
+        // the key must not be created and the waiting client must not be woken
+        inMemoryGetSet.getBuf(slot, 'missingKey2', 0, 0L) == null
+        !rpushxPromise.isComplete()
+
+        when: 'the key does exist, lpushx pushes and wakes the waiting client'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        SettablePromise<Reply> lpushxExistingPromise = new SettablePromise<Reply>()
+        BlockingList.addBlockingListPromiseByKey('existingKey', lpushxExistingPromise, null, true)
+        def existingCv = Mock.prepareCompressedValueList(1)[0]
+        existingCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def existingRl = new RedisList()
+        existingRl.addFirst('a'.bytes)
+        existingCv.compressedData = existingRl.encode()
+        inMemoryGetSet.put(slot, 'existingKey', 0, existingCv)
+        reply = lGroup.execute('lpushx existingKey a')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2
+        lpushxExistingPromise.isComplete()
 
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()

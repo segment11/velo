@@ -847,6 +847,14 @@ public class LGroup extends BaseCommand {
         }
 
         var key = Wal.keyString(keyBytes);
+        if (needKeyExist) {
+            // lpushx / rpushx push only if the key exists. A client blocked on the key does
+            // not make it exist, redis answers 0 and creates nothing, so the check must run
+            // before the blocking list delivery hands the value over.
+            if (getRedisList(slotWithKeyHashListParsed.getFirst()) == null) {
+                return IntegerReply.REPLY_0;
+            }
+        }
         var afterPopValueBytesArray = BlockingList.setReplyIfBlockingListExist(key, addFirst, valueBytesArr, this);
         // no blocking for this key
         if (afterPopValueBytesArray == null) {
