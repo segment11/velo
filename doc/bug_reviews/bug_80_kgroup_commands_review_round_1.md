@@ -13,6 +13,9 @@
 Files read (method + line ranges):
 
 - `src/main/java/io/velo/command/KGroup.java` — class doc + registry (16-30); `parseSlots()` (49-53); `handle()` (60-67); `keys()` (72-149)
+- `src/main/java/io/velo/command/SGroup.java` — scan registration (50); `parseSlots()` scan slot-pinning branch (308-330); `scanResultToReply()` (547-558); **`scan()` MATCH/COUNT parse + WAL-then-key-bucket iteration (576-733)** — read as the reference implementation for the 80.2 fix direction
+- `src/main/java/io/velo/persist/KeyLoader.java` — **`isKeyMatch()` glob dispatch + fast path (427-459)**; **`stringMatchLen()`/`stringMatchImpl()` — Redis `stringmatchlen` port (461-494)** — read as the reference matcher for the 80.1 fix direction
+- `src/main/java/io/velo/persist/Wal.java` — `scan()` signature + isKeyMatch usage (392-438)
 - `src/main/java/io/velo/persist/index/KeyAnalysisHandler.java` — class doc (30-35); `initOptions()` (93-123); `createDB()` (125-130); ctor (141-159); `addKey()` (168-190); `addBatch()` (207-231); `removeKey()` (233-238); `clearAllKeysAfterAnalysis()` (253-265); `flushdb()` (272-274); `filterKeys()` (334-371); **`prefixMatch()` (382-404)**; `run()` (411-429)
 - `src/main/java/io/velo/BaseCommand.java` — `execute()` test entry (454-489); `set()` write path incl. `addKey` call sites (975-1000, 1160-1222)
 - `src/main/java/io/velo/RequestHandler.java` — shortcut + group dispatch, exception catch-all (474-580)
@@ -33,6 +36,8 @@ Reference docs (ground truth):
 - Redis KEYS official command doc — https://redis.io/commands/keys/ (glob patterns `h?llo`/`h*llo`/`h[ae]llo`/`h[^e]llo`/`h[a-b]llo`, `\` escaping, "Returns **all** keys matching pattern", `KEYS *` = whole keyspace, O(N) full scan)
 - `doc/redis_command_support.md` line 92 — `KEYS` marked `[√]` supported
 - Prior round on this pipeline (not re-reported, see Delta): `doc/bug_reviews/bug_52_activej_usage_review_round_1.md` Finding 2 (KEYS promise completion cross-eventloop — fixed by the current `Promise.ofFuture` branch) and Finding 3 (FLUSHDB/FLUSHALL stale key-analysis index)
+
+Fix direction note: on 2026-11-09 the maintainer agreed to re-implement `keys()` on the SCAN machinery (`isKeyMatch` glob + per-slot WAL/key-bucket iteration via `oneSlot.asyncCall` fan-out); the consolidated design lives in Finding 80.2's *Suggested fix direction*, and 80.1/80.3/80.5/80.6/80.7 reference it.
 
 Baseline: `./gradlew :test --tests "io.velo.command.KGroupTest"` — BUILD SUCCESSFUL at reviewed commit.
 
@@ -76,7 +81,7 @@ With keys `user:1` … `user:100` present (Redis: `KEYS user:*` → 100 keys):
 `doc/redis_command_support.md` claims `KEYS [√]`, so any Redis client (jedis `keys("user:*")`, redis-cli `KEYS *` family) silently gets wrong data. No error is returned — worst-case failure mode.
 
 ### Suggested fix direction
-Translate glob → regex before compiling: `*`→`.*`, `?`→`.`, `[...]`→`[...]` (Redis `^` negation and `a-b` ranges map directly), escape all other regex metachars (`.` `+` `(` `)` `{` `}` `\` …) with `\\`; in Redis 7.2 `\` inside the pattern is a literal unless escaping a special char — follow `stringmatchlen` semantics. Restrict the prefix-break set to real glob metachars (`*`, `?`, `[`) so `.`/`+` no longer break the prefix (they are plain literals in glob). Keep the `startsWith(prefix)` seek optimization. If regex-flavored input is a product feature (the existing test uses `key:.*`), it is incompatible with the `[√]` Redis claim and needs a product decision — but `KEYS user:*` must not silently return wrong keys.
+**Don't write a glob→regex translator — reuse the existing one the SCAN family already uses.** `KeyLoader.isKeyMatch` (KeyLoader.java:432-459) delegates to `stringMatchLen` (KeyLoader.java:470+, a port of Redis `stringmatchlen`: `*`, `?`, `[...]`, `^` negation, `a-b` ranges, `\` escapes) with a `startsWith` fast path for simple `user:*`-style prefixes. `SGroup.scan` / `Wal.scan` / `KeyLoader.scan` already filter keys through it for `SCAN MATCH`. Replace KGroup's `Pattern.compile(patternString)` + `prefixMatch` regex path with `isKeyMatch(key, pattern)` over the real iteration (see 80.2's unified design) — exact Redis glob semantics for free, including the `\`-escape and unclosed-`[` handling (also resolves 80.3). If regex-flavored input is a product feature (the existing test uses `key:.*`), it is incompatible with the `[√]` Redis claim and needs a product decision — but `KEYS user:*` must not silently return wrong keys.
 
 ## Finding 2 (Bug 80.2): KEYS queries the 1%-sampled, periodically-wiped key-analysis RocksDB instead of the keyspace — structurally incomplete and stale results
 
@@ -128,7 +133,14 @@ Redis: "Returns all keys matching pattern", O(N) over the live database. Velo wi
 Any client using KEYS for enumeration/cleanup verification gets silently wrong answers. (`SCAN` in SGroup uses the real persist layer — so Velo itself already has a correct iteration path to borrow.)
 
 ### Suggested fix direction
-Short term, minimal: route `keys()` through the real key space the way `SGroup.scan()` iterates (KeyLoader + WAL shadow check), keeping the prefix seek as optimization; that fixes completeness, staleness, and deleted-keys at once and makes `maxCount` the only limit. If the analysis-buffer source is kept by product decision, the `[√]` claim in `doc/redis_command_support.md` must be downgraded to "approximate" — but silent wrong data argues for the real iteration.
+**Re-implement `keys()` on the SCAN machinery — unified design agreed with the maintainer (2026-11-09); it resolves 80.1/80.2/80.3/80.5/80.7 as a family:**
+
+1. **Data source — the real keyspace per slot, not the analysis RocksDB.** Inside each slot run the exact loop shape of `SGroup.scan()` (SGroup.java:676-732): iterate WAL groups first via `oneSlot.getWalByGroupIndex(i).scan(skipCount, typeAsByteIgnore, matchPattern, leftCount, beginScanSeq)` until `lastScanCursor.isWalIterateEnd()`, then key buckets via `oneSlot.getKeyLoader().scan(...)` until `ScanCursor.END`. WAL-shadow skipping and `beginScanSeq` snapshot semantics (`SnowFlake.asBeginScanSeqEpoch()`, cf. bug 70.7) come for free — no sampling, no periodic wipe, deletes/expiries respected.
+2. **Pattern matching** — `KeyLoader.isKeyMatch(key, matchPattern)` (see 80.1), i.e. Redis glob, not `java.util.regex`.
+3. **Cross-slot fan-out + threading** — SCAN pins one slot via its cursor (SGroup.java:312-329) but KEYS must aggregate all slots in one reply. Precedent: `FGroup.flushall` and `ManageCommand.dynConfig` (ManageCommand.groovy:1030-1057) — submit per-slot work with `oneSlot.asyncCall(() -> <slot scan loop>)`, aggregate with `Promises.all(promises)`, so WAL/key-bucket reads stay on the owning slot worker thread (thread-affinity model preserved).
+4. **Reply plumbing** — keep the existing `AsyncReply` + `SettablePromise` and the `Promise.ofFuture` reactor-affinity branch (KGroup.java:112-148); concatenate per-slot lists into one `MultiBulkReply` in completion order-independent fashion (slot order), honoring `keys.matchMaxCount` as an early-exit cap (see 80.6/80.4).
+
+Trade-off accepted: O(N) full scan per call — the same complexity class as Redis KEYS itself (doc: O(N), "may ruin performance" warning); work runs on slot workers so other slots are unaffected, and the `keys.matchMaxCount` cap is the safety valve. The RocksDB prefix-seek speed of the current path is intentionally sacrificed for correctness. If instead the analysis-buffer source were kept by product decision, the `[√]` claim in `doc/redis_command_support.md` must be downgraded to "approximate" — but silent wrong data argues for the real iteration.
 
 ## Finding 3 (Bug 80.3): glob-legal patterns crash `Pattern.compile` — `KEYS foo[` replies with a JVM internals error
 
@@ -158,7 +170,7 @@ Patterns like `foo[` (unclosed class), `foo\` (trailing backslash), `foo{2,` …
 `KEYS foo[` → `-ERR Unclosed character class near index 3 …` (JVM message, not a Redis error text); same request also logs a full ERROR stack server-side (log-spam vector from any connected client — KEYS is `@dangerous`/`@slow` but not admin-gated).
 
 ### Suggested fix direction
-Falls out of the 80.1 glob translation (a glob translator never produces invalid regex); independently, wrap compile in try/catch → `ErrorReply` with a stable message (or treat as literal per Redis).
+Falls out of the 80.2 unified design: with `KeyLoader.isKeyMatch`/`stringMatchLen` there is no `Pattern.compile` at all — an unterminated `[` is matched literally, exactly like Redis `stringmatchlen`, and no pattern can raise. (If KEYS keeps any regex compilation independently of 80.2, wrap it in try/catch → stable `ErrorReply`; but the agreed direction removes the regex path entirely.)
 
 ## Finding 4 (Bug 80.4): the `keys.matchMaxCount` escape knob is dead — DynConfig rejects the key it was designed for
 
@@ -223,7 +235,7 @@ Two Redis-legal pattern families are refused: (a) patterns *starting* with a met
 Any client that opens with `KEYS *` gets an error instead of the keyspace; inventory/cleanup scripts doing `KEYS prefix` (exact) break. Deliberate divergence → candidate for won't-fix, but it must be a recorded product decision with the support doc downgraded, not silent behavior.
 
 ### Suggested fix direction
-Cheapest: treat a leading `*` as "empty prefix" (prefix `""` iterates from the first key — `prefixMatch` already handles it via `iterator.seek(keyBytes(""))`), and treat a wildcard-free pattern as an exact-key existence lookup. At minimum downgrade `redis_command_support.md` and document the restriction.
+Both families fall out of the 80.2 unified design: with `isKeyMatch`, `KEYS *` is the `"*"` fast path (KeyLoader.java:437-439 → always true) and a wildcard-free `KEYS foo` is a plain literal `stringMatchLen` exact match — the first-byte guard and the `indexes`/`indexOf` prefix machinery (KGroup.java:79-98) are deleted rather than extended. If the prefix-only restriction is nonetheless kept by product decision, downgrade `redis_command_support.md` `[√]` to document it.
 
 ## Finding 6 (Bug 80.6): silent truncation at 100 results — Redis returns all matches
 
@@ -248,7 +260,7 @@ Redis `KEYS` returns the complete match set (doc: "Returns all key names that ma
 300 matching keys → 100 returned, silently. Scripts computing deletions from KEYS output leave 200 keys behind.
 
 ### Suggested fix direction
-If 80.2's real-iteration fix lands, either drop the cap or keep it configurable *and alive* (80.4); any retained cap should be documented. (Depends on 80.4 disposition; listed separately because the root cause — the cap itself — is independent of the knob being dead.)
+With 80.2's unified design, keep the cap as the O(N)-safety valve but make it honest: register `keys.matchMaxCount` first (80.4 — otherwise the cap is stuck at 100 forever), let the per-slot loops early-exit once the aggregate reaches `maxCount`, and document the cap in `redis_command_support.md` next to the `[√]`. Alternative: drop the cap entirely and match Redis (return all); O(N) is already accepted. Product decision — but either way the knob must be alive (80.4) or removed, never dead-but-present.
 
 ## Finding 7 (Bug 80.7): `KEYS ""` throws AIOOBE — `data[1][0]` on a zero-length bulk argument
 
@@ -275,7 +287,7 @@ bytes[i] = new byte[size];   // size == 0 → byte[0]
 Any client sending an empty pattern (dynamic-pattern construction bug, fuzzer) gets a JVM error-string reply.
 
 ### Suggested fix direction
-Length-check first: `if (data[1].length == 0) return MultiBulkReply.EMPTY` (or route through the 80.1 translator which handles it naturally).
+Length-check first: `if (data[1].length == 0) return MultiBulkReply.EMPTY` (empty pattern can match no key since key names are non-empty). In the 80.2 unified design this is a two-line guard at the top of `keys()`; no array indexing on `data[1]` remains.
 
 ## Notes / non-findings
 
