@@ -9,3 +9,18 @@
 /velo-data/
 /segment_common/bin/
 /.worktrees/
+### test run artifacts written into the repo root
+/hs_err_pid*.log
+/perf.data
+/perf.data.old
+/dump.rdb
+/mypass
+/pass1
+/pass2
+/dict-global-test.dat
+/meta_chunk_segment_flag_seq.dat
+/meta_chunk_segment_index.dat
+/chunk_segment_flag.txt
+/chunk_segment_flag_range.txt
+/test_jnr_libc
+/tmp/
