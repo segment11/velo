@@ -152,6 +152,18 @@ public class DynConfig {
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                 }
+            },
+            "keys.matchMaxCount", new DynConfigItem() {
+                @Override
+                public Object parseAndValidate(@NotNull Object value) {
+                    return parsePositiveInt("keys.matchMaxCount", value);
+                }
+
+                @Override
+                public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    // read on each keys() call, nothing to apply eagerly
+                    log.warn("Dyn config for slot set keys.matchMaxCount={}, slot={}", value, currentSlot);
+                }
             }
     );
 

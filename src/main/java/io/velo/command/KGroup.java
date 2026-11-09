@@ -2,16 +2,18 @@ package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.Promise;
+import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
-import io.activej.reactor.Reactor;
 import io.velo.BaseCommand;
+import io.velo.SnowFlake;
+import io.velo.persist.KeyLoader;
+import io.velo.persist.OneSlot;
+import io.velo.persist.ScanCursor;
 import io.velo.reply.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Set;
-import java.util.TreeSet;
-import java.util.regex.Pattern;
 
 /**
  * Handles Redis commands starting with letter 'K'.
@@ -28,6 +30,15 @@ public class KGroup extends BaseCommand {
                 "Find all keys matching the given pattern.",
                 "1.0.0", "O(N)"));
     }
+
+    /**
+     * Dyn config key capping the number of keys one KEYS call returns, see DynConfig.
+     */
+    @VisibleForTesting
+    static final String MATCH_MAX_COUNT_KEY = "keys.matchMaxCount";
+
+    @VisibleForTesting
+    static final int DEFAULT_MATCH_MAX_COUNT = 100;
 
     /**
      * @param cmd    the command string
@@ -66,85 +77,116 @@ public class KGroup extends BaseCommand {
         return NilReply.INSTANCE;
     }
 
-    @VisibleForTesting
-    static final ErrorReply ONLY_SUPPORT_PREFIX_MATCH_PATTERN = new ErrorReply("only support prefix match pattern");
-
     private Reply keys() {
         if (data.length != 2) {
             return ErrorReply.FORMAT;
         }
 
-        // only support prefix match pattern
-        var patternFirstByte = data[1][0];
-        if (patternFirstByte == '*' || patternFirstByte == '?' || patternFirstByte == '['
-                || patternFirstByte == '.' || patternFirstByte == '+') {
-            return ONLY_SUPPORT_PREFIX_MATCH_PATTERN;
+        // an empty pattern can match no key, key names are never empty
+        if (data[1].length == 0) {
+            return MultiBulkReply.EMPTY;
         }
 
-        var patternString = new String(data[1]);
-        TreeSet<Integer> indexes = new TreeSet<>();
-        indexes.add(-1);
-        indexes.add(patternString.indexOf("*"));
-        indexes.add(patternString.indexOf("?"));
-        indexes.add(patternString.indexOf("["));
-        indexes.add(patternString.indexOf("."));
-        indexes.add(patternString.indexOf("+"));
-        indexes.remove(-1);
+        var pattern = new String(data[1]);
 
-        var index = indexes.isEmpty() ? -1 : indexes.first();
-        if (index == -1) {
-            return ONLY_SUPPORT_PREFIX_MATCH_PATTERN;
+        int maxCount = DEFAULT_MATCH_MAX_COUNT;
+        var firstOneSlot = localPersist.firstOneSlot();
+        if (firstOneSlot != null) {
+            var maxCountValue = firstOneSlot.getDynConfig().get(MATCH_MAX_COUNT_KEY);
+            if (maxCountValue instanceof Integer i) {
+                maxCount = i;
+            }
         }
-        var keyPrefix = patternString.substring(0, index);
+        final int matchMaxCount = maxCount;
 
-        // refer ManageCommand
-        // manage dyn-config key value
-        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
-        var maxCountStr = firstOneSlot.getDynConfig().get("keys.matchMaxCount");
-        int maxCount = maxCountStr == null ? 100 : Integer.parseInt((String) maxCountStr);
+        // snapshot: only keys existing when the scan began participate, same as SCAN, see bug 70.7
+        long beginScanSeq = SnowFlake.asBeginScanSeqEpoch();
 
-        // todo, check if need add . before *
-        var pattern = Pattern.compile(patternString);
-
-        var keyAnalysisHandler = localPersist.getIndexHandlerPool().getKeyAnalysisHandler();
-        var f = keyAnalysisHandler.prefixMatch(keyPrefix, pattern, maxCount);
+        // iterate the real keyspace (wal first, then key buckets) on each slot worker thread
+        var oneSlots = localPersist.initializedOneSlots();
+        var promises = new ArrayList<Promise<ArrayList<String>>>(oneSlots.size());
+        for (var oneSlot : oneSlots) {
+            promises.add(oneSlot.asyncCall(() -> collectMatchedKeys(oneSlot, pattern, matchMaxCount, beginScanSeq)));
+        }
 
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        // Complete finalPromise on the request reactor instead of the key-analysis
-        // eventloop. Promise.ofFuture captures the current reactor and bounces the
-        // completion (and the downstream transferAsyncReply map) back to it, preserving
-        // reactor affinity. Fallback keeps inline completion for off-reactor unit tests.
-        if (Reactor.getCurrentReactorOrNull() != null) {
-            Promise.ofFuture(f)
-                    .whenResult(r -> {
-                        var replies = new Reply[r.size()];
-                        for (int i = 0; i < r.size(); i++) {
-                            replies[i] = new BulkReply(r.get(i));
-                        }
-                        finalPromise.set(new MultiBulkReply(replies));
-                    })
-                    .whenException(e -> {
-                        log.error("keys error={}", e.getMessage());
-                        finalPromise.setException(e);
-                    });
-        } else {
-            f.whenComplete((r, e) -> {
-                if (e != null) {
-                    log.error("keys error={}", e.getMessage());
-                    finalPromise.setException((Exception) e);
-                    return;
-                }
+        Promises.toList(promises).whenComplete((lists, e) -> {
+            if (e != null) {
+                log.error("keys error={}", e.getMessage());
+                finalPromise.setException(e);
+                return;
+            }
 
-                var replies = new Reply[r.size()];
-                for (int i = 0; i < r.size(); i++) {
-                    replies[i] = new BulkReply(r.get(i));
+            // concatenate in slot order, then apply the global cap
+            var keys = new ArrayList<String>();
+            for (var list : lists) {
+                keys.addAll(list);
+                if (keys.size() >= matchMaxCount) {
+                    break;
                 }
-                finalPromise.set(new MultiBulkReply(replies));
-            });
-        }
+            }
+            if (keys.size() > matchMaxCount) {
+                keys = new ArrayList<>(keys.subList(0, matchMaxCount));
+            }
+
+            var replies = new Reply[keys.size()];
+            for (int i = 0; i < keys.size(); i++) {
+                replies[i] = new BulkReply(keys.get(i));
+            }
+            finalPromise.set(new MultiBulkReply(replies));
+        });
 
         return asyncReply;
+    }
+
+    /**
+     * Collects up to maxCount keys matching the glob pattern from one slot. Iterates the WAL
+     * groups first and then the key buckets, the same iteration shape and glob matcher
+     * (KeyLoader.isKeyMatch) as SGroup.scan. Must run on the slot worker thread, call via
+     * oneSlot.asyncCall.
+     *
+     * @param oneSlot      the slot to iterate
+     * @param pattern      the glob pattern
+     * @param maxCount     the max number of matched keys to return
+     * @param beginScanSeq the scan begin seq for the snapshot semantics
+     * @return the matched keys, at most maxCount
+     */
+    private static ArrayList<String> collectMatchedKeys(OneSlot oneSlot, String pattern, int maxCount, long beginScanSeq) {
+        var keys = new ArrayList<String>();
+
+        // scan wal first
+        var scanCursor = new ScanCursor(oneSlot.slot(), 0, (short) 0, (short) 0, (byte) 0, (byte) 0);
+        while (!scanCursor.isWalIterateEnd() && keys.size() < maxCount) {
+            var wal = oneSlot.getWalByGroupIndex(scanCursor.walGroupIndex());
+            var r = wal.scan(scanCursor.walSkipCount(), KeyLoader.typeAsByteIgnore, pattern, maxCount - keys.size(), beginScanSeq);
+            keys.addAll(r.keys());
+            scanCursor = r.scanCursor();
+        }
+
+        // then scan key buckets
+        var keyLoader = oneSlot.getKeyLoader();
+        int walGroupIndex = 0;
+        byte splitIndex = 0;
+        byte bucketIndex = 0;
+        short keyBucketsSkipCount = 0;
+        while (keys.size() < maxCount) {
+            var r = keyLoader.scan(walGroupIndex, splitIndex, bucketIndex, keyBucketsSkipCount,
+                    KeyLoader.typeAsByteIgnore, pattern, maxCount - keys.size(), beginScanSeq);
+            keys.addAll(r.keys());
+
+            var next = r.scanCursor();
+            if (next == ScanCursor.END || next.slot() != oneSlot.slot()) {
+                // end, or the cursor hands over to the next slot of a multi-slot scan chain
+                break;
+            }
+            walGroupIndex = next.walGroupIndex();
+            splitIndex = next.splitIndex();
+            bucketIndex = next.bucketIndex();
+            keyBucketsSkipCount = next.keyBucketsSkipCount();
+        }
+
+        return keys;
     }
 }
