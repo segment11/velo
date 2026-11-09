@@ -631,7 +631,7 @@ public abstract class BaseCommand {
         if (ConfForGlobal.clusterEnabled) {
             var toClientSlot = JedisClusterCRC16.getSlot(keyBytes);
             var innerSlot = MultiShard.asInnerSlotByToClientSlot(toClientSlot);
-            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, (int) bucketIndex, keyHash, rawKey);
+            return new SlotWithKeyHash(innerSlot, (short) toClientSlot, bucketIndex, keyHash, rawKey);
         }
 
         final int halfSlotNumber = slotNumber / 2;
@@ -641,12 +641,12 @@ public abstract class BaseCommand {
         if (tagHash != 0L) {
             var slotPositive = slotNumber == 1 ? 0 : Math.abs((tagHash / x) & (halfSlotNumber - 1));
             var slot = tagHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-            return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, rawKey);
+            return new SlotWithKeyHash((short) slot, bucketIndex, keyHash, rawKey);
         }
 
         var slotPositive = slotNumber == 1 ? 0 : Math.abs((keyHash / x) & (halfSlotNumber - 1));
         var slot = keyHash > 0 ? slotPositive : halfSlotNumber + slotPositive;
-        return new SlotWithKeyHash((short) slot, (int) bucketIndex, keyHash, rawKey);
+        return new SlotWithKeyHash((short) slot, bucketIndex, keyHash, rawKey);
     }
 
     /**
