@@ -1044,6 +1044,15 @@ class LGroupTest extends Specification {
         }
     }
 
+    private List<String> readList(InMemoryGetSet inMemoryGetSet, String key) {
+        var buf = inMemoryGetSet.getBuf(slot, key, 0, 0L)
+        if (buf == null) {
+            return null
+        }
+        var rl = RedisList.decode(buf.cv().compressedData)
+        return rl.getList().collect { new String(it) }
+    }
+
     def 'test ltrim'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
@@ -1108,6 +1117,27 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('ltrim >key 0 9')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        // bug 82.1: a negative end index is relative to the list length,
+        // redis keeps the range instead of deleting the list
+        resetRedisList(rl, 3)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = lGroup.execute('ltrim a 0 -1')
+        then:
+        reply == OKReply.INSTANCE
+        readList(inMemoryGetSet, 'a') == ['0', '1', '2']
+
+        when:
+        // bug 82.1: trim from index 1 to the end of the list
+        resetRedisList(rl, 3)
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cv)
+        reply = lGroup.execute('ltrim b 1 -1')
+        then:
+        reply == OKReply.INSTANCE
+        readList(inMemoryGetSet, 'b') == ['1', '2']
     }
 
     def 'test load rdb'() {

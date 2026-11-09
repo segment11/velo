@@ -1067,6 +1067,11 @@ public class LGroup extends BaseCommand {
         }
 
         int size = rl.size();
+        // a negative end index is relative to the end of the list, redis normalizes it
+        // before the range is checked, otherwise the range looks empty and the list is dropped
+        if (end < 0) {
+            end = size + end;
+        }
         if (start > size || start > end) {
             removeDelay(slotWithKeyHash);
             return OKReply.INSTANCE;
