@@ -489,6 +489,40 @@ class IGroupTest extends Specification {
         new String(ordCv.getCompressedData()) == 'bbb,aaa,0'
 
         when:
+        // a negative value index is rejected before any write
+        new File(dir, 'neg.csv').withPrintWriter { w ->
+            w.println('1,aaa,bbb')
+            w.println('2,ccc,ddd')
+        }
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=neg.csv file_format=csv ' +
+                'key_field_index=0 key_prefix=nv_ value_fields_indexes=-1,1')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('value_fields_indexes')
+        and: 'nothing was written'
+        inMemoryGetSet.getBuf(slot, 'nv_1', 0, 0) == null
+
+        when:
+        // a negative key index is rejected before any write
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=neg.csv file_format=csv ' +
+                'key_field_index=-1 key_prefix=nk_ value_fields_indexes=0,1')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('key_field_index')
+        inMemoryGetSet.getBuf(slot, 'nk_1', 0, 0) == null
+
+        when:
+        // an out-of-range value index is a descriptive per-line error, not a raw array index exception
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=neg.csv file_format=csv ' +
+                'key_field_index=0 key_prefix=oo_ value_fields_indexes=0,1,5')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getException() instanceof IllegalArgumentException
+        (reply as AsyncReply).settablePromise.getException().message.contains('value_fields_indexes')
+        and: 'no row of the failing file was written'
+        inMemoryGetSet.getBuf(slot, 'oo_1', 0, 0) == null
+
+        when:
         // key field not exists
         reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.json file_format=json ' +
                 'key_field=name1 key_prefix=test_ value_fields=name,age')

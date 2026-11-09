@@ -244,6 +244,16 @@ public class IGroup extends BaseCommand {
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER;
             }
+
+            // validate indexes before any write (bug 79.5), negative indexes are invalid for every row
+            if (keyFieldIndex < 0) {
+                return new ErrorReply("key_field_index: " + keyFieldIndex + " < 0");
+            }
+            for (int i = 0; i < valueFieldsIndexes.length; i++) {
+                if (valueFieldsIndexes[i] < 0) {
+                    return new ErrorReply("value_fields_indexes[" + i + "]: " + valueFieldsIndexes[i] + " < 0");
+                }
+            }
         } else {
             valueFieldsIndexes = null;
         }
@@ -314,6 +324,12 @@ public class IGroup extends BaseCommand {
                                 var lineArray = line.split(",");
                                 if (finalKeyFieldIndex >= lineArray.length) {
                                     throw new IllegalArgumentException("key_field_index: " + finalKeyFieldIndex + " >= line_array.length: " + lineArray.length);
+                                }
+                                for (int i = 0; i < valueFieldsIndexes.length; i++) {
+                                    if (valueFieldsIndexes[i] >= lineArray.length) {
+                                        // descriptive per-line error instead of a raw array index exception (bug 79.5)
+                                        throw new IllegalArgumentException("value_fields_indexes[" + i + "]: " + valueFieldsIndexes[i] + " >= line_array.length: " + lineArray.length);
+                                    }
                                 }
 
                                 var key = keyPrefix + lineArray[finalKeyFieldIndex];
