@@ -120,16 +120,24 @@ public class KGroup extends BaseCommand {
                 return;
             }
 
-            // concatenate in slot order, then apply the global cap
+            // round-robin across the per-slot lists so the cap does not starve
+            // high-numbered slots, see bug 80 re-review 3 S1
             var keys = new ArrayList<String>();
-            for (var list : lists) {
-                keys.addAll(list);
-                if (keys.size() >= matchMaxCount) {
+            for (int index = 0; keys.size() < matchMaxCount; index++) {
+                boolean added = false;
+                for (var list : lists) {
+                    if (index < list.size()) {
+                        keys.add(list.get(index));
+                        added = true;
+                        if (keys.size() >= matchMaxCount) {
+                            break;
+                        }
+                    }
+                }
+                if (!added) {
+                    // every slot list is exhausted
                     break;
                 }
-            }
-            if (keys.size() > matchMaxCount) {
-                keys = new ArrayList<>(keys.subList(0, matchMaxCount));
             }
 
             var replies = new Reply[keys.size()];

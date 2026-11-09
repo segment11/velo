@@ -114,6 +114,18 @@ class KGroupTest extends Specification {
         then:
         keysOf(kGroup, 'keys q:*').size() == 100
 
+        and: 'the cap does not starve high slots, fair round-robin share, see bug 80 re-review 3 S1'
+        def slotOf = { String key -> BaseCommand.slot(key, 2).slot() }
+        def cappedKeys = keysOf(kGroup, 'keys q:*')
+        def keysInSlot0 = (0..<150).collect { 'q:' + it }.count { slotOf(it) == 0 }
+        def keysInSlot1 = (0..<150).collect { 'q:' + it }.count { slotOf(it) == 1 }
+        def fromSlot0 = cappedKeys.count { slotOf(it) == 0 }
+        def fromSlot1 = cappedKeys.count { slotOf(it) == 1 }
+        fromSlot0 + fromSlot1 == 100
+        fromSlot0 > 0 && fromSlot1 > 0
+        // fair share: near-equal, unless the smaller slot is exhausted
+        Math.abs(fromSlot0 - fromSlot1) <= 1 || Math.min(fromSlot0, fromSlot1) == Math.min(keysInSlot0, keysInSlot1)
+
         when: 'the cap knob is registered in dyn config and settable'
         localPersist.oneSlot(slot).updateDynConfig(KGroup.MATCH_MAX_COUNT_KEY, '200')
         localPersist.oneSlot(slot1).updateDynConfig(KGroup.MATCH_MAX_COUNT_KEY, '200')
