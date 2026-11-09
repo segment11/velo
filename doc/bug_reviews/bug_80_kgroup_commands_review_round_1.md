@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** all 7 findings CONFIRMED (reproduced) by agent 2; fix phase complete — `keys()` rewritten on the SCAN machinery per maintainer decision (TDD red step waived), (fix commit d8e41ddd)
+**Status:** all 7 findings CONFIRMED (reproduced) by agent 2; fix phase complete — `keys()` rewritten on the SCAN machinery per maintainer decision (TDD red step waived), (fix commit d8e41ddd); **re-review 3 (independent, post-commit): NOT ACCEPTED — blocking same-millisecond exclusion defect (see "Re-review 3")**
 **Review branch:** `review/kgroup`
 **Reviewed commit:** `2dc770d709507d8ca437d6172094b4ea8e9bf4db`
 
@@ -390,13 +390,119 @@ PAT[app?log] => app.log,appXlog,
 
 **Verdict: fix ACCEPTED.** All seven findings verified fixed at `d8e41ddd`/`db9564fc`; the TDD-red waiver is recorded with the maintainer's decision; follow-ups (non-blocking): `KeyAnalysisHandler.prefixMatch` now has zero callers (dead code, cleanup candidate); stale "commit pending" wording in the pre-commit re-review superseded by this section.
 
+### Re-review 3 (independent review, post-commit — commit `d8e41ddd`)
+
+**Method:** diff review of `d8e41ddd` against the agreed design + independent reproduction over the real persist layer (`prepareLocalPersist` + `fixSlotThreadId`, blocking on `settablePromise.toCompletableFuture().get()`), live differential against Redis 7.2 (`redis-cli eval` scripts against a running Velo server on port 7399 and a stock `redis-server` on 6399), and a controlled root-cause experiment (temporary local edit, reverted afterwards — the working tree at review time is unmodified).
+
+**Verdict: NOT ACCEPTED — one blocking correctness defect.** The rewrite direction is right and all seven original findings are genuinely fixed, but the snapshot-seq mechanism borrowed from SCAN is semantically wrong for KEYS: it silently drops keys that Redis returns. The two prior re-review sections did not exercise the write-then-read path within the same millisecond, which is where the defect lives.
+
+#### BLOCKING — KEYS misses keys written in the same millisecond as the scan
+
+**Root cause.** `KGroup.java:103` computes the scan boundary as
+
+```java
+long beginScanSeq = SnowFlake.asBeginScanSeqEpoch();
+```
+
+`asBeginScanSeqEpoch()` (SnowFlake.java:137-139) returns `(System.currentTimeMillis() - START_STAMP) << TIMESTAMP_LEFT` with `TIMESTAMP_LEFT = 22` (SnowFlake.java:62) — the **timestamp part only, low 22 bits zeroed**. A key's real id is `(currentStamp - START_STAMP) << TIMESTAMP_LEFT | datacenterId << 17 | machineId << 12 | sequence` (SnowFlake.java:166-169). Therefore for a key written in the *same millisecond* as the scan:
+
+```
+key_seq - beginScanSeq = (dc << 17) + (mc << 12) + sequence  >  0
+```
+
+i.e. the key's seq is **greater** than the boundary, and both filter sides drop it:
+
+- WAL phase — `Wal.java:416`: `if (entry.getValue().seq <= beginScanSeq)` → same-millisecond keys are excluded from the snapshot.
+- key-bucket phase — `KeyLoader.java:685`: `if (seq > beginScanSeq) { postScanStartSkippedCount[0]++; return; }` → same-millisecond keys are skipped.
+
+For SCAN this exclusion is acceptable — the Redis SCAN contract explicitly permits omitting keys added during iteration, and bug 70.7 documented the same-millisecond exclusion as inherent to the timestamp-epoch approach. **KEYS has no such contract**: Redis `KEYS` returns every key present at scan time. KEYS also has no cursor and no resume, so it has no need for a snapshot boundary at all — the boundary was inherited, not required.
+
+**Evidence (reproduced, this session):**
+
+| Scenario | Result |
+|---|---|
+| write key, then `KEYS <exact key>` immediately (test snowflake `SnowFlake(1,1)`) | **193 / 200 misses** |
+| same, with production-like snowflake `SnowFlake(0,0)` (ConfForGlobal defaults) | **401 / 500 misses** |
+| same, with `Thread.sleep(2)` between write and read | 0 / 100 misses |
+| same, with `Thread.sleep(5)` between write and read | 0 / 100 misses |
+
+Live differential against the real server (build of `d8e41ddd`) vs stock Redis 7.2, using an atomic script so the write and the read land in the same millisecond:
+
+```
+# Velo (:7399)          redis-cli eval "redis.call('set',KEYS[1],'v'); return redis.call('keys',KEYS[1])" 1 s:1
+(empty)  x8
+
+# Redis 7.2 (:6399)     same script
+s:1 s:2 s:3 ... s:8
+```
+
+**Why the committed test does not catch it.** The plain two-command CLI path (`redis-cli set` then `redis-cli keys`) *passes* — the network round-trip crosses a millisecond boundary — and the rewritten `KGroupTest.'test keys'` likewise separates every write from its assertion by a `Thread.sleep` or by intervening work. The defect only bites when the write and the KEYS land in the same millisecond: Lua scripts, pipelined batches, tight client loops, or high write throughput.
+
+**Root cause confirmed by experiment.** Temporarily replacing the boundary with an unbounded value (`long beginScanSeq = Long.MAX_VALUE;`) drops the miss rate to **0 / 200**. The temporary edit was reverted; the working tree is unmodified at review time.
+
+**Fix direction.** KEYS must not use a timestamp-epoch snapshot. Two viable options:
+
+1. **Drop the boundary entirely** — pass an unbounded seq so no key is ever excluded. This matches Redis KEYS semantics most closely (Redis KEYS is not a snapshot command; keys written during the scan may or may not appear).
+2. **Use a per-slot `nextId()` captured at scan start.** This requires care: `SnowFlake.nextId()` is per-instance, so its low bits are *not* ordered across slots — the epoch approach was chosen in bug 70.7 precisely because it is instance-independent. A bounded variant must preserve instance-independence, e.g. compare against `(now << 22) | 0x3FFFFF` so that same-millisecond keys are included.
+
+Option 1 is simpler and needs no bit-layout reasoning; option 2 keeps a well-defined "keys present at scan start" boundary if that property is wanted for KEYS. Either way a **same-millisecond regression test is required** (see Testing gaps).
+
+#### Secondary findings
+
+**S1 — the cap is biased to low slot numbers (Medium).** `KGroup.java:123-132` concatenates the per-slot results in slot order and trims to `matchMaxCount`. Each slot independently collects *up to* `matchMaxCount` matches, so the aggregate can hold up to `slots × matchMaxCount` before trimming, and the trim keeps the low-numbered slots' keys first. Measured with 150 keys over 2 slots and the default cap of 100:
+
+```
+WRITTEN slot0=73 slot1=77
+RETURNED slot0=73 slot1=27 total=100     -> 50 slot-1 keys silently dropped
+```
+
+With the default `slotNumber=1` this is invisible, but on a multi-slot deployment (e.g. 1024 slots) only a small prefix of slots ever contributes to the reply, and the client gets no indication that more keys exist. The prior Residual Risk section called this "a slot-order bias … acceptable: KEYS result order is unspecified in Redis" — that framing understates it: the issue is not ordering, it is *systematic starvation of higher-numbered slots*. Redis returns every match. If the cap is retained as a product decision (80.6), it needs a fair per-slot share, or the response needs to signal truncation.
+
+**S2 — `keys.matchMaxCount` is read from one slot but written to all (Medium).** The knob is read from `localPersist.firstOneSlot()` (`KGroup.java:93-95`), but `manage dyn-config` fans the update out to every initialized slot (`ManageCommand.groovy:1030-1035`), and each slot persists its own `dyn-config.json` (`OneSlot.java:194`, `OneSlot.java:944`). The values agree today only because the fan-out writes the same number everywhere — the read and the write target different scopes. Two consequences: (a) `firstOneSlot()` returns `null` in cluster mode when this node owns no slots (`LocalPersist.java:651-663`), so the knob silently falls back to 100 instead of the configured value; (b) the rewritten test sets the knob on **two** slots (`KGroupTest.groovy`, `localPersist.oneSlot(slot).updateDynConfig(...)` and the same for `slot1`) although only slot 0 is ever read — the test therefore masks the asymmetry instead of pinning the contract. The knob should either become genuinely global (like `RedisZSet.ZSET_MAX_LENGTH` / `RedisHashKeys.HASH_MAX_SIZE`, which are set as statics by their `apply()`) or the read must target the same scope the write does.
+
+**S3 — `apply()` is a no-op that logs a warning (Low).** `DynConfig.java:156-167` registers `keys.matchMaxCount` with an `apply()` whose only effect is `log.warn("Dyn config for slot set keys.matchMaxCount={}, slot={}")`. Because the fan-out applies it once per slot, setting the knob once emits N warnings. Every other global knob in `SUPPORTED_ITEMS` sets an actual global in `apply()`. Make it global, or drop the log.
+
+**S4 — `keys` is dispatched to a random worker (Low, pre-existing, not a defect).** `parseSlots` returns an empty list, so `Request.getSingleSlot()` yields `SLOT_CAN_HANDLE_BY_ANY_WORKER` and `MultiWorkerServer.java:624-626` picks a random worker. The old code called `localPersist.currentThreadFirstOneSlot()`, which threw when the thread owned no slot; the new `firstOneSlot()` is null-guarded and safer. Recorded for completeness only.
+
+#### Reactor affinity — verified, no regression
+
+Checked explicitly because the rewrite dropped the `Promise.ofFuture` bounce that bug 52 F2 introduced. `OneSlot.asyncCall` (OneSlot.java:726-749) returns `Promise.ofFuture(slotWorkerEventloop.submit(...))` on a reactor, and `Promise.ofFuture` captures the **calling** reactor and bounces completion back to it. Every constituent promise of `Promises.toList` therefore completes on the request reactor, and `Promises.toList(...).whenComplete` + `finalPromise.set(...)` run there — the same thread that ran `handle()`, i.e. the same guarantee the old `Promise.ofFuture` fix provided. **The prior re-review's conclusion holds; no affinity regression.** (For completeness: `transferAsyncReply`, MultiWorkerServer.java:694-710, still has no hop back to the *socket's* reactor, so in a multi-worker (`slotWorkers>1`/`netWorkers>1`) configuration the byte write happens off the socket's reactor. That is a pre-existing, codebase-wide defect shared by every `AsyncReply` producer — `doSthInSlots`, `SGroup` set fan-outs — not introduced or worsened by this commit.)
+
+#### Strengths (confirmed by this review)
+
+- Glob matching now runs through `KeyLoader.isKeyMatch` → `stringMatchLen`, the Redis `stringmatchlen` port (`KeyLoader.java:427-562`). The rewritten test's expectations (`user:*` ≠ `user`, `h?llo` ≠ `hllo`, `app.log` matches only `app.log`) encode correct Redis semantics.
+- The key source is the real keyspace (WAL delay maps + persisted key buckets), replacing the 1%-sampled, periodically-wiped, delete-blind RocksDB analysis DB; `del` and `expire` are now visible (80.2 genuinely fixed).
+- `keys.matchMaxCount` is properly registered in `DynConfig.SUPPORTED_ITEMS` with a `parsePositiveInt` validator, so it round-trips through JSON and rejects non-positive/non-numeric values; `DynConfigTest` covers the normalize-and-validate path.
+- Cross-slot fan-out via `asyncCall` + `Promises.toList` is the correct idiom, matching `LocalPersist.doSthInSlots` and `SGroup`'s set commands; `Promises.toList` is used rather than `Promises.all` (which discards results).
+- The cursor-resume path is correct: the bucket loop feeds back `walGroupIndex/splitIndex/bucketIndex/keyBucketsSkipCount` in `KeyLoader.scan`'s parameter order, and the `next == END || next.slot() != oneSlot.slot()` break covers both the end sentinel and the cross-slot hand-over.
+- `KGroupTest` is stable: 15 / 15 consecutive `--rerun` runs green.
+
+#### Testing gaps
+
+The committed `KGroupTest` cannot fail on the blocking defect because every assertion is separated from its write by a `Thread.sleep` or by intervening work. Required additions before the fix is re-reviewed:
+
+1. **Same-millisecond regression test** — write a key and query it in the *immediately following statement*, with no sleep and no intervening persist-layer work, so both land in the same millisecond. Assert the key is returned. This is the test that must go red before the fix and green after.
+2. A Lua/`EVAL`-equivalent atomic case, if the test harness supports scripting — the natural end-to-end shape of the defect.
+3. A multi-slot cap case that asserts the *number* of distinct keys returned across slots against the cap (to pin whatever fairness contract is chosen for S1), and one that pins the knob's read scope (S2).
+
+#### Required follow-ups
+
+1. Fix the scan boundary for KEYS (blocking) and add the same-millisecond regression test.
+2. Decide and implement the cap fairness contract (S1) — fair per-slot share, or an explicit truncation signal.
+3. Make the knob's read and write scopes agree (S2) and make `apply()` either global or silent (S3).
+4. Re-review after the fix, with the same-millisecond case in the evidence set.
 
 ## Residual Risk
 
+> **Superseded in part by "Re-review 3"** (independent post-commit review): the same-millisecond exclusion is a *confirmed defect*, not acceptable residual risk, and the cap "slot-order bias" bullet is re-classified there as systematic starvation of high-numbered slots (S1). Read those sections before acting on the bullets below.
+
 - Uncovered defensive branches in KGroup.java: `firstOneSlot == null` (94), the `whenComplete` exception translation (116-119), one cursor-flavor branch (174) — reachable only via fault injection / cluster-with-no-slots; noted, not blocking.
-- Per-slot budget = `matchMaxCount` for every slot in parallel, then the aggregate is trimmed to `matchMaxCount` in slot order — a slot-order bias when the cap is hit (acceptable: KEYS result order is unspecified in Redis, and the cap is a documented safety valve).
+- Per-slot budget = `matchMaxCount` for every slot in parallel, then the aggregate is trimmed to `matchMaxCount` in slot order — a slot-order bias when the cap is hit (acceptable: KEYS result order is unspecified in Redis, and the cap is a documented safety valve). **[Re-review 3, S1: re-classified as Medium — not merely ordering, but systematic starvation of higher-numbered slots; 50 of 77 slot-1 keys dropped in a 2-slot / 150-key / cap-100 measurement.]**
 - KEYS is O(N) per call over all slots (Redis-equivalent complexity class; runs on slot workers so other slots are unaffected; the cap bounds the reply size but not the scan work when matches are sparse — same as before for SCAN).
 - The key-analysis RocksDB store itself is untouched (still sampled, still wiped by the periodic task) — it now only feeds `KeyAnalysisTask` statistics, no longer any command path. The `prefixMatch` anomaly recorded above lives there.
+- **[Re-review 3, S2]** `keys.matchMaxCount` is read from `firstOneSlot()` only but written to every slot; `firstOneSlot()` is null in cluster mode when the node owns no slots → the knob silently reverts to 100.
+- **[Re-review 3, S3]** `DynConfig.apply()` for `keys.matchMaxCount` is a no-op that logs one warning per slot on every set.
+- **[Re-review 3]** `transferAsyncReply` (MultiWorkerServer.java:694-710) has no hop back to the socket's reactor, so in a multi-worker configuration the byte write happens off the socket's reactor. Pre-existing and codebase-wide (all `AsyncReply` producers), **not** introduced or worsened by this commit; noted here only because the rewrite dropped an explicit `Promise.ofFuture` bounce and the affinity question was re-checked.
 
 ## Summary
 
@@ -409,3 +515,25 @@ PAT[app?log] => app.log,appXlog,
 | 80.5 | `KEYS *` / wildcard-free `KEYS foo` rejected | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (rewrite) |
 | 80.6 | Silent truncation at 100 matches | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (knob alive + cap documented; product decision: cap kept) |
 | 80.7 | `KEYS ""` AIOOBE → JVM error string reply | Low | Edge case | CONFIRMED (reproduced) | fixed (rewrite) |
+
+### New findings from re-review 3 (independent post-commit review of `d8e41ddd`)
+
+| # | Finding | Severity | Class | Verdict | Disposition |
+|---|---|---|---|---|---|
+| 80.8 | KEYS silently omits keys written in the same millisecond as the scan (timestamp-epoch `beginScanSeq` inherited from SCAN; Redis KEYS has no snapshot contract) | **High / blocking** | Correctness / Redis compat | CONFIRMED (reproduced; 193/200 and 401/500 miss rates; live Redis 7.2 differential) | fixed in `512b44fb` (boundary dropped, red/green + JaCoCo) |
+| 80.9 | Cap trim in slot order starves high-numbered slots (each slot collects up to the cap independently, then the aggregate is trimmed) | Medium | Correctness / operability | CONFIRMED (reproduced; 50 of 77 slot-1 keys dropped) | fixed in `616ef7ac` (round-robin interleave, red/green + JaCoCo) |
+| 80.10 | `keys.matchMaxCount` read from `firstOneSlot()` but written to all slots; null in cluster mode → silent revert to 100 | Medium | Correctness / operability | CONFIRMED (static) | fixed in `f25391f3` (global static `ConfForGlobal.keysMatchMaxCount` set by `apply()`) |
+| 80.11 | `DynConfig.apply()` for the knob is a no-op that logs one warning per slot per set | Low | Operability / log noise | CONFIRMED (static) | fixed in `f25391f3` (`apply()` sets the global; the per-slot log line matches the `max_connections` precedent) |
+
+### Response to Re-review 3 (fix agent)
+
+Agreed with all four findings before fixing — the blocking 80.8 was independently reproduced first (write + immediate `KEYS <exact-key>`, no sleep: **16/20 misses** in my run, matching the reviewer's mechanism analysis), then each fix followed a red/green cycle (the rewrite's TDD waiver does not extend to new defects):
+
+- **80.8** — RED: `sameMsMiss == 0` failed with 16 misses in `KGroupTest`; fix `512b44fb` passes `Long.MAX_VALUE` as the scan seq limit (`scanAllSeq`), so no WAL/bucket filter can exclude a key; re-run green, JaCoCo KGroup.java 95-115 = 11/11 lines, both branch lines fully covered.
+- **80.9** — RED: fairness predicate failed with returned split 78/22 vs available 78/72 (slot 1 starved — note the reviewer's earlier "slot0=73/slot1=77" measurement was from a different run; the distribution is fixed per JVM by the xxHash seed but the starvation is deterministic under the old trim); fix `616ef7ac` round-robin-interleaves the per-slot lists up to the cap; green returns 50/50, JaCoCo 116-155 with the new interleave loop fully covered including both break branches.
+- **80.10 + 80.11** — RED: setting slot0=100 / slot1=200 returned 100 (read scope = slot 0's file); fix `f25391f3` moves the knob to a global static `ConfForGlobal.keysMatchMaxCount` set by `DynConfig.apply()` (the `ZSET_MAX_LENGTH`/`max_connections` pattern; per-slot JSON persistence retained for restart re-apply); green returns 150 (last apply wins, fan-out writes the same value everywhere), JaCoCo KGroup 85-95 4/4, DynConfig 157-172 6/6, ConfForGlobal 49 1/1.
+- The regression tests requested in "Testing gaps" items 1 and 3 are now permanent cases inside `KGroupTest.'test keys'` (same-millisecond loop; multi-slot cap fairness with per-slot contribution counts via `BaseCommand.slot`). Item 2 (Lua/EVAL end-to-end) remains open — the harness has no scripting path in unit tests; the reviewer's live EVAL differential stands as the e2e evidence.
+
+Incident note: while the 80.10 fix was being verified, a concurrent agent injected `as int` coercions into `KGroupTest.groovy` (GroovyCastException: "Cannot coerce a map to Integer"); reverted before commit `f25391f3`. Fix agents should hold the pen exclusively during a fix phase.
+
+All suites re-verified after the three commits: `KGroupTest`, `DynConfigTest`, `SGroupTest`, `CommandRegistryPopulationTest`, `CategoryTest` green.
