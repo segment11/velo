@@ -1,6 +1,7 @@
 package io.velo.persist;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.velo.ConfForGlobal;
 import io.velo.MultiWorkerServer;
 import io.velo.SocketInspector;
 import io.velo.TrainSampleJob;
@@ -161,8 +162,9 @@ public class DynConfig {
 
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
-                    // read on each keys() call, nothing to apply eagerly
-                    log.warn("Dyn config for slot set keys.matchMaxCount={}, slot={}", value, currentSlot);
+                    // global, read by every keys() call
+                    ConfForGlobal.keysMatchMaxCount = (int) value;
+                    log.warn("Dyn config set keys.matchMaxCount={}, slot={}", value, currentSlot);
                 }
             }
     );

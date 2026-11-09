@@ -43,6 +43,12 @@ public class ConfForGlobal {
     public static int keyAnalysisNumberPercent = 1;
 
     /**
+     * Max number of keys one KEYS command returns. Global, set through dyn config
+     * key {@code keys.matchMaxCount}, see KGroup.
+     */
+    public static volatile int keysMatchMaxCount = 100;
+
+    /**
      * Connection timeout for Jedis pool in milliseconds (default is 1000 ms).
      */
     public static final int JEDIS_POOL_CONNECT_TIMEOUT_MILLIS = 1000;

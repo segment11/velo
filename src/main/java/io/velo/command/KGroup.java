@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
+import io.velo.ConfForGlobal;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.OneSlot;
 import io.velo.persist.ScanCursor;
@@ -32,12 +33,10 @@ public class KGroup extends BaseCommand {
 
     /**
      * Dyn config key capping the number of keys one KEYS call returns, see DynConfig.
+     * The value is global, held in {@link ConfForGlobal#keysMatchMaxCount}.
      */
     @VisibleForTesting
     static final String MATCH_MAX_COUNT_KEY = "keys.matchMaxCount";
-
-    @VisibleForTesting
-    static final int DEFAULT_MATCH_MAX_COUNT = 100;
 
     /**
      * @param cmd    the command string
@@ -88,15 +87,7 @@ public class KGroup extends BaseCommand {
 
         var pattern = new String(data[1]);
 
-        int maxCount = DEFAULT_MATCH_MAX_COUNT;
-        var firstOneSlot = localPersist.firstOneSlot();
-        if (firstOneSlot != null) {
-            var maxCountValue = firstOneSlot.getDynConfig().get(MATCH_MAX_COUNT_KEY);
-            if (maxCountValue instanceof Integer i) {
-                maxCount = i;
-            }
-        }
-        final int matchMaxCount = maxCount;
+        final int matchMaxCount = ConfForGlobal.keysMatchMaxCount;
 
         // KEYS has no cursor and no resume, so unlike SCAN it takes no snapshot boundary:
         // every key visible in the wal or the key buckets at scan time is returned, including

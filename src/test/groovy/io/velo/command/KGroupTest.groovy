@@ -1,6 +1,7 @@
 package io.velo.command
 
 import io.velo.BaseCommand
+import io.velo.ConfForGlobal
 import io.velo.ConfForSlot
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
@@ -132,6 +133,12 @@ class KGroupTest extends Specification {
         then:
         keysOf(kGroup, 'keys q:*').size() == 150
 
+        when: 'the knob is global, setting it on any slot is honored, see bug 80 re-review 3 S2'
+        localPersist.oneSlot(slot).updateDynConfig(KGroup.MATCH_MAX_COUNT_KEY, '100')
+        localPersist.oneSlot(slot1).updateDynConfig(KGroup.MATCH_MAX_COUNT_KEY, '200')
+        then:
+        keysOf(kGroup, 'keys q:*').size() == 150
+
         when: 'invalid knob value is rejected'
         localPersist.oneSlot(slot).updateDynConfig(KGroup.MATCH_MAX_COUNT_KEY, 'abc')
         then:
@@ -152,6 +159,7 @@ class KGroupTest extends Specification {
 
         cleanup:
         ConfForSlot.global.confBucket.onceScanMaxLoopCount = 1024
+        ConfForGlobal.keysMatchMaxCount = 100
         localPersist.cleanUp()
         localPersist.resetForTest()
         Consts.persistDir.deleteDir()
