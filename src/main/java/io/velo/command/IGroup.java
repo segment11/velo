@@ -326,7 +326,13 @@ public class IGroup extends BaseCommand {
                                 r[0]++;
 
                                 String value;
-                                if (valueFieldsIndexes.length == lineArray.length) {
+                                // only treat as "the whole line" when every column is requested in order,
+                                // a count equality alone stores unprojected columns (bug 79.3)
+                                boolean allColumnsInOrder = valueFieldsIndexes.length == lineArray.length;
+                                for (int i = 0; allColumnsInOrder && i < valueFieldsIndexes.length; i++) {
+                                    allColumnsInOrder = valueFieldsIndexes[i] == i;
+                                }
+                                if (allColumnsInOrder) {
                                     value = line;
                                 } else {
                                     var sb = new StringBuilder();
@@ -356,14 +362,25 @@ public class IGroup extends BaseCommand {
                                 r[0]++;
 
                                 String value;
-                                if (valueFieldsArray.length == map.size()) {
+                                if ("*".equals(valueFields)) {
+                                    // documented form, all fields (bug 79.3)
                                     value = line;
                                 } else {
-                                    var subMap = new HashMap<>();
-                                    for (int i = 0; i < valueFieldsArray.length; i++) {
-                                        subMap.put(valueFieldsArray[i], map.get(valueFieldsArray[i]));
+                                    // only treat as "the whole line" when the requested names cover the record,
+                                    // a count equality alone stores unprojected fields (bug 79.3)
+                                    boolean allFieldsRequested = valueFieldsArray.length == map.size();
+                                    for (int i = 0; allFieldsRequested && i < valueFieldsArray.length; i++) {
+                                        allFieldsRequested = map.containsKey(valueFieldsArray[i]);
                                     }
-                                    value = objectMapper.writeValueAsString(subMap);
+                                    if (allFieldsRequested) {
+                                        value = line;
+                                    } else {
+                                        var subMap = new HashMap<>();
+                                        for (int i = 0; i < valueFieldsArray.length; i++) {
+                                            subMap.put(valueFieldsArray[i], map.get(valueFieldsArray[i]));
+                                        }
+                                        value = objectMapper.writeValueAsString(subMap);
+                                    }
                                 }
                                 set(value.getBytes(), slotWithKeyHash);
                             }

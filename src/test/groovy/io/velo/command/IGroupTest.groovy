@@ -361,6 +361,36 @@ class IGroupTest extends Specification {
         (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
 
         when:
+        // json value_fields=* is the documented form and means all fields
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.json file_format=json ' +
+                'key_field=name key_prefix=star_ value_fields=*')
+        then:
+        reply instanceof AsyncReply
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        def starCv = inMemoryGetSet.getBuf(slot, 'star_name0', 0, 0).cv()
+        new String(starCv.getCompressedData()) == '{"name":"name0","age":20,"address":"address0"}'
+
+        when:
+        // json count-equal but name-mismatched fields must project, not store the raw line
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.json file_format=json ' +
+                'key_field=name key_prefix=cnt_ value_fields=x,y,z')
+        then:
+        reply instanceof AsyncReply
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        def cntCv = inMemoryGetSet.getBuf(slot, 'cnt_name0', 0, 0).cv()
+        new ObjectMapper().readValue(new String(cntCv.getCompressedData()), HashMap) == [x: null, y: null, z: null]
+
+        when:
+        // csv count-equal indexes in a different order must project in the requested order
+        reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.csv file_format=csv ' +
+                'key_field_index=0 key_prefix=ord_ value_fields_indexes=2,1,0')
+        then:
+        reply instanceof AsyncReply
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        def ordCv = inMemoryGetSet.getBuf(slot, 'ord_0', 0, 0).cv()
+        new String(ordCv.getCompressedData()) == 'bbb,aaa,0'
+
+        when:
         // key field not exists
         reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.json file_format=json ' +
                 'key_field=name1 key_prefix=test_ value_fields=name,age')
