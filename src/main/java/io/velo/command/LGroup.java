@@ -315,9 +315,8 @@ public class LGroup extends BaseCommand {
         } catch (NumberFormatException e) {
             return ErrorReply.NOT_INTEGER;
         }
-        if (index >= RedisList.LIST_MAX_SIZE) {
-            return ErrorReply.LIST_SIZE_TO_LONG;
-        }
+        // an index beyond the list size is out of range, redis replies nil.
+        // the list size limit is an internal storage limit, not a protocol limit
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
