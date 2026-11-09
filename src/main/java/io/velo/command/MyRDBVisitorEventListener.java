@@ -15,8 +15,6 @@ import io.velo.type.RedisZSet;
 
 /**
  * Event listener for RDB visitor events.
- *
- * @param lGroup the list command group for list operations
  */
 public class MyRDBVisitorEventListener implements EventListener {
     private final LGroup lGroup;
