@@ -72,9 +72,7 @@ class InfoCommandTest extends Specification {
         reply = infoCommand.handle()
         then:
         reply instanceof BulkReply
-        def zzzRaw = new String((reply as BulkReply).raw)
-        zzzRaw.contains('# Server')
-        !zzzRaw.contains('key:value')
+        (reply as BulkReply).asString() == ''
 
         when: 'an empty section must not throw and returns default content'
         def data2Empty = new byte[2][]
@@ -84,7 +82,7 @@ class InfoCommandTest extends Specification {
         reply = infoCommand.handle()
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('# Server')
+        (reply as BulkReply).asString() == ''
 
         cleanup:
         localPersist.cleanUp()
@@ -108,14 +106,14 @@ class InfoCommandTest extends Specification {
         def reply = infoCommand.execute('info server')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('uptime_in_seconds:10')
+        (reply as BulkReply).asString().contains('uptime_in_seconds:10')
 
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
 
-    def 'test clients'(){
+    def 'test clients'() {
         given:
         def iGroup = new IGroup('info', null, null)
         iGroup.from(BaseCommand.mockAGroup())
@@ -128,7 +126,7 @@ class InfoCommandTest extends Specification {
         def reply = infoCommand.execute('info clients')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('connected_clients:')
+        (reply as BulkReply).asString().contains('connected_clients:')
     }
 
     def 'test memory'() {
@@ -141,7 +139,7 @@ class InfoCommandTest extends Specification {
         def reply = infoCommand.execute('info memory')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('total_system_memory:')
+        (reply as BulkReply).asString().contains('total_system_memory:')
     }
 
     def 'test memory handles undefined (-1) max without corrupting totals'() {
@@ -307,7 +305,7 @@ class InfoCommandTest extends Specification {
         RuntimeCpuCollector.close()
     }
 
-    def 'test cluster'(){
+    def 'test cluster'() {
         given:
         def iGroup = new IGroup('info', null, null)
         iGroup.from(BaseCommand.mockAGroup())

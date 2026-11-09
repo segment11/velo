@@ -580,7 +580,7 @@ class GGroupTest extends Specification {
         then:
         reply instanceof BulkReply
         // distance in meters should be ~166274
-        def distM = new String((reply as BulkReply).getRaw()).toDouble()
+        def distM = (reply as BulkReply).asString().toDouble()
         distM > 166000 && distM < 167000
 
         when:
@@ -588,7 +588,7 @@ class GGroupTest extends Specification {
         then:
         reply instanceof BulkReply
         // distance in km should be ~166.27 (166274 / 1000)
-        def distKm = new String((reply as BulkReply).getRaw()).toDouble()
+        def distKm = (reply as BulkReply).asString().toDouble()
         distKm > 166 && distKm < 167
 
         when:
@@ -596,7 +596,7 @@ class GGroupTest extends Specification {
         then:
         reply instanceof BulkReply
         // distance in miles should be ~103.3 (166274 / 1609.34)
-        def distMi = new String((reply as BulkReply).getRaw()).toDouble()
+        def distMi = (reply as BulkReply).asString().toDouble()
         distMi > 103 && distMi < 104
 
         when:
@@ -604,7 +604,7 @@ class GGroupTest extends Specification {
         then:
         reply instanceof BulkReply
         // distance in feet should be ~545523 (166274 / 0.3048)
-        def distFt = new String((reply as BulkReply).getRaw()).toDouble()
+        def distFt = (reply as BulkReply).asString().toDouble()
         distFt > 545000 && distFt < 546000
 
         when:
@@ -627,20 +627,20 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('geodist xxx m0 m0')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw) == '0.0000'
+        (reply as BulkReply).asString() == '0.0000'
 
         when:
         // Bug 77.5: km distance keeps 4 fixed decimals
         reply = gGroup.execute('geodist xxx m0 m1 km')
         then:
-        new String((reply as BulkReply).raw) == '166.2743'
+        (reply as BulkReply).asString() == '166.2743'
 
         when:
         // Bug 77.5: a large distance in meters never uses scientific notation
         gGroup.execute('geoadd faraway 0 85 fa 0 -85 fb')
         reply = gGroup.execute('geodist faraway fa fb m')
         then:
-        def farStr = new String((reply as BulkReply).raw)
+        def farStr = (reply as BulkReply).asString()
         farStr ==~ /\d+\.\d{4}/
         farStr.toDouble() > 18800000 && farStr.toDouble() < 19000000
     }
