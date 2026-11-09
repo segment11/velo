@@ -102,6 +102,17 @@ class LGroupTest extends Specification {
 
         expect:
         lGroup.execute('lastsave') instanceof IntegerReply
+
+        when:
+        // bug 82.3: redis replies a unix timestamp in seconds, not in milliseconds
+        BGroup.lastBgSaveMillis.set(1_700_000_000_123L)
+        def replyWithSave = lGroup.execute('lastsave')
+        then:
+        replyWithSave instanceof IntegerReply
+        ((IntegerReply) replyWithSave).getInteger() == 1_700_000_000
+
+        cleanup:
+        BGroup.lastBgSaveMillis.set(0)
     }
 
     def 'test lindex'() {

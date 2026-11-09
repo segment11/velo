@@ -225,7 +225,8 @@ public class LGroup extends BaseCommand {
     @Override
     public Reply handle() {
         if ("lastsave".equals(cmd)) {
-            return new IntegerReply(BGroup.lastBgSaveMillis.get());
+            // redis replies a unix timestamp in seconds, the internal timestamp is in milliseconds
+            return new IntegerReply(BGroup.lastBgSaveMillis.get() / 1000);
         }
 
         if ("lindex".equals(cmd)) {
