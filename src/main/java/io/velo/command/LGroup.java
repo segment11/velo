@@ -846,12 +846,16 @@ public class LGroup extends BaseCommand {
             }
         }
 
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        RedisList rlAlreadyGet = null;
+
         var key = Wal.keyString(keyBytes);
         if (needKeyExist) {
             // lpushx / rpushx push only if the key exists. A client blocked on the key does
             // not make it exist, redis answers 0 and creates nothing, so the check must run
             // before the blocking list delivery hands the value over.
-            if (getRedisList(slotWithKeyHashListParsed.getFirst()) == null) {
+            rlAlreadyGet = getRedisList(slotWithKeyHash);
+            if (rlAlreadyGet == null) {
                 return IntegerReply.REPLY_0;
             }
         }
@@ -864,8 +868,7 @@ public class LGroup extends BaseCommand {
         // all elements are popped, need to add to list
         if (afterPopValueBytesArray.length == 0) {
             // no need to add to list
-            var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-            var rl = getRedisList(slotWithKeyHash);
+            var rl = rlAlreadyGet != null ? rlAlreadyGet : getRedisList(slotWithKeyHash);
             if (rl == null || rl.size() == 0) {
                 return IntegerReply.REPLY_1;
             } else {
