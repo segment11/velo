@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** discovery complete — 7 findings, none verified yet
+**Status:** all 7 findings CONFIRMED (reproduced) by agent 2; fix phase complete — `keys()` rewritten on the SCAN machinery per maintainer decision (TDD red step waived), (fix commit d8e41ddd)
 **Review branch:** `review/kgroup`
 **Reviewed commit:** `2dc770d709507d8ca437d6172094b4ea8e9bf4db`
 
@@ -45,7 +45,7 @@ Baseline: `./gradlew :test --tests "io.velo.command.KGroupTest"` — BUILD SUCCE
 
 **Severity:** High
 **Class:** Correctness / Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced) — fixed by the bug 80 rewrite`
 
 ### Cited files / lines
 ```java
@@ -87,7 +87,7 @@ With keys `user:1` … `user:100` present (Redis: `KEYS user:*` → 100 keys):
 
 **Severity:** High
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced) — fixed by the bug 80 rewrite`
 
 ### Cited files / lines
 ```java
@@ -146,7 +146,7 @@ Trade-off accepted: O(N) full scan per call — the same complexity class as Red
 
 **Severity:** Medium
 **Class:** Edge case / Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced) — fixed by the bug 80 rewrite (REFINED: bare trailing-backslash example rejected earlier by the no-wildcard guard)`
 
 ### Cited files / lines
 ```java
@@ -176,7 +176,7 @@ Falls out of the 80.2 unified design: with `KeyLoader.isKeyMatch`/`stringMatchLe
 
 **Severity:** Medium
 **Class:** Correctness / operability
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced) — fixed by the bug 80 rewrite`
 
 ### Cited files / lines
 ```java
@@ -210,7 +210,7 @@ Register the item in `SUPPORTED_ITEMS` with a `parsePositiveInt` validator (retu
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced) — fixed by the bug 80 rewrite`
 
 ### Cited files / lines
 ```java
@@ -241,7 +241,7 @@ Both families fall out of the 80.2 unified design: with `isKeyMatch`, `KEYS *` i
 
 **Severity:** Low
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced) — knob registered + cap documented by the bug 80 rewrite (product decision: cap kept)`
 
 ### Cited files / lines
 ```java
@@ -266,7 +266,7 @@ With 80.2's unified design, keep the cap as the O(N)-safety valve but make it ho
 
 **Severity:** Low
 **Class:** Edge case
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced) — fixed by the bug 80 rewrite`
 
 ### Cited files / lines
 ```java
@@ -311,46 +311,67 @@ Length-check first: `if (data[1].length == 0) return MultiBulkReply.EMPTY` (empt
 
 ## Review Feedback (AI agent 2, round 1)
 
-**Method:** <Spock temp spec | live Redis 7.2 differential | JDK repro | static inspection>
+**Method:** Spock temp spec (`src/test/groovy/io/velo/command/Bug80ReviewTempSpec.groovy`, deleted after evidence capture) over the real persist layer (`prepareLocalPersist` + `indexWorkers=1`, `fixSlotThreadId`), blocking on `settablePromise.toCompletableFuture().get()`; regex ground truth via JDK repro; DynConfig behavior via `OneSlot.updateDynConfig` + hand-edited JSON ctor. All findings verified at reviewed commit `2dc770d7` before the fix.
 
 | Finding | Verdict | Evidence |
 |---|---|---|
-| 80.1 | | |
-| 80.2 | | |
-| 80.3 | | |
-| 80.4 | | |
-| 80.5 | | |
-| 80.6 | | |
-| 80.7 | | |
+| 80.1 | CONFIRMED (reproduced) + REFINED detail | `keys h?llo` → `[hllo]` (misses `hxllo`; Redis: both); `keys app.log` → `[app.log, appXlog]` (false positive `appXlog`; Redis: one); `keys user:*` → `[]` with all 8 keys present in the analysis DB (dump via `filterKeys` proved `user` present and `Pattern 'user:*'.matches('user')=true`, yet the reply was empty — the analysis path is even wronger than reported). Refinements: (a) the report's regex analysis had the quantifier binding wrong — `user:*` compiles to `user` + `:`* (the `*` binds to the colon), so the report's "returns user/userr/userrr" row was itself inaccurate; (b) the report's Redis expectations had two errors — glob `user:*` does NOT match `user`/`userr` (colon required), and `h?llo` does NOT match the 4-char `hllo`. None of this weakens the finding: wildcard patterns were evaluated with non-glob semantics and silently returned wrong results. |
+| 80.2 | CONFIRMED (reproduced) | Default `keyAnalysisNumberPercent=1` (log: `do add when add loop increase count=100`), 20 keys `k:0..k:19` written → `keys k:.*` returned exactly 1 (`k:0`), Redis returns 20. With percent=100 (log: `count=1`): 10 `k:*` keys written, `del k:5` → 1, `keys k:.*` still returned 10 including `k:5`; `handler.flushdb()` (the same `clearAllKeysAfterAnalysis` the periodic `run()` calls, KeyAnalysisHandler.java:417) → `keys k:.*` returned 0 while all 10 keys still exist in the keyspace. Static: `removeKey` has no production call site (grep: definition only). |
+| 80.3 | CONFIRMED (reproduced) | `execute('keys foo[')` → `THROWN java.util.regex.PatternSyntaxException: Unclosed character class near index 3`; in production RequestHandler.java:576-579 stringifies it into `-ERR Unclosed character class near index 3…`. Refinement: bare `keys foo\` is REJECTED earlier by the no-wildcard guard (`\` is not among the 5 indexOf chars, KGroup.java:85-97) with the only-support error — it never reaches `Pattern.compile`; a pattern that both contains a metachar and ends with a backslash (e.g. `fo.o\`) still crashes the compile. |
+| 80.4 | CONFIRMED (reproduced) | `oneSlot.updateDynConfig('keys.matchMaxCount','500')` → `IllegalArgumentException: Unsupported dyn config key: keys.matchMaxCount`; `new DynConfig(slot, file-with-{"keys.matchMaxCount":500}, oneSlot)` → ctor throws the same (slot init breaks on hand-edited JSON); live `get('keys.matchMaxCount')` → null → cap hard-stuck at 100. Static: key in neither `SUPPORTED_ITEMS` (DynConfig.java:43-156) nor `INTERNAL_KEYS` (158-165). |
+| 80.5 | CONFIRMED (reproduced) | `keys *` and `keys foo` → `ErrorReply('only support prefix match pattern')`; Redis 7.2 returns the whole keyspace / the exact key if present. |
+| 80.6 | CONFIRMED (reproduced) | percent=100, 150 `q:*` keys written → `keys q:.*` returned exactly 100, normal-looking array, no truncation marker. |
+| 80.7 | CONFIRMED (reproduced) | `execute('keys _0')` (BYTES_0_LENGTH_PLACEHOLDER → `data[1]=byte[0]`) → `THROWN java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0` at KGroup.java:78; production catch-all → `-ERR Index 0 out of bounds for length 0`; Redis 7.2 replies an empty array. |
 
 ### Additional observations
 
+- The `execute('keys user:*')` → `[]` anomaly (direct `prefixMatch('user', user:*)` → `[user]` in the same instant) points at an additional defect inside the old analysis path (prime suspect: the RocksDB fixed-length prefix bloom, `useFixedLengthPrefixExtractor(3)`, interacting with `iterator.seek`) — moot after the rewrite removed the analysis source, recorded here so it is not lost.
+- Confirmed the reviewer-checklist suspicion about KGroupTest's powerless `whenResult{}` assertion: under default 1% sampling the old test wrote 10 keys and "expected" 10 back while the analysis DB held exactly 1 — the test could not fail.
+- `Promises.all` discards results (`Promise<Void>`); result-collecting fan-out must use `Promises.toList` (bit the first compile of the rewrite).
+
 ### Recommended fix order (for the fix agent)
 
-## Fix Log (AI agent 1, round 1 fix phase)
+Superseded by the maintainer decision of 2026-11-09 (second session): the whole family 80.1/80.2/80.3/80.5/80.7 is fixed by one rewrite of `keys()` on the SCAN machinery (no per-bug commits), 80.4 by registering `keys.matchMaxCount` in `DynConfig.SUPPORTED_ITEMS`, 80.6 resolved as product decision: cap kept + knob alive + documented in `doc/redis_command_support.md`.
+
+## Fix Log (round 1 fix phase)
+
+Maintainer waiver: since `keys` is a full rewrite off the key-analysis store, the per-bug TDD red step was waived ("as this 'keys' need rewrite, do not use key analysis, need not write TDD red step"); the rewritten `KGroupTest.'test keys'` covers every finding's before/after behavior in one command test per `doc/how_to_write_high_coverage_test_cases_for_commands.md`.
 
 | Bug | Failing test evidence | Fix commit | Focused test | JaCoCo |
 |---|---|---|---|---|
-| 80.1 | | | | |
-| 80.2 | | | | |
-| 80.3 | | | | |
-| 80.4 | | | | |
-| 80.5 | | | | |
-| 80.6 | | | | |
-| 80.7 | | | | |
+| 80.1 | waived (rewrite); old wrong behavior captured in reviewer temp spec above | d8e41ddd | `./gradlew :test --tests "io.velo.command.KGroupTest"` green — `keys user:*`→[user:1,user:2], `keys user*`→[user,user:1,user:2,userr], `keys h?llo`→[hello,hxllo], `keys app.log`→[app.log] only, `keys h[ax]llo`, `keys h[eo]llo` | KGroup.java 57/64 lines covered, 10/14 branch lines fully covered |
+| 80.2 | waived (rewrite); temp spec: 1-of-20 keys, del-blind, wipe-blind | d8e41ddd | same run — `del user:1` visible, `expire user 1` + sleep visible, key-bucket phase via `persistShortValueListBatchInOneWalGroup` (incl. mid-cursor resume with `onceScanMaxLoopCount=1`) | same |
+| 80.3 | waived (rewrite); temp spec: PSE on `foo[` | d8e41ddd | same run — `keys foo[` → empty array, no error | same |
+| 80.4 | waived (rewrite); temp spec: IAE on set + ctor throw | d8e41ddd | same run — `updateDynConfig('keys.matchMaxCount','200')` accepted and honored; `'abc'` → `thrown(IllegalArgumentException)` | DynConfig.java:156-170 5/5 covered |
+| 80.5 | waived (rewrite); temp spec: `*`/`foo` rejected | d8e41ddd | same run — `keys *` → all 9 keys, `keys user` → [user] | same as 80.1 |
+| 80.6 | waived (rewrite); temp spec: silent 100 cap | d8e41ddd | same run — 150 `q:*` keys → 100 (default), knob→200 → 150; cap documented in `doc/redis_command_support.md` | same |
+| 80.7 | waived (rewrite); temp spec: AIOOBE | d8e41ddd | same run — `keys _0` → `MultiBulkReply.EMPTY` | same |
 
 ## Re-review (AI agent 2)
 
+Fix-phase verification (agent 2, same session, pre-commit):
+
+- `./gradlew :test --tests "io.velo.command.KGroupTest"` → BUILD SUCCESSFUL (4 methods; `test keys` exercises glob family / del / expire / cap + knob / bucket phase + cursor resume over 2 slots).
+- Related suites green: `DynConfigTest`, `SGroupTest`, `CategoryTest`, `CommandRegistryPopulationTest`, `XDynConfigTest`.
+- JaCoCo (`scripts/jacoco_cover.py`): `io.velo.command.KGroup` 69-185 → 57/64 lines, 10/14 branch lines fully covered; `io.velo.persist.DynConfig` 155-175 → 5/5.
+- Semantics spot-check against Redis 7.2 glob: `user:*` ≠ `user`/`userr` (colon required), `h?llo` ≠ `hllo` (5-char pattern) — the rewritten expectations encode Redis semantics, verified against `stringMatchLen` (the Redis `stringmatchlen` port) via `KeyLoader.isKeyMatch`.
+- Accept: the rewrite + knob registration + doc note. Commit pending (maintainer has not requested commit).
+
 ## Residual Risk
+
+- Uncovered defensive branches in KGroup.java: `firstOneSlot == null` (94), the `whenComplete` exception translation (116-119), one cursor-flavor branch (174) — reachable only via fault injection / cluster-with-no-slots; noted, not blocking.
+- Per-slot budget = `matchMaxCount` for every slot in parallel, then the aggregate is trimmed to `matchMaxCount` in slot order — a slot-order bias when the cap is hit (acceptable: KEYS result order is unspecified in Redis, and the cap is a documented safety valve).
+- KEYS is O(N) per call over all slots (Redis-equivalent complexity class; runs on slot workers so other slots are unaffected; the cap bounds the reply size but not the scan work when matches are sparse — same as before for SCAN).
+- The key-analysis RocksDB store itself is untouched (still sampled, still wiped by the periodic task) — it now only feeds `KeyAnalysisTask` statistics, no longer any command path. The `prefixMatch` anomaly recorded above lives there.
 
 ## Summary
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 80.1 | Glob pattern evaluated as Java regex (`KEYS user:*` silent wrong results) | High | Correctness / Redis compat | | |
-| 80.2 | KEYS source is 1%-sampled, periodically-wiped, delete-blind analysis DB | High | Correctness | | |
-| 80.3 | `Pattern.compile` crash on glob-legal patterns (`foo[`, `foo\`) | Medium | Edge case / Redis compat | | |
-| 80.4 | `keys.matchMaxCount` un-settable (DynConfig rejects the key; JSON edit breaks slot init) | Medium | Correctness / operability | | |
-| 80.5 | `KEYS *` / wildcard-free `KEYS foo` rejected | Medium | Redis protocol compatibility | | |
-| 80.6 | Silent truncation at 100 matches | Low | Redis protocol compatibility | | |
-| 80.7 | `KEYS ""` AIOOBE → JVM error string reply | Low | Edge case | | |
+| 80.1 | Glob pattern evaluated as Java regex (`KEYS user:*` silent wrong results) | High | Correctness / Redis compat | CONFIRMED (reproduced) | fixed (rewrite) |
+| 80.2 | KEYS source is 1%-sampled, periodically-wiped, delete-blind analysis DB | High | Correctness | CONFIRMED (reproduced) | fixed (rewrite) |
+| 80.3 | `Pattern.compile` crash on glob-legal patterns (`foo[`) | Medium | Edge case / Redis compat | CONFIRMED (reproduced, `foo\` example refined) | fixed (rewrite) |
+| 80.4 | `keys.matchMaxCount` un-settable (DynConfig rejects the key; JSON edit breaks slot init) | Medium | Correctness / operability | CONFIRMED (reproduced) | fixed (knob registered) |
+| 80.5 | `KEYS *` / wildcard-free `KEYS foo` rejected | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (rewrite) |
+| 80.6 | Silent truncation at 100 matches | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (knob alive + cap documented; product decision: cap kept) |
+| 80.7 | `KEYS ""` AIOOBE → JVM error string reply | Low | Edge case | CONFIRMED (reproduced) | fixed (rewrite) |
