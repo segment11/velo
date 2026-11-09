@@ -41,6 +41,10 @@ public class DynConfig {
         void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value);
     }
 
+    private static void logSet(@NotNull String key, @NotNull Object value, short currentSlot) {
+        log.warn("Dyn config set {}={}, slot={}", key, value, currentSlot);
+    }
+
     private static final Map<String, DynConfigItem> SUPPORTED_ITEMS = Map.of(
             SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, new DynConfigItem() {
                 @Override
@@ -52,7 +56,7 @@ public class DynConfig {
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     int maxConnections = (int) value;
                     MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections(maxConnections);
-                    log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
+                    logSet(SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG, value, currentSlot);
                 }
             },
             TrainSampleJob.KEY_IN_DYN_CONFIG, new DynConfigItem() {
@@ -69,7 +73,7 @@ public class DynConfig {
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>(Arrays.asList(((String) value).split(",")));
                     TrainSampleJob.setKeyPrefixOrSuffixGroupList(keyPrefixOrSuffixGroupList);
-                    log.warn("Dyn config for global set dict_key_prefix_groups={}, slot={}", value, currentSlot);
+                    logSet(TrainSampleJob.KEY_IN_DYN_CONFIG, value, currentSlot);
                 }
             },
             BigKeyTopK.KEY_IN_DYN_CONFIG, new DynConfigItem() {
@@ -81,7 +85,7 @@ public class DynConfig {
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     oneSlot.initBigKeyTopK((int) value);
-                    log.warn("Global config for current slot set monitor_big_key_top_k={}, slot={}", value, currentSlot);
+                    logSet(BigKeyTopK.KEY_IN_DYN_CONFIG, value, currentSlot);
                 }
             },
             "type_zset_member_max_length", new DynConfigItem() {
@@ -93,7 +97,7 @@ public class DynConfig {
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     RedisZSet.ZSET_MEMBER_MAX_LENGTH = (Short) value;
-                    log.warn("Dyn config for global set zset_member_max_length={}, slot={}", value, currentSlot);
+                    logSet("type_zset_member_max_length", value, currentSlot);
                 }
             },
             "type_set_member_max_length", new DynConfigItem() {
@@ -105,7 +109,7 @@ public class DynConfig {
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     RedisHashKeys.SET_MEMBER_MAX_LENGTH = (Short) value;
-                    log.warn("Dyn config for global set set_member_max_length={}, slot={}", value, currentSlot);
+                    logSet("type_set_member_max_length", value, currentSlot);
                 }
             },
             "type_zset_max_size", new DynConfigItem() {
@@ -117,7 +121,7 @@ public class DynConfig {
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     RedisZSet.ZSET_MAX_SIZE = (Short) value;
-                    log.warn("Dyn config for global set zset_max_size={}, slot={}", value, currentSlot);
+                    logSet("type_zset_max_size", value, currentSlot);
                 }
             },
             "type_hash_max_size", new DynConfigItem() {
@@ -129,7 +133,7 @@ public class DynConfig {
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     RedisHashKeys.HASH_MAX_SIZE = (Short) value;
-                    log.warn("Dyn config for global set hash_max_size={}, slot={}", value, currentSlot);
+                    logSet("type_hash_max_size", value, currentSlot);
                 }
             },
             "type_list_max_size", new DynConfigItem() {
@@ -141,7 +145,7 @@ public class DynConfig {
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     RedisList.LIST_MAX_SIZE = (Short) value;
-                    log.warn("Dyn config for global set list_max_size={}, slot={}", value, currentSlot);
+                    logSet("type_list_max_size", value, currentSlot);
                 }
             },
             "repl_connect_timeout_millis", new DynConfigItem() {
@@ -152,6 +156,7 @@ public class DynConfig {
 
                 @Override
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
+                    // read lazily by the replication connect path, nothing to apply eagerly
                 }
             },
             "keys.matchMaxCount", new DynConfigItem() {
@@ -164,7 +169,7 @@ public class DynConfig {
                 public void apply(short currentSlot, OneSlot oneSlot, @NotNull Object value) {
                     // global, read by every keys() call
                     ConfForGlobal.keysMatchMaxCount = (int) value;
-                    log.warn("Dyn config set keys.matchMaxCount={}, slot={}", value, currentSlot);
+                    logSet("keys.matchMaxCount", value, currentSlot);
                 }
             }
     );
@@ -259,40 +264,40 @@ public class DynConfig {
                 case SocketInspector.MAX_CONNECTIONS_KEY_IN_DYN_CONFIG -> {
                     int valueInt = (int) value;
                     if (valueInt <= 0) {
-                        log.error("Dyn config for global set max_connections ignored, invalid value={}, slot={}", value, currentSlot);
+                        log.error("Dyn config set max_connections ignored, invalid value={}, slot={}", value, currentSlot);
                     } else {
                         MultiWorkerServer.STATIC_GLOBAL_V.socketInspector.setMaxConnections(valueInt);
-                        log.warn("Dyn config for global set max_connections={}, slot={}", value, currentSlot);
+                        logSet(key, value, currentSlot);
                     }
                 }
                 case TrainSampleJob.KEY_IN_DYN_CONFIG -> {
                     ArrayList<String> keyPrefixOrSuffixGroupList = new ArrayList<>(Arrays.asList(((String) value).split(",")));
                     TrainSampleJob.setKeyPrefixOrSuffixGroupList(keyPrefixOrSuffixGroupList);
-                    log.warn("Dyn config for global set dict_key_prefix_groups={}, slot={}", value, currentSlot);
+                    logSet(key, value, currentSlot);
                 }
                 case BigKeyTopK.KEY_IN_DYN_CONFIG -> {
                     oneSlot.initBigKeyTopK(Integer.parseInt(value.toString()));
-                    log.warn("Global config for current slot set monitor_big_key_top_k={}, slot={}", value, currentSlot);
+                    logSet(key, value, currentSlot);
                 }
                 case "type_zset_member_max_length" -> {
                     RedisZSet.ZSET_MEMBER_MAX_LENGTH = Short.parseShort(value.toString());
-                    log.warn("Dyn config for global set zset_member_max_length={}, slot={}", value, currentSlot);
+                    logSet(key, value, currentSlot);
                 }
                 case "type_set_member_max_length" -> {
                     RedisHashKeys.SET_MEMBER_MAX_LENGTH = Short.parseShort(value.toString());
-                    log.warn("Dyn config for global set set_member_max_length={}, slot={}", value, currentSlot);
+                    logSet(key, value, currentSlot);
                 }
                 case "type_zset_max_size" -> {
                     RedisZSet.ZSET_MAX_SIZE = Short.parseShort(value.toString());
-                    log.warn("Dyn config for global set zset_max_size={}, slot={}", value, currentSlot);
+                    logSet(key, value, currentSlot);
                 }
                 case "type_hash_max_size" -> {
                     RedisHashKeys.HASH_MAX_SIZE = Short.parseShort(value.toString());
-                    log.warn("Dyn config for global set hash_max_size={}, slot={}", value, currentSlot);
+                    logSet(key, value, currentSlot);
                 }
                 case "type_list_max_size" -> {
                     RedisList.LIST_MAX_SIZE = Short.parseShort(value.toString());
-                    log.warn("Dyn config for global set list_max_size={}, slot={}", value, currentSlot);
+                    logSet(key, value, currentSlot);
                 }
             }
         }
