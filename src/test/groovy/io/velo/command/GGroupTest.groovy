@@ -298,6 +298,38 @@ class GGroupTest extends Specification {
         then:
         reply instanceof BulkReply
 
+        when: 'a zero ttl is rejected like redis does, the key is left untouched'
+        def zeroCv = Mock.prepareCompressedValueList(1)[0]
+        zeroCv.expireAt = System.currentTimeMillis() + 1000 * 60
+        inMemoryGetSet.put(slot, 'z', 0, zeroCv)
+        reply = gGroup.execute('getex z ex 0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'getex' command"
+
+        when: 'a zero millisecond ttl is rejected too'
+        reply = gGroup.execute('getex z px 0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'getex' command"
+
+        when: 'a zero absolute ttl is rejected'
+        reply = gGroup.execute('getex z exat 0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'getex' command"
+
+        when: 'a zero absolute millisecond ttl is rejected'
+        reply = gGroup.execute('getex z pxat 0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'getex' command"
+
+        and: 'the rejected commands did not change the key, its ttl is still the original one'
+        def zeroStoredCv = inMemoryGetSet.getBuf(slot, 'z', 0, zeroCv.keyHash).cv()
+        zeroStoredCv.expireAt == zeroCv.expireAt
+        !zeroStoredCv.isExpired()
+
         when: 'key holds a list type value'
         def listCv = Mock.prepareCompressedValueList(1)[0]
         listCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST

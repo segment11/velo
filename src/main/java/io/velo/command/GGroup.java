@@ -322,6 +322,11 @@ public class GGroup extends BaseCommand {
             if (x < 0) {
                 return ErrorReply.INVALID_INTEGER;
             }
+            if (x == 0) {
+                // redis rejects a zero ttl: EX/PX 0 would expire the key at once and
+                // EXAT/PXAT 0 would clear the ttl, because 0 is NO_EXPIRE
+                return invalidExpireTime();
+            }
 
             if ("ex".equalsIgnoreCase(arg)) {
                 ex = x;
