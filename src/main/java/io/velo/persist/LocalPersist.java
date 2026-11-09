@@ -729,6 +729,9 @@ public class LocalPersist implements NeedCleanUp {
      * @throws IOException if an I/O error occurs during startup
      */
     public void startIndexHandlerPool() throws IOException {
+        if (this.indexHandlerPool != null) {
+            return;
+        }
         this.indexHandlerPool = new IndexHandlerPool(ConfForGlobal.indexWorkers, persistDir, persistConfig);
         this.indexHandlerPool.start();
     }
