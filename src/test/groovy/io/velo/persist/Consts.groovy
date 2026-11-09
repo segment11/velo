@@ -35,7 +35,7 @@ class Consts {
     }
 
     static String zookeeperDownloadUrl() {
-        return "https://dlcdn.apache.org/zookeeper/zookeeper-${zookeeperVersion}/apache-zookeeper-${zookeeperVersion}-bin.tar.gz"
+        return "https://archive.apache.org/dist/zookeeper/zookeeper-${zookeeperVersion}/apache-zookeeper-${zookeeperVersion}-bin.tar.gz"
     }
 
     static void stopZookeeper() {
