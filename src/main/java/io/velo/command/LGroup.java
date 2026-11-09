@@ -23,6 +23,11 @@ import java.util.Set;
  * This includes commands like LASTSAVE, LINDEX, LLEN, LPOP, LPUSH, LRANGE, LREM, LSET, LTRIM.
  */
 public class LGroup extends BaseCommand {
+    /** Error reply for a LPOS RANK of zero, redis rejects it. */
+    private static final ErrorReply LPOS_RANK_ZERO = new ErrorReply(
+            "RANK can't be zero: use 1 to start from the first match, 2 from the second ... "
+                    + "or use negative to start from the end of the list");
+
     static {
         CommandRegistry.register(new CommandEntry(
                 "lastsave", 1,
@@ -727,6 +732,9 @@ public class LGroup extends BaseCommand {
                         rank = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
                         return ErrorReply.NOT_INTEGER;
+                    }
+                    if (rank == 0) {
+                        return LPOS_RANK_ZERO;
                     }
                 }
                 case "count" -> {

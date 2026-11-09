@@ -655,6 +655,13 @@ class LGroupTest extends Specification {
         reply == ErrorReply.NOT_INTEGER
 
         when:
+        // bug 82.4: redis rejects rank 0, it is not a valid rank
+        reply = lGroup.execute('lpos a a rank 0')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains("RANK can't be zero")
+
+        when:
         reply = lGroup.execute('lpos a a count a')
         then:
         reply == ErrorReply.NOT_INTEGER
