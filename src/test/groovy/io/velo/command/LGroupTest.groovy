@@ -158,14 +158,18 @@ class LGroupTest extends Specification {
         reply == NilReply.INSTANCE
 
         when:
-        // bug 82.6: redis replies nil for an out of range index, the list size limit
-        // is an internal storage limit and not a protocol limit
+        // the list size limit stays a protocol error, 32767 is the boundary
         reply = lGroup.execute('lindex a 65536')
         then:
-        reply == NilReply.INSTANCE
+        reply == ErrorReply.LIST_SIZE_TO_LONG
 
         when:
         reply = lGroup.execute('lindex a 32767')
+        then:
+        reply == ErrorReply.LIST_SIZE_TO_LONG
+
+        when:
+        reply = lGroup.execute('lindex a 32766')
         then:
         reply == NilReply.INSTANCE
 
