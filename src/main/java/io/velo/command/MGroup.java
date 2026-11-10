@@ -129,7 +129,11 @@ public class MGroup extends BaseCommand {
         if ("migrate".equals(cmd)) {
             // the migrated keys are inside the command line, register them so the request is
             // routed to the slot worker that owns them
-            for (var key : migrateKeysOf(data)) {
+            var args = parseMigrateArgs(data);
+            if (args == null) {
+                return slotWithKeyHashList;
+            }
+            for (var key : args.keys()) {
                 slotWithKeyHashList.add(slot(key, slotNumber));
             }
             return slotWithKeyHashList;
@@ -139,40 +143,81 @@ public class MGroup extends BaseCommand {
     }
 
     /**
-     * Extracts the keys to migrate from a MIGRATE command line.
+     * The parsed MIGRATE command line.
+     *
+     * @param isCopy        whether the copy option is present
+     * @param isReplace     whether the replace option is present
+     * @param authUsername  the auth2 username, null when the option is not present
+     * @param authPassword  the auth or auth2 password, null when the option is not present
+     * @param key           the key argument, the single key form
+     * @param keys          the keys to migrate
+     * @param hasKeysOption whether the keys option is present
+     */
+    record MigrateArgs(boolean isCopy, boolean isReplace, String authUsername, String authPassword,
+                       String key, ArrayList<String> keys, boolean hasKeysOption) {
+    }
+
+    /**
+     * Parses the options of a MIGRATE command line.
      * <p>
-     * Only the {@code KEYS} option form is supported for now. An empty list is returned when the
-     * command line can not be parsed, so the command answers the error without touching any slot.
+     * The keys to migrate are inside the command line, they are the arguments of the keys option
+     * or the key argument of the single key form.
      *
      * @param data the command arguments, the command name is at index 0
-     * @return the keys to migrate, empty when the command line is not supported
+     * @return the parsed arguments, null when the command line is invalid
      */
-    private static ArrayList<String> migrateKeysOf(byte[][] data) {
-        var keys = new ArrayList<String>();
-        if (data.length < 7) {
-            return keys;
+    private static MigrateArgs parseMigrateArgs(byte[][] data) {
+        if (data.length < 6) {
+            return null;
         }
+
+        boolean isCopy = false;
+        boolean isReplace = false;
+        String authUsername = null;
+        String authPassword = null;
+        var keys = new ArrayList<String>();
+        boolean hasKeysOption = false;
 
         for (int i = 6; i < data.length; i++) {
             var arg = new String(data[i]);
             if (arg.equalsIgnoreCase("keys")) {
+                hasKeysOption = true;
                 for (int j = i + 1; j < data.length; j++) {
                     keys.add(new String(data[j]));
                 }
-                return keys;
+                break;
             }
-            if (arg.equalsIgnoreCase("auth")) {
+            if (arg.equalsIgnoreCase("copy")) {
+                isCopy = true;
+            } else if (arg.equalsIgnoreCase("replace")) {
+                isReplace = true;
+            } else if (arg.equalsIgnoreCase("auth")) {
                 // the auth option has one argument, the password
+                if (i + 1 >= data.length) {
+                    return null;
+                }
                 i++;
+                authPassword = new String(data[i]);
             } else if (arg.equalsIgnoreCase("auth2")) {
                 // the auth2 option has two arguments, the username and the password
-                i += 2;
-            } else if (!arg.equalsIgnoreCase("copy") && !arg.equalsIgnoreCase("replace")) {
-                // any other option is not supported yet, the command answers a syntax error
-                return new ArrayList<>();
+                if (i + 2 >= data.length) {
+                    return null;
+                }
+                i++;
+                authUsername = new String(data[i]);
+                i++;
+                authPassword = new String(data[i]);
+            } else {
+                return null;
             }
         }
-        return keys;
+
+        var key = new String(data[3]);
+        if (!hasKeysOption && !key.isEmpty()) {
+            // the single key form, the key argument is the key to migrate
+            keys.add(key);
+        }
+        return new MigrateArgs(isCopy, isReplace, authUsername, authPassword, key, keys, hasKeysOption);
     }
 
     /**
@@ -450,54 +495,29 @@ public class MGroup extends BaseCommand {
     static final Reply NOKEY_REPLY = new BulkReply("NOKEY");
 
     private Reply migrate() {
-        if (data.length < 7) {
-            return ErrorReply.FORMAT;
+        var args = parseMigrateArgs(data);
+        if (args == null) {
+            return ErrorReply.SYNTAX;
+        }
+
+        if (args.hasKeysOption() && !args.key().isEmpty()) {
+            return ErrorReply.MIGRATE_KEY_NOT_EMPTY;
+        }
+
+        var keys = args.keys();
+        if (keys.isEmpty()) {
+            return ErrorReply.SYNTAX;
         }
 
         var host = new String(data[1]);
         var port = Integer.parseInt(new String(data[2]));
-        var keyOrBlank = new String(data[3]);
         var destinationDb = Integer.parseInt(new String(data[4]));
         var timeoutMs = Integer.parseInt(new String(data[5]));
 
-        boolean isCopy = false;
-        boolean isReplace = false;
-        String authUsername = null;
-        String authPassword = null;
-
-        for (int i = 6; i < data.length; i++) {
-            var arg = new String(data[i]);
-            if (arg.equalsIgnoreCase("keys")) {
-                break;
-            } else if (arg.equalsIgnoreCase("copy")) {
-                isCopy = true;
-            } else if (arg.equalsIgnoreCase("replace")) {
-                isReplace = true;
-            } else if (arg.equalsIgnoreCase("auth")) {
-                // the auth option has one argument, the password
-                if (i + 1 >= data.length) {
-                    return ErrorReply.SYNTAX;
-                }
-                i++;
-                authPassword = new String(data[i]);
-            } else if (arg.equalsIgnoreCase("auth2")) {
-                // the auth2 option has two arguments, the username and the password
-                if (i + 2 >= data.length) {
-                    return ErrorReply.SYNTAX;
-                }
-                i++;
-                authUsername = new String(data[i]);
-                i++;
-                authPassword = new String(data[i]);
-            } else {
-                return ErrorReply.SYNTAX;
-            }
-        }
-
-        var keys = migrateKeysOf(data);
-        if (keys.isEmpty()) {
-            return ErrorReply.SYNTAX;
-        }
+        boolean isCopy = args.isCopy();
+        boolean isReplace = args.isReplace();
+        String authUsername = args.authUsername();
+        String authPassword = args.authPassword();
 
         // perf bad
         var jedisClientConfig = DefaultJedisClientConfig.builder().timeoutMillis(timeoutMs).build();

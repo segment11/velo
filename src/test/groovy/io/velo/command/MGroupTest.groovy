@@ -412,8 +412,12 @@ class MGroupTest extends Specification {
         mGroup.parseSlots('migrate', noKeysData, mGroup.slotNumber).size() == 0
 
         when: 'a migrate command line with too few arguments has no slots'
-        def shortMigrateData = new byte[6][]
+        def shortMigrateData = new byte[5][]
         shortMigrateData[0] = 'migrate'.bytes
+        shortMigrateData[1] = '127.0.0.1'.bytes
+        shortMigrateData[2] = redisServer.port.toString().bytes
+        shortMigrateData[3] = ''.bytes
+        shortMigrateData[4] = '0'.bytes
         then:
         mGroup.parseSlots('migrate', shortMigrateData, mGroup.slotNumber).size() == 0
 
@@ -576,6 +580,28 @@ class MGroupTest extends Specification {
         def auth2NoPasswordReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH2 default')
         then:
         auth2NoPasswordReply == ErrorReply.SYNTAX
+
+        when: 'migrate the single key form, the key argument is the key to migrate'
+        def cvJ = Mock.prepareCompressedValueList(1)[0]
+        cvJ.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvJ.compressedData = 'valuej'.bytes
+        inMemoryGetSet.put('j', cvJ)
+        mGroup.crossRequestWorker = false
+        def singleKeyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' j 0 1000')
+        then:
+        singleKeyReply == OKReply.INSTANCE
+        jedis.get('j') == 'valuej'
+
+        when: 'the single key form with an empty key argument is a syntax error'
+        def emptyKeyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000')
+        then:
+        emptyKeyReply == ErrorReply.SYNTAX
+
+        when: 'the key argument must be empty when the keys option is used'
+        def notEmptyKeyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' notempty 0 1000 KEYS a')
+        then:
+        notEmptyKeyReply instanceof ErrorReply
+        notEmptyKeyReply.getMessage() == 'When using MIGRATE KEYS option, the key argument must be set to the empty string'
 
         when: 'the auth option without the keys option is a syntax error'
         def authNoKeysReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH secret')
