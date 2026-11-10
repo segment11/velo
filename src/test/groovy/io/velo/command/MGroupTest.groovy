@@ -16,6 +16,7 @@ import io.velo.persist.OneSlot
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.test.tools.RedisServer
+import io.velo.type.RedisHashKeys
 import redis.clients.jedis.Jedis
 import spock.lang.Specification
 
@@ -569,6 +570,32 @@ class MGroupTest extends Specification {
         then:
         hllReply2 instanceof AsyncReply
         (hllReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == MGroup.NOKEY_REPLY
+
+        when: 'a key with an empty collection is skipped in the local path'
+        def emptySetCv = Mock.prepareCompressedValueList(1)[0]
+        emptySetCv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        emptySetCv.compressedData = new RedisHashKeys().encodeButDoNotCompress()
+        inMemoryGetSet.put('emptyset', emptySetCv)
+        mGroup.crossRequestWorker = false
+        def emptySetReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS emptyset')
+        then:
+        emptySetReply == MGroup.NOKEY_REPLY
+
+        when: 'a key with an empty collection is skipped in the cross worker path'
+        mGroup.crossRequestWorker = true
+        def emptySetReply2 = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS emptyset')
+        eventloopCurrent.run()
+        then:
+        emptySetReply2 instanceof AsyncReply
+        (emptySetReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == MGroup.NOKEY_REPLY
+
+        when: 'a key that does not exist is skipped in the cross worker path'
+        mGroup.crossRequestWorker = true
+        def missingKeyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS nosuchkey')
+        eventloopCurrent.run()
+        then:
+        missingKeyReply instanceof AsyncReply
+        (missingKeyReply as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == MGroup.NOKEY_REPLY
 
         when: 'migrate without the copy option must delete the source key'
         def cvC = Mock.prepareCompressedValueList(1)[0]
