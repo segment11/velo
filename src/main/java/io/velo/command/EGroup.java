@@ -266,7 +266,8 @@ public class EGroup extends BaseCommand {
         try {
             seconds = Long.parseLong(new String(secondsBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            // redis answers 'value is not an integer or out of range'
+            return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
         }
 
         final long now = System.currentTimeMillis();

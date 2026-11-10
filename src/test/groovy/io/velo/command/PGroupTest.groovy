@@ -246,6 +246,12 @@ class PGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
         cv.expireAt > System.currentTimeMillis()
+
+        when: 'a not integer ttl'
+        reply = pGroup.execute('pexpire a abc')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'value is not an integer or out of range'
     }
 
     def 'test pexpireat'() {
@@ -275,6 +281,12 @@ class PGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
         inMemoryGetSet.getBuf(slot, 'a', 0, 0) == null
+
+        when: 'a not integer expire time'
+        reply = pGroup.execute('pexpireat a abc')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'value is not an integer or out of range'
     }
 
     def 'test persist'() {
@@ -609,6 +621,37 @@ class PGroupTest extends Specification {
         then:
         wrongTypeReply instanceof ErrorReply
         (wrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
+    }
+
+    def 'test psetex'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def pGroup = new PGroup('psetex', null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = pGroup.execute('psetex a 100000 value')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        def sTtl = pGroup.slot('a'.bytes, pGroup.slotNumber)
+        def cv = inMemoryGetSet.getBuf(slot, 'a', sTtl.bucketIndex(), sTtl.keyHash()).cv()
+        then:
+        cv.expireAt > System.currentTimeMillis()
+
+        when: 'a not integer ttl'
+        reply = pGroup.execute('psetex a abc value')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'value is not an integer or out of range'
+
+        when: 'a not positive ttl'
+        reply = pGroup.execute('psetex a 0 value')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'psetex' command"
     }
 
     def 'test psubscribe'() {
