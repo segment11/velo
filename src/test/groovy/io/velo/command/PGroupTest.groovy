@@ -7,16 +7,59 @@ import io.velo.SocketInspector
 import io.velo.SocketInspectorTest
 import io.velo.acl.AclUsers
 import io.velo.acl.RPubSub
+import io.velo.mock.ByPassGetSet
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
+import io.velo.persist.OneSlot
 import io.velo.reply.*
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 class PGroupTest extends Specification {
     def _PGroup = new PGroup(null, null, null)
+
+    /**
+     * A by pass get set that records the thread which wrote each key, to check the slot thread affinity.
+     */
+    static class RecordingGetSet implements ByPassGetSet {
+        final Map<String, CompressedValue> map = new ConcurrentHashMap<>()
+        final Map<String, Long> putThreadId = new ConcurrentHashMap<>()
+
+        @Override
+        void put(short slot, String key, int bucketIndex, CompressedValue cv) {
+            map.put(key, cv)
+            putThreadId.put(key, Thread.currentThread().threadId())
+        }
+
+        @Override
+        boolean remove(short slot, String key) {
+            return map.remove(key) != null
+        }
+
+        @Override
+        OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash) {
+            var cv = map.get(key)
+            if (cv == null) {
+                return null
+            }
+            return new OneSlot.BufOrCompressedValue(null, cv)
+        }
+    }
+
+    /**
+     * Waits until the async reply is settled.
+     */
+    static Object waitForReply(AsyncReply reply, long timeoutMs = 5000) {
+        def deadline = System.currentTimeMillis() + timeoutMs
+        while (!reply.settablePromise.isComplete() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5)
+        }
+        return reply.settablePromise.getResult()
+    }
 
     static SocketInspector initSocketInspector() {
         def inspector = new SocketInspector()
@@ -360,6 +403,10 @@ class PGroupTest extends Specification {
         pGroup.byPassGetSet = inMemoryGetSet
         pGroup.from(BaseCommand.mockAGroup())
 
+        and:
+        def eventloopDst = null
+        def eventloopSrc = null
+
         when:
         inMemoryGetSet.remove(slot, 'a')
         def reply = pGroup.execute('pfcount a')
@@ -438,8 +485,63 @@ class PGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
 
+        when: 'a cross worker pfmerge writes the destination key on the destination slot thread'
+        eventloopDst = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloopDst.keepAlive(true)
+        def dstOwnerThreadId = new AtomicLong(-1)
+        Thread.start {
+            dstOwnerThreadId.set(Thread.currentThread().threadId())
+            eventloopDst.run()
+        }
+        eventloopSrc = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        // the destination slot is owned by the other thread, the source slot by the current thread
+        LocalPersist.instance.addOneSlotForTest2((short) 0)
+        LocalPersist.instance.oneSlot((short) 0).setSlotWorkerEventloop(eventloopDst)
+        LocalPersist.instance.addOneSlotForTest2((short) 1)
+        LocalPersist.instance.oneSlot((short) 1).setSlotWorkerEventloop(eventloopSrc)
+
+        def recordingGetSet = new RecordingGetSet()
+        def crossGroup = new PGroup('pfmerge', null, null)
+        crossGroup.byPassGetSet = recordingGetSet
+        crossGroup.from(BaseCommand.mockAGroup((byte) 0, (byte) 2, (short) 2))
+        crossGroup.crossRequestWorker = true
+
+        def dstKey = null
+        def srcKey = null
+        for (int i = 0; i < 1000 && (dstKey == null || srcKey == null); i++) {
+            def candidate = "pfmerge_key_$i"
+            def candidateSlot = crossGroup.slot(candidate, 2).slot()
+            if (candidateSlot == 0 && dstKey == null) {
+                dstKey = candidate
+            } else if (candidateSlot == 1 && srcKey == null) {
+                srcKey = candidate
+            }
+        }
+
+        def crossReply = crossGroup.execute("pfmerge $dstKey $srcKey")
+        // run the source slot task, the aggregation callback runs on the source slot thread
+        def deadline = System.currentTimeMillis() + 5000
+        while (!crossReply.settablePromise.isComplete() && System.currentTimeMillis() < deadline) {
+            eventloopSrc.run()
+            Thread.sleep(5)
+        }
+        then:
+        dstKey != null
+        srcKey != null
+        crossReply instanceof AsyncReply
+        waitForReply(crossReply as AsyncReply) == OKReply.INSTANCE
+        // the destination key must be written on the destination slot owner thread
+        recordingGetSet.putThreadId[dstKey] == dstOwnerThreadId.get()
+
         cleanup:
-        eventloop.breakEventloop()
+        eventloop?.breakEventloop()
+        eventloopDst?.breakEventloop()
+        eventloopSrc?.breakEventloop()
     }
 
     def 'test pfmerge destkey-only'() {

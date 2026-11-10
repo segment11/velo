@@ -534,20 +534,34 @@ public class PGroup extends BaseCommand {
                 return;
             }
 
-            var dstHll = getHll(dstS);
-            if (dstHll == null) {
-                dstHll = emptyHll();
-            }
-            for (var p : promises) {
-                var hllList = p.getResult();
-                for (var hll : hllList) {
-                    mergeHllInto(dstHll, hll);
-                }
-            }
             try {
-                saveHll(dstS, dstHll, getHllExpireAt(dstS));
-                finalPromise.set(OKReply.INSTANCE);
-            } catch (IOException e1) {
+                var srcHllList = new ArrayList<HyperLogLog>();
+                for (var p : promises) {
+                    srcHllList.addAll(p.getResult());
+                }
+
+                // the destination key is owned by its own slot, read and write it on the
+                // destination slot worker thread, never on the source slot worker thread
+                var dstOneSlot = localPersist.oneSlot(dstS.slot());
+                dstOneSlot.asyncCall(() -> {
+                    var dstHll = getHll(dstS);
+                    if (dstHll == null) {
+                        dstHll = emptyHll();
+                    }
+                    for (var hll : srcHllList) {
+                        mergeHllInto(dstHll, hll);
+                    }
+                    saveHll(dstS, dstHll, getHllExpireAt(dstS));
+                    return null;
+                }).whenComplete((r1, e1) -> {
+                    if (e1 != null) {
+                        finalPromise.setException(e1);
+                        return;
+                    }
+                    finalPromise.set(OKReply.INSTANCE);
+                });
+            } catch (Exception e1) {
+                log.error("pfmerge error={}", e1.getMessage());
                 finalPromise.setException(e1);
             }
         });
