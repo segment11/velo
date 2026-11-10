@@ -693,7 +693,8 @@ public class PGroup extends BaseCommand {
             return new IntegerReply(socketInspector.subscribePatternCount());
         } else if ("numsub".equals(subCmd)) {
             if (data.length < 3) {
-                return ErrorReply.FORMAT;
+                // redis returns an empty list when no channel is given
+                return MultiBulkReply.EMPTY;
             }
 
             var channels = new ArrayList<String>();
@@ -711,7 +712,7 @@ public class PGroup extends BaseCommand {
             }
             return new MultiBulkReply(replies);
         } else {
-            return NilReply.INSTANCE;
+            return new ErrorReply("unknown subcommand '" + subCmd + "'. Try PUBSUB HELP.");
         }
     }
 }

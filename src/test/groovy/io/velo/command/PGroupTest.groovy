@@ -784,14 +784,15 @@ class PGroupTest extends Specification {
         then:
         reply == MultiBulkReply.EMPTY
 
-        when:
+        when: 'PUBSUB NUMSUB without a channel returns an empty list'
         reply = pGroup.execute('pubsub numsub')
         then:
-        reply == ErrorReply.FORMAT
+        reply == MultiBulkReply.EMPTY
 
-        when:
+        when: 'an unknown subcommand is an error'
         reply = pGroup.execute('pubsub xxx')
         then:
-        reply == NilReply.INSTANCE
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "unknown subcommand 'xxx'. Try PUBSUB HELP."
     }
 }
