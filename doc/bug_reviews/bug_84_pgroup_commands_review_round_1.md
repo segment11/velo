@@ -900,7 +900,14 @@ The affected existing assertions were updated: `EGroupTest.groovy` (the `expire`
    estimate, so a PFADD pays one HLL serialization (8 KB for a dense HLL) even when nothing changed. Redis compares
    the sparse register set instead. The cost is O(m) per PFADD, in line with the compression cost that Velo already
    pays for every saved HLL.
-5. **The HLL cardinality estimate still differs from Redis.** Velo uses `com.github.prasanthj:hyperloglog` and Redis
+5. **A pre-existing test isolation flake in `io.velo.persist.OneSlotTest.'test get short type'`.** During the
+   regression run of the fix phase (`--tests "io.velo.command.*" --tests "io.velo.SocketInspectorTest" --tests
+   "io.velo.repl.*" --tests "io.velo.persist.*"`, 908 tests) that test failed once with
+   `getShortType(...) == -1`; it passed when re-run alone, and the same selection at HEAD and at the reviewed commit
+   `3d8ee532` (a separate worktree) is green. The test shares `/tmp/velo-data/test-persist` with the other persist
+   tests, so the failure is a state/order flake of the persist test fixtures, not a regression of this round (no
+   persist code was touched).
+6. **The HLL cardinality estimate still differs from Redis.** Velo uses `com.github.prasanthj:hyperloglog` and Redis
    uses its own implementation, so `PFCOUNT` returns a slightly different number for the same elements
    (2467 vs 2453 for the 2471 elements of the 84.2 scenario). This is expected and is not a bug.
 
