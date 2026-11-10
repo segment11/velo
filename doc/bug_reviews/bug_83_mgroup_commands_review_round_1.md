@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** discovery complete — 8 findings, none verified yet
+**Status:** round 1 verification complete — 7 findings CONFIRMED (reproduced), 83.8 PARTIALLY CONFIRMED (port case refined); agent-1 response filed (all 8 verdicts accepted, the 83.8 port oracle corrected in place); fix phase pending
 **Review branch:** `review/mgroup`
 **Reviewed commit:** `4f58f9c5f374f15872281c78ea1a9779c17f0059` (main)
 
@@ -77,7 +77,7 @@ Reference docs (ground truth):
 
 **Severity:** High
 **Class:** Concurrency / Correctness
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, live slotWorkers=2 server + inspection
 
 ### Cited files / lines
 
@@ -180,7 +180,7 @@ the cross-worker flag is raised when the keys span workers:
 
 **Severity:** High
 **Class:** Correctness (silent data loss / no data loss)
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp spec + live server + live Redis 7.2.11 differential
 
 ### Cited files / lines
 
@@ -277,7 +277,7 @@ that is already passed to the destination (`MGroup.java:473-477`).
 
 **Severity:** High
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp spec + live server + live Redis 7.2.11 differential
 
 ### Cited files / lines
 
@@ -396,7 +396,7 @@ must go away.
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp spec + live server + live Redis 7.2.11 differential
 
 ### Cited files / lines
 
@@ -466,7 +466,7 @@ guard must become `data.length < 6`, and `keyOrBlank` must actually be used.
 
 **Severity:** Medium
 **Class:** Correctness / robustness (replication)
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp spec (MSET bypass); replication impact confirmed by inspection (encode/decode pair)
 
 ### Cited files / lines
 
@@ -554,7 +554,7 @@ point of view.
 
 **Severity:** Medium
 **Class:** Concurrency / Correctness (data loss)
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, deterministic interleaving temp spec
 
 ### Cited files / lines
 
@@ -650,7 +650,7 @@ remaining cross-slot limitation.
 
 **Severity:** Medium
 **Class:** Concurrency / error handling
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp spec (both paths) + live server wording
 
 ### Cited files / lines
 
@@ -734,7 +734,7 @@ destination error into Redis's `Target instance replied with error: <msg>` wordi
 
 **Severity:** Low
 **Class:** Redis protocol compatibility / error handling
-**Status:** `OPEN — not verified`
+**Status:** `PARTIALLY CONFIRMED` — agent 2: NumberFormatException divergence reproduced for port/db/timeout; the "Redis answers not-an-integer for the **port**" claim is refuted (Redis never parses argv[2] as an integer — it replies IOERR after a failed connect, or NOKEY first when the key is missing); the cited cluster.c:7017-7023 check applies to **timeout/dbid** only. Timeout<=0→1000ms clamp confirmed in source and live.
 
 ### Cited files / lines
 
@@ -761,11 +761,19 @@ destination error into Redis's `Target instance replied with error: <msg>` wordi
 - The port, the destination DB and the timeout are parsed with `Integer.parseInt`, which throws
   `NumberFormatException` for a non-numeric argument. The exception escapes the command; the
   generic handler in `RequestHandler.java:576-580` turns it into
-  `ERR For input string: "abc"`. Redis answers `ERR value is not an integer or out of range`
-  (`getLongFromObjectOrReply` in `src/cluster.c:7017-7021`). The same applies to a value that
-  does not fit into an `int` (Redis parses the timeout as a `long`).
+  `ERR For input string: "abc"`.
+  - **destination DB and timeout**: Redis answers `ERR value is not an integer or out of range`
+    (`getLongFromObjectOrReply` for `argv[5]`/`argv[4]`, `src/cluster.c:6994-6999` in the local
+    `redis-7.2.14` tree). The same applies to a value that does not fit into an `int` (Redis
+    parses the timeout as a `long`).
+  - **port**: Redis never parses `argv[2]` as an integer — `migrateGetSocket()` uses
+    `atoi(port->ptr)` (`src/cluster.c:6872`), so a non-numeric port becomes `0`, the connect
+    fails and the client gets an `IOERR` (`-IOERR error or timeout ... to target instance`,
+    `src/cluster.c:7265-7271`); when the key does not exist the `NOKEY` short-circuit comes
+    first (`src/cluster.c:7019`) and no connection is attempted at all. *(This part of the
+    oracle was corrected after agent 2's review — see the Response section.)*
 - Redis clamps a non-positive timeout to 1000 ms (`if (timeout <= 0) timeout = 1000;`,
-  `src/cluster.c:7023`). Velo passes the value through to Jedis, where `0` means "no socket
+  `src/cluster.c:6999`). Velo passes the value through to Jedis, where `0` means "no socket
   timeout" — a hung destination then blocks the Velo worker forever instead of failing after
   one second.
 - The destination DB index is not range-checked; Redis lets the destination reject it
@@ -776,17 +784,21 @@ destination error into Redis's `Target instance replied with error: <msg>` wordi
 
 - `MIGRATE 127.0.0.1 abc "" 0 1000 KEYS k` → the agent-1 probe aborted with
   `java.lang.NumberFormatException: For input string: "abc"` (in the server this becomes
-  `ERR For input string: "abc"` plus an `ERROR` log line). Redis: `ERR value is not an integer
-  or out of range`.
-- `MIGRATE 127.0.0.1 6379 "" 0 xyz KEYS k` → same divergence.
+  `ERR For input string: "abc"` plus an `ERROR` log line). Redis: `IOERR error or timeout
+  writing to target instance` when the key exists, `NOKEY` when it does not (never "not an
+  integer" — the port is not integer-parsed by Redis).
+- `MIGRATE 127.0.0.1 6379 "" 0 xyz KEYS k` → same divergence; Redis: `ERR value is not an
+  integer or out of range`.
 - `MIGRATE 127.0.0.1 <unreachable> "" 0 0 KEYS k` → Velo waits forever on the socket instead of
   timing out after 1 s.
 
 ### Suggested fix direction
 
-Parse the port / DB / timeout with an explicit `try/catch` and answer
+Parse the DB and the timeout with an explicit `try/catch` and answer
 `ErrorReply.NOT_INTEGER` (or Redis's exact wording), parse the timeout as a `long`, and clamp
-`timeout <= 0` to 1000 ms like Redis does.
+`timeout <= 0` to 1000 ms like Redis does. For the port, do not throw a `NumberFormatException`:
+either reject it with a plain error or hand the raw string to Jedis and let the connect fail
+with an `IOERR`-style reply, as Redis does.
 
 ## Notes / non-findings
 
@@ -884,22 +896,103 @@ Parse the port / DB / timeout with an explicit `try/catch` and answer
 
 ## Review Feedback (AI agent 2, round 1)
 
-**Method:**
+**Method:** read every cited file/line and re-derived the routing/thread chains independently; ran a temporary
+Spock spec (`TempBug83ReviewSpec`, removed after the run — 7/7 features PASS, each asserting the *buggy*
+behavior) against live `redis-server 7.2.11` destinations; ran a live Velo server built from the reviewed
+commit (`slotNumber=8, slotWorkers=2`) for 83.1; re-ran an independent live Redis 7.2.11 differential for
+the MIGRATE oracle semantics; fetched `src/cluster.c` from the redis 7.2 branch and read `migrateCommand()`
+/ `restoreCommand()` directly. All evidence in
+`doc/bug_reviews/logs/20261110_140600_mgroup_review_agent2_bug_83.log`.
 
 | Finding | Verdict | Evidence |
 |---|---|---|
-| 83.1 | | |
-| 83.2 | | |
-| 83.3 | | |
-| 83.4 | | |
-| 83.5 | | |
-| 83.6 | | |
-| 83.7 | | |
-| 83.8 | | |
+| 83.1 | `CONFIRMED (reproduced)` | Live server (velo-1.0.0.jar @ 4f58f9c5, slotNumber=8/slotWorkers=2): `MIGRATE ... KEYS mk:1` → `ERR Thread id not match, thread id=54, thread id protected for safe=53`; failures random per request (mk:1/3/5 failed first round, mk:2 succeeded then failed 2 retries, then hit BUSYKEY); `MIGRATE ... KEYS` with 8 keys spanning both workers → single `ERR Thread id not match` (whole command fails — cross-worker branch never taken). Static chain re-verified: `parseSlots("migrate")` returns empty list (MGroup.java:98-130), `Request.getSingleSlot()` → `SLOT_CAN_HANDLE_BY_ANY_WORKER` for empty (Request.java:213-215), random worker pick (MultiWorkerServer.java:624-626), cross-worker flag needs `size() > 1` (MultiWorkerServer.java:577), local path calls `getCv()`/`removeDelay()` → `OneSlot.get()/removeDelay()` → `checkCurrentThreadId()` throws (OneSlot.java:1752, 1959, 1600-1604). |
+| 83.2 | `CONFIRMED (reproduced)` | Temp spec: no-COPY migrate → OK and source key still exists; `COPY REPLACE` → OK and source key **deleted**. Live server: `EXISTS mk:2`/`mk:7` → `1` after successful no-COPY migrations (Redis: deleted). Redis 7.2.11 oracle: no-COPY → source deleted; COPY+REPLACE → source kept (`v3`). Source: `if (!copy) dbDelete(...)` (cluster.c:7197-7200). `isCopy` occurs only at MGroup.java:417/434 (grep) — parsed, never read. |
+| 83.3 | `CONFIRMED (reproduced)` | Temp spec: `AUTH secret` → `ErrorReply{syntax error}`; `AUTH2 default secret` → `ErrorReply{syntax error}` (against a `--requirepass secret` destination). Live server: `ERR syntax error`. Oracle: AUTH and AUTH2 both → `OK`, key transferred + source deleted. Source: Redis's loop advances `j` past the consumed AUTH/AUTH2 args (cluster.c:6993-7010) and sends AUTH before SELECT (cluster.c:7085-7110); Velo's `select()` at MGroup.java:461 runs before `auth()` at :463-467 (latent until the loop is fixed). |
+| 83.4 | `CONFIRMED (reproduced)` | Temp spec: `MIGRATE host port mykey 0 1000` → `ErrorReply.FORMAT` (→ `ERR *wrong number of arguments for 'migrate' command` live); `notempty ... KEYS k` → `OKReply` (key arg silently ignored, KEYS migrated). Oracle: single-key form → `OK` + source deleted; non-empty key + KEYS → `ERR When using MIGRATE KEYS option, the key argument must be set to the empty string` (cluster.c:7002-7006). |
+| 83.5 | `CONFIRMED (reproduced)` | Temp spec: `MSET <257-byte key> v` → OK, key exists in store; `SET <same key>` → `ERR key too long (max length is 256)`; `MSET k <1MiB+1>` → OK; `SET` → `ERR value too long (max length is 1048576)`. Replication impact confirmed by inspection of the encode/decode pair: `BaseCommand.set()` performs no length check (BaseCommand.java:1016-1222), `OneSlot.put()` none (OneSlot.java:2080+), `Wal.V` encodes `(short) keyBytes.length` without a guard (Wal.java:125), while the replica rejects `keyLength > 256` on decode (XWalV.java:133-135) — one over-long key written by MSET makes the replica's catch-up throw and stalls that slot's offset. |
+| 83.6 | `CONFIRMED (reproduced)` | Deterministic interleave in the temp spec (mirrors the production topology: check task on the slot eventloop, completion bounced to the requester's reactor): after phase 1 ran, client B's value `BBB` was present; pumping the requester eventloop ran phase 2 which **overwrote** it with `AAA`; final reply `1` (success). Redis MSETNX is atomic and would reply `0` without writing. The window is the two separate `asyncCall` tasks (MGroup.java:346-354 check vs :379-385 write) — exists even for keys within a single slot. |
+| 83.7 | `CONFIRMED (reproduced)` | Local path: destination pre-set + no REPLACE → `JedisDataException: BUSYKEY ...` escapes `migrate()` (spec caught it) — `jedisTo.close()` at MGroup.java:509 is not in a `finally`, connection leaked. Cross path: same setup with hand-set `crossRequestWorker` → ActiveJ logged `ERROR Fatal error in .whenComplete ... JedisDataException: BUSYKEY` (thrown at MGroup.java:563) and `finalPromise` stayed incomplete (`!settablePromise.isComplete()` asserted after pumping) → `AsyncReply` never resolves → client hangs until its own timeout. Wording live: Velo `ERR BUSYKEY Target key name already exists.` vs Redis `ERR Target instance replied with error: BUSYKEY Target key name already exists.` (cluster.c:7190-7196). |
+| 83.8 | `PARTIALLY CONFIRMED` | Reproduced: `port=abc` → `NumberFormatException: For input string: "abc"` escapes the command (spec + live `ERR For input string: "abc"`); `timeout=xyz` → same (live). Oracle: **dbid/timeout** non-numeric → `ERR value is not an integer or out of range` (cluster.c:7020-7023); **port** non-numeric → Redis never parses argv[2] as an integer — it attempts the connection and replies `IOERR error or timeout writing to target instance` (live, key exists), or `NOKEY` first when no key exists (NOKEY is checked before connecting, cluster.c:7040-7045). So Velo diverges on all three args, but the finding's port oracle wording is wrong. `timeout <= 0` → clamped to 1000 ms confirmed in source (cluster.c:7024) and live (NOKEY, no hang); Velo passes 0 through to Jedis = infinite socket timeout. |
 
 ### Additional observations
 
+1. **`ErrorReply.WRONG_NUMBER` emits a stray `*` prefix** — the message is built as
+   `"*wrong number of arguments for '<cmd>' command"` (ErrorReply.java:18-20), so the client sees
+   `ERR *wrong number of arguments for 'migrate' command` (live evidence, section C.2 of the log).
+   Redis replies without the `*`. This is velo-wide (every command using `WRONG_NUMBER`), not
+   MGroup-specific — recommend a separate follow-up, not folded into 83.4.
+2. **Redis checks key existence before connecting to the destination** (`NOKEY` short-circuit,
+   cluster.c:7040-7045); Velo connects (and AUTH/SELECTs) first — worth folding into the 83.x MIGRATE
+   rework: a no-key migration currently pays a full TCP round trip.
+3. **Cross-worker `MIGRATE` never validates `dumpBytes`** (null for an empty collection is added to the
+   result list at MGroup.java:536-537; `TYPE_NOT_SUPPORT` never checked) — as the report's
+   *Notes / non-findings* already records, these are folded into the 83.1 fix direction; the reviewer
+   confirms they become reachable the moment 83.1 is fixed and must be handled in the same fix.
+4. The delta declaration correctly excludes prior-round items (bug 39/74/82 checked via STATE.md);
+   none of the *Notes / non-findings* entries was re-reported, and the reviewer found no re-reporting.
+
 ### Recommended fix order (for the fix agent)
+
+1. **83.1** (High) — MIGRATE is broken end-to-end on any `slotWorkers>1` deployment; also the gate for
+   83.7's cross-path hang and the folded dumpBytes checks, so fix first and cover the newly reachable
+   cross-worker path in the same commit's tests.
+2. **83.2** (High) — silent source-data loss with `COPY REPLACE`; the default (no COPY) never frees the
+   source — the core migration semantic.
+3. **83.3** (High) — any password-protected destination is unusable; rewrite the option loop (consume
+   AUTH/AUTH2 args, AUTH before SELECT) together with 83.4's syntax work since both touch the parser.
+4. **83.4** (Medium) — the single-key form is the documented default syntax; smallest parser change,
+   can share the commit boundary with 83.3 if kept one-bug-per-commit in intent (keep separate commits).
+5. **83.7** (Medium) — client hang + connection leak on any destination error; do together with 83.1/83.2
+   test-wise since the repro harness overlaps.
+6. **83.5** (Medium) — MSET/MSETNX length validation before any write (whole-command reject).
+7. **83.6** (Medium) — merge the per-slot check+write into one slot task; document the residual
+   cross-slot limitation.
+8. **83.8** (Low) — try/catch numeric parse with Redis wording for dbid/timeout, parse timeout as long,
+   clamp `<=0` to 1000 ms; align the port behavior with Redis (IOERR-style connect failure, not a
+   NumberFormatException).
+
+## Response (AI agent 1, round 1)
+
+**Method:** re-read every reviewer citation against the current tree (`4f58f9c5`) and against the
+local Redis source (`~/ws/redis`, tag **7.2.14**, `git describe` → `7.2.14`), plus a live
+Redis 7.2.11 re-run of the two oracle cases the reviewer refined. No new test run was needed —
+the reviewer's evidence is pasted and every chain it claims checks out.
+
+| Finding | Response | Note |
+|---|---|---|
+| 83.1 | **AGREE** | The static chain I derived is the one the reviewer re-derived independently (`parseSlots("migrate")` → empty list → `Request.getSingleSlot()` → `SLOT_CAN_HANDLE_BY_ANY_WORKER` → random worker → `OneSlot.get()/removeDelay()` → `checkCurrentThreadId()` throws). The reviewer's live `slotNumber=8, slotWorkers=2` server shows the failure is **random per request** (mk:2 succeeded once, then failed) — exactly the "1/slotWorkers of the keys" prediction in my *Trigger / impact*. No retraction. |
+| 83.2 | **AGREE** | Re-checked the oracle in the local 7.2.14 tree: `src/cluster.c:7173-7175` — `if (!copy) { dbDelete(c->db,kv[j]); ... }` — the source key is deleted **iff `COPY` is absent**, `REPLACE` is irrelevant to it. `isCopy` is still assigned at `MGroup.java:417/434` and read nowhere. The `COPY REPLACE` data-loss direction is the serious half of this finding. |
+| 83.3 | **AGREE** | The reviewer confirms the two defects I cited and adds the third (`SELECT` before `AUTH`) as *latent until the loop is fixed* — I agree with that qualification: with the current loop the `auth` branch is never reached, so the `select()`-before-`auth()` ordering is unreachable today, not an independent live bug. Fixing 83.3 must therefore fix the ordering in the same change. `src/cluster.c:6961-6976` (7.2.14) confirms Redis consumes the `AUTH`/`AUTH2` arguments — `j++` for `auth`, `username = c->argv[++j]->ptr; password = c->argv[++j]->ptr;` for `auth2` — and that the `KEYS` branch (6977-6987) `break`s out of the loop so the remaining arguments are the keys. |
+| 83.4 | **AGREE** | `src/cluster.c:6950-6951` (7.2.14) sets the defaults `first_key = 3; num_keys = 1;` for the single-key form and `src/cluster.c:6984-6986` overrides them for the `KEYS` form (`first_key = j+1; num_keys = c->argc - j - 1;`). The reviewer also confirms Velo silently ignores a non-empty key argument when `KEYS` is used (Redis: `ERR When using MIGRATE KEYS option, the key argument must be set to the empty string`, `src/cluster.c:6978-6983`) — that part was in my finding's *Trigger / impact* and is kept. |
+| 83.5 | **AGREE** | I verified the reviewer's inspection independently: `BaseCommand.set()` (`BaseCommand.java:1016-1246`) contains **no** `KEY_MAX_LENGTH` / `VALUE_MAX_LENGTH` check (grep over that range → 0 hits) and neither does `OneSlot.put()` (`OneSlot.java:2050-2200` → 0 hits), while `Wal.V.encode()` writes the key length unchecked (`Wal.java:125`, `buffer.putShort((short) keyBytes.length)`) and the replica rejects it (`XWalV.java:132-135`). The "one over-long key stalls that slot's replica offset" consequence stands. |
+| 83.6 | **AGREE** | The reviewer's deterministic interleave (phase 1 ran → client B wrote `BBB` → phase 2 overwrote it with `AAA`, reply `1`) is exactly the window I described; it also confirms the window exists **within a single slot**, which is the worst part of the finding (the local path of the same command is atomic). My fix direction (merge the per-slot check+write into one slot task) is unchanged. |
+| 83.7 | **AGREE** | Both halves confirmed: the local path lets the `JedisDataException` escape before `jedisTo.close()` (`MGroup.java:509`, not in a `finally`) → connection leak; the cross path throws inside the `whenComplete` callback (`MGroup.java:563`) → `finalPromise` never completed → the `AsyncReply` never resolves → the client hangs. The wording divergence (`ERR BUSYKEY ...` vs Redis's `ERR Target instance replied with error: BUSYKEY ...`, `src/cluster.c:7169`) is kept. |
+| 83.8 | **AGREE with the verdict, and the reviewer's refinement of the port oracle is CORRECT — my port wording was wrong** | Verified in the local 7.2.14 tree: Redis' integer sanity check covers **only** `argv[5]` (timeout) and `argv[4]` (dbid) (`src/cluster.c:6994-6999`); the **port is never integer-parsed** — `migrateGetSocket()` uses `atoi(port->ptr)` (`src/cluster.c:6872`), so a non-numeric port becomes `0` and the connect fails (`-IOERR error or timeout ... to target instance`, `src/cluster.c:7265-7271`), and when the key does not exist the `NOKEY` short-circuit (`src/cluster.c:7019`) answers before any connection is attempted. My live Redis 7.2.11 re-run reproduces exactly that (`port=abc` + existing key → `IOERR error or timeout writing to target instance`; `port=abc` + missing key → `NOKEY`). **The finding itself is not retracted** — Velo still throws a raw `NumberFormatException` out of the command for a non-numeric port/dbid/timeout, which Redis never does — but the *oracle wording* in the root cause / trigger sections was wrong and has been corrected in place above. |
+
+### Accepted follow-ups from the reviewer's *Additional observations*
+
+1. **`ErrorReply.WRONG_NUMBER` emits a stray `*`** — verified: `src/main/java/io/velo/reply/ErrorReply.java:18-20`
+   builds `"*wrong number of arguments for '" + cmd + "' command"`, so the client sees
+   `ERR *wrong number of arguments for 'migrate' command`. This is velo-wide (every command that
+   answers `WRONG_NUMBER`), **not** MGroup-specific → **separate follow-up report**, not folded
+   into 83.4. Agreed.
+2. **Redis checks the key existence before connecting** (`NOKEY` short-circuit,
+   `src/cluster.c:7003-7021`) — Velo connects and AUTH/SELECTs first, so a no-key migration pays
+   a full TCP round trip. Agreed: this belongs to the MIGRATE rework of 83.3/83.4 (the option
+   parser and the key list are rewritten anyway); it will be handled there, not as a new bug.
+3. **Cross-worker `MIGRATE` never validates `dumpBytes`** (`null` for an empty collection is added
+   to the result list at `MGroup.java:536-537`; `DGroup.TYPE_NOT_SUPPORT` is never checked) — this
+   is my own *Notes / non-findings* entry; agreed that it must be handled **in the same commit as
+   83.1**, because 83.1 makes the cross-worker path reachable.
+4. The delta declaration and the *Notes / non-findings* were checked by the reviewer — no
+   re-reporting, no missing prior-round items.
+
+**Fix order:** the reviewer's order is accepted as-is: **83.1 → 83.2 → 83.3 → 83.4 → 83.7 → 83.5 → 83.6 → 83.8**,
+with the folded items (dumpBytes validation, the `NOKEY` short-circuit) landing inside the 83.1 /
+83.3 commits. One bug = one commit, TDD first (permanent failing regression test → minimal fix →
+focused test → JaCoCo on the changed lines), per `AGENTS.md` and
+`doc/write_better_test_cases_for_ai_agents.md`.
 
 ## Fix Log (AI agent 1, round 1 fix phase)
 
@@ -922,11 +1015,11 @@ Parse the port / DB / timeout with an explicit `try/catch` and answer
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 83.1 | `MIGRATE` registers no slot → wrong slot worker → "Thread id not match" | High | Concurrency / Correctness | | |
-| 83.2 | `MIGRATE` uses `REPLACE` instead of `COPY` to decide the source-key deletion | High | Correctness | | |
-| 83.3 | `MIGRATE ... AUTH ...` always fails with "syntax error"; no `AUTH2`; `SELECT` before `AUTH` | High | Redis protocol compatibility | | |
-| 83.4 | `MIGRATE` rejects Redis's single-key form | Medium | Redis protocol compatibility | | |
-| 83.5 | `MSET`/`MSETNX` bypass the key/value length limits → breaks replication | Medium | Correctness / robustness | | |
-| 83.6 | `MSETNX` is not atomic in the cross-worker path (check and write are two tasks) | Medium | Concurrency / Correctness | | |
-| 83.7 | `MIGRATE` does not handle a destination error → client hangs / connection leaks | Medium | Concurrency / error handling | | |
-| 83.8 | `MIGRATE` numeric-argument validation diverges from Redis | Low | Redis protocol compatibility | | |
+| 83.1 | `MIGRATE` registers no slot → wrong slot worker → "Thread id not match" | High | Concurrency / Correctness | CONFIRMED (reproduced) | pending fix |
+| 83.2 | `MIGRATE` uses `REPLACE` instead of `COPY` to decide the source-key deletion | High | Correctness | CONFIRMED (reproduced) | pending fix |
+| 83.3 | `MIGRATE ... AUTH ...` always fails with "syntax error"; no `AUTH2`; `SELECT` before `AUTH` | High | Redis protocol compatibility | CONFIRMED (reproduced) | pending fix |
+| 83.4 | `MIGRATE` rejects Redis's single-key form | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | pending fix |
+| 83.5 | `MSET`/`MSETNX` bypass the key/value length limits → breaks replication | Medium | Correctness / robustness | CONFIRMED (reproduced) | pending fix |
+| 83.6 | `MSETNX` is not atomic in the cross-worker path (check and write are two tasks) | Medium | Concurrency / Correctness | CONFIRMED (reproduced) | pending fix |
+| 83.7 | `MIGRATE` does not handle a destination error → client hangs / connection leaks | Medium | Concurrency / error handling | CONFIRMED (reproduced) | pending fix |
+| 83.8 | `MIGRATE` numeric-argument validation diverges from Redis | Low | Redis protocol compatibility | PARTIALLY CONFIRMED (port oracle refined) | pending fix |

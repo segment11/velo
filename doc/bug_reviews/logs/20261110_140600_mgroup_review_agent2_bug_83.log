@@ -1,0 +1,91 @@
+Velo MGroup review (agent 2) — temp Spock spec TempBug83ReviewSpec + live server + live Redis 7.2.11 differential
+date: 2026-11-10T14:02:23+08:00
+reviewed commit: 4f58f9c5f374f15872281c78ea1a9779c17f0059 (branch review/mgroup)
+===================================================================================================
+== A) temp spec result (7/7 PASS, every expected-buggy behavior reproduced) ==
+tests=7 failures=0 errors=0 skipped=0
+PASS - 83.2 COPY/REPLACE source-key deletion uses REPLACE instead of COPY
+PASS - 83.3 AUTH / AUTH2 options rejected with syntax error
+PASS - 83.4 single key form rejected, non-empty key arg with KEYS ignored
+PASS - 83.5 MSET bypasses key/value length limits
+PASS - 83.6 MSETNX cross-worker check/write window lets a concurrent SET be overwritten
+PASS - 83.7 destination BUSYKEY: local path leaks the exception (and the connection), cross path never replies
+PASS - 83.8 non-numeric port throws NumberFormatException out of the command
+
+== B) spec run transcript excerpts (key evidence lines) ==
+TempBug83ReviewSpec > 83.7 destination BUSYKEY: local path leaks the exception (and the connection), cross path never replies STANDARD_OUT
+    /usr/local/bin/redis-server --save "" --appendonly no --port 31003
+    14:01:10.891 [Test worker] [1;32mINFO [m [io.velo.BaseCommand] - Connect to 127.0.0.1:31003
+    14:01:11.004 [Test worker] [1;32mINFO [m [io.velo.BaseCommand] - Connect to 127.0.0.1:31003
+    14:01:12.007 [Test worker] [1;32mINFO [m [io.velo.BaseCommand] - Close jedis 127.0.0.1:31003
+    14:01:12.007 [Test worker] [1;31mERROR[m [io.activej.eventloop.Eventloop] - Fatal error in .whenComplete(io.velo.command.MGroup$$Lambda/0x000070a29839cc78@53cba89f)
+    redis.clients.jedis.exceptions.JedisDataException: BUSYKEY Target key name already exists.
+    	at redis.clients.jedis.Protocol.processError(Protocol.java:96)
+    	at redis.clients.jedis.Protocol.process(Protocol.java:137)
+    	at redis.clients.jedis.Protocol.read(Protocol.java:192)
+    	at redis.clients.jedis.Connection.readProtocolWithCheckingBroken(Connection.java:335)
+    	at redis.clients.jedis.Connection.getOne(Connection.java:317)
+
+== C) live Velo server (slotNumber=8 slotWorkers=2, velo-1.0.0.jar @ 4f58f9c5) ==
+== seed keys across slots ==
+8
+== single-key MIGRATE attempts (random worker each time) ==
+MIGRATE ... KEYS mk:1 -> ERR Thread id not match, thread id=54, thread id protected for safe=53  
+MIGRATE ... KEYS mk:2 -> OK 
+MIGRATE ... KEYS mk:3 -> ERR Thread id not match, thread id=53, thread id protected for safe=54  
+MIGRATE ... KEYS mk:4 -> OK 
+MIGRATE ... KEYS mk:5 -> ERR Thread id not match, thread id=53, thread id protected for safe=54  
+MIGRATE ... KEYS mk:6 -> OK 
+MIGRATE ... KEYS mk:7 -> OK 
+MIGRATE ... KEYS mk:8 -> OK 
+== retry one failing key a few times to show randomness ==
+retry 1 -> ERR Thread id not match, thread id=54, thread id protected for safe=53  
+retry 2 -> ERR Thread id not match, thread id=54, thread id protected for safe=53  
+retry 3 -> ERR BUSYKEY Target key name already exists.  
+retry 4 -> ERR BUSYKEY Target key name already exists.  
+== multi-key MIGRATE spanning workers (cross-worker branch should be taken but is not) ==
+MIGRATE all 8 keys -> ERR Thread id not match, thread id=54, thread id protected for safe=53  
+== target key count: 5
+
+== D) live Redis 7.2.11 differential (source 32111 -> target 32112 requirepass) ==
+== oracle 1: single-key form (no KEYS option) ==
+OK
+OK
+   source after single-key migrate: '' (empty = deleted, no COPY)
+== oracle 2: no COPY deletes the source ==
+OK
+OK
+   source after no-COPY migrate: '' (empty = deleted)
+   target value: 'v'
+== oracle 3: COPY REPLACE keeps the source ==
+OK
+OK
+   source after COPY+REPLACE migrate: 'v3' (v3 = kept)
+   target value: 'v3'
+== oracle 4: AUTH2 accepted ==
+OK
+OK
+   source after AUTH2 migrate: '' (empty = transferred+deleted)
+== oracle 5: non-empty key arg + KEYS ==
+ERR When using MIGRATE KEYS option, the key argument must be set to the empty string
+
+== oracle 6: non-numeric port / timeout ==
+NOKEY
+ERR value is not an integer or out of range
+
+== oracle 7: target BUSYKEY without REPLACE ==
+OK
+OK
+ERR Target instance replied with error: BUSYKEY Target key name already exists.
+
+   source after BUSYKEY: 'new' (new = kept)
+== oracle 8: timeout <= 0 clamped ==
+NOKEY
+
+== C.2) additional live probes on the same server (redis-cli) ==
+83.2 live: EXISTS mk:2 / mk:7 after successful no-COPY MIGRATE -> 1 / 1 (Redis: 0 — source not deleted)
+83.4 live: MIGRATE 127.0.0.1 32115 mk:3 0 1000 -> ERR *wrong number of arguments for 'migrate' command
+83.4 live: MIGRATE ... notempty 0 1000 KEYS mk:3 -> ERR Thread id not match (random worker; semantic part covered by the spec)
+83.3 live: MIGRATE ... AUTH secret KEYS mk:3 -> ERR syntax error
+83.8 live: port 'abc' -> ERR For input string: "abc";  timeout 'xyz' -> ERR For input string: "xyz" (Redis: port -> IOERR connect error; timeout/db -> ERR value is not an integer or out of range)
+83.7 live: BUSYKEY wording (local path) -> ERR BUSYKEY Target key name already exists. (Redis: ERR Target instance replied with error: BUSYKEY ...)
