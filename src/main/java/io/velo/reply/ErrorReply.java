@@ -73,6 +73,9 @@ public class ErrorReply implements Reply {
     /** Error reply for not a float. */
     public static final ErrorReply NOT_FLOAT = new ErrorReply("not float");
 
+    /** Error reply for a value that is not an integer or out of range. */
+    public static final ErrorReply NOT_INTEGER_OR_OUT_OF_RANGE = new ErrorReply("value is not an integer or out of range");
+
     /** Error reply for a NaN or Infinity value. */
     public static final ErrorReply NAN_OR_INFINITY = new ErrorReply("value is NaN or Infinity");
 

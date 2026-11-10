@@ -705,6 +705,43 @@ class MGroupTest extends Specification {
         busyReply2 instanceof AsyncReply
         (busyReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) instanceof ErrorReply
 
+        when: 'the timeout is not an integer'
+        mGroup.crossRequestWorker = false
+        def badTimeoutReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 xyz KEYS a')
+        then:
+        badTimeoutReply instanceof ErrorReply
+        badTimeoutReply.getMessage() == 'value is not an integer or out of range'
+
+        when: 'the destination db is not an integer'
+        def badDbReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" abc 1000 KEYS a')
+        then:
+        badDbReply instanceof ErrorReply
+        badDbReply.getMessage() == 'value is not an integer or out of range'
+
+        when: 'the port is not an integer'
+        def badPortReply = mGroup.execute('migrate 127.0.0.1 abc "" 0 1000 KEYS a')
+        then:
+        badPortReply instanceof ErrorReply
+        badPortReply.getMessage() == 'value is not an integer or out of range'
+
+        when: 'a timeout that is not positive uses the default timeout of redis'
+        def cvTimeout = Mock.prepareCompressedValueList(1)[0]
+        cvTimeout.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvTimeout.compressedData = 'valuetimeout'.bytes
+        inMemoryGetSet.put('timeoutkey', cvTimeout)
+        def zeroTimeoutReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 0 KEYS timeoutkey')
+        then:
+        zeroTimeoutReply == OKReply.INSTANCE
+
+        when: 'a negative timeout uses the default timeout of redis'
+        def cvNegativeTimeout = Mock.prepareCompressedValueList(1)[0]
+        cvNegativeTimeout.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvNegativeTimeout.compressedData = 'valuenegativetimeout'.bytes
+        inMemoryGetSet.put('negativetimeoutkey', cvNegativeTimeout)
+        def negativeTimeoutReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 -1 KEYS negativetimeoutkey')
+        then:
+        negativeTimeoutReply == OKReply.INSTANCE
+
         when: 'the auth option without the keys option is a syntax error'
         def authNoKeysReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH secret')
         then:

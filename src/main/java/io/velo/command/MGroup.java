@@ -532,6 +532,22 @@ public class MGroup extends BaseCommand {
 
     static final Reply NOKEY_REPLY = new BulkReply("NOKEY");
 
+    /**
+     * Parses the timeout of the migrate command.
+     *
+     * @param timeout the timeout argument
+     * @return the timeout in milliseconds, a not positive timeout uses the default timeout of redis
+     * @throws NumberFormatException when the timeout is not an integer
+     */
+    private static int parseMigrateTimeout(String timeout) {
+        var timeoutMs = Long.parseLong(timeout);
+        if (timeoutMs <= 0) {
+            // redis uses a default timeout of 1000 ms
+            return 1000;
+        }
+        return (int) Math.min(timeoutMs, Integer.MAX_VALUE);
+    }
+
     private Reply migrate() {
         var args = parseMigrateArgs(data);
         if (args == null) {
@@ -548,9 +564,17 @@ public class MGroup extends BaseCommand {
         }
 
         var host = new String(data[1]);
-        var port = Integer.parseInt(new String(data[2]));
-        var destinationDb = Integer.parseInt(new String(data[4]));
-        var timeoutMs = Integer.parseInt(new String(data[5]));
+        int port;
+        int destinationDb;
+        int timeoutMs;
+        try {
+            port = Integer.parseInt(new String(data[2]));
+            destinationDb = Integer.parseInt(new String(data[4]));
+            timeoutMs = parseMigrateTimeout(new String(data[5]));
+        } catch (NumberFormatException e) {
+            log.warn("Migrate invalid argument, error={}", e.getMessage());
+            return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+        }
 
         boolean isCopy = args.isCopy();
         boolean isReplace = args.isReplace();
