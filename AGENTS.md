@@ -19,6 +19,7 @@ system written in Java with Groovy components.
 
 ```bash
 # Build the project, prefer
+# (also copies runtime deps, log4j2.xml, velo.properties and the dyn scripts into build/libs)
 ./gradlew jar
 
 # Run all tests in all Gradle projects, including submodules
@@ -48,7 +49,8 @@ system written in Java with Groovy components.
 # Run specific JMH benchmark
 ./gradlew jmh -Pjmh.includes="SlotCalc*"
 
-# Generate test coverage report
+# Generate test coverage report (also runs automatically after every test task,
+# so its Total row reflects only whatever test class ran last — see Testing Guidelines)
 ./gradlew jacocoTestReport
 
 # Run after build
@@ -168,12 +170,12 @@ io.velo/             # Main package
 ├── mock/            # Mock persist layers, use in memory HashMap for testing
 ├── monitor/         # Monitoring some metrics when running, like top big keys, cpu usage 
 ├── perf/            # Perf test examples
-├── persist/         # Persistence layer, hash index implementations
+├── persist/         # Persistence layer: WAL → Key Buckets → Chunk Segments
 ├── rdb/             # Redis RDB file format read / write, for dump / restore
 ├── repl/            # Replication functionality
 ├── reply/           # Redis protocol reply abstraction
 ├── task/            # Interval execute tasks, delay in an event loop
-└── type/            # Redis data types
+└── type/            # Redis data types: string, hash, list, set, zset, bitmap, hyperloglog, bloomfilter, geo
 ```
 
 TIPS: Main packet io.velo features are:
@@ -282,7 +284,7 @@ Notes:
 
 ### Key Configuration Files
 
-- `velo.properties`: Main application configuration
+- `velo.properties`: Main application configuration (slot count, workers, listen address, LRU size, etc.)
 - `log4j2.xml`: Logging configuration
 - `acl.conf`: ACL rules
 - `build.gradle`: Build configuration and dependencies
