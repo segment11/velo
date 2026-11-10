@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** round 1 verification complete — 7 findings CONFIRMED (reproduced), 83.8 PARTIALLY CONFIRMED (port case refined); agent-1 response filed (all 8 verdicts accepted, the 83.8 port oracle corrected in place); fix phase pending
+**Status:** round 1 closed on the fix side — 8/8 findings fixed in 8 commits (one per bug), agent-2 re-review pending
 **Review branch:** `review/mgroup`
 **Reviewed commit:** `4f58f9c5f374f15872281c78ea1a9779c17f0059` (main)
 
@@ -996,30 +996,73 @@ focused test → JaCoCo on the changed lines), per `AGENTS.md` and
 
 ## Fix Log (AI agent 1, round 1 fix phase)
 
+TDD for every bug: the regression test was written **first** in the command's own `test <command>`
+method (`MGroupTest.groovy`), watched failing for the expected reason, then the minimal production
+change was made. One bug = one commit. JaCoCo was inspected for every changed line/branch with
+`scripts/jacoco_cover.py io.velo.command.MGroup <start> <end>`.
+
 | Bug | Failing test evidence | Fix commit | Focused test | JaCoCo |
 |---|---|---|---|---|
-| 83.1 | | | | |
-| 83.2 | | | | |
-| 83.3 | | | | |
-| 83.4 | | | | |
-| 83.5 | | | | |
-| 83.6 | | | | |
-| 83.7 | | | | |
-| 83.8 | | | | |
+| 83.1 | `MGroupTest.test migrate` — `parseSlots('migrate', data, slotNumber).size() == 2` → **FAILED**, actual `0` (the migrated keys were not registered, so the request was routed to a random slot worker); the request level case `request.getSlotWithKeyHashList().size() == 2` failed the same way; the dump payload case → `JedisDataException: ERR DUMP payload version or checksum are wrong` (the `"-1-1"` payload of an unsupported type was sent to the destination) | `aac6ba68` *fix: register the migrate keys slots and skip the keys that can not be dumped* | `./gradlew :test --tests "io.velo.command.MGroupTest" --tests "io.velo.command.DGroupTest"` → BUILD SUCCESSFUL (14 + 23 tests) | `MGroup` 126-138 (the parseSlots migrate branch) and 150-176 (`migrateKeysOf`) → 19/19 lines, 7/7 branch groups fully covered; `MGroup` 529-533 and 581-583 (the dump payload check, both paths) covered; `DGroup` 552-560 (`isTypeNotSupport`) covered |
+| 83.2 | `MGroupTest.test migrate` — `inMemoryGetSet.getBuf(slot, 'c', 0, 0L) == null` after a no-COPY migration → **FAILED**, the source key was still there; the `COPY REPLACE` case (`getBuf(slot, 'e', ...) != null`) → **FAILED**, the source key was deleted | `c8a2f85c` *fix: delete the migrate source key by the copy option, not by replace* | same focused run → BUILD SUCCESSFUL | `MGroup` 544-546 (`if (!isCopy)`) and 619-621 (the cross worker path) → all branches covered |
+| 83.3 | `MGroupTest.test migrate` — `authReply == OKReply.INSTANCE` against a `redis-server --requirepass secret` destination → **FAILED**, actual `ErrorReply{syntax error}`; the `AUTH2` case → **FAILED**, actual `ErrorReply{syntax error}` | `4abf7b43` *fix: support the migrate auth and auth2 options* | same focused run → BUILD SUCCESSFUL | `MGroup` 460-520 (the option loop, the auth branch, the auth2 branch, the auth before select) → 43/43 lines, 11/11 branch groups fully covered |
+| 83.4 | `MGroupTest.test migrate` — `singleKeyReply == OKReply.INSTANCE` for `migrate <host> <port> j 0 1000` → **FAILED**, actual `ErrorReply{message='format'}`; the non-empty key argument case → **FAILED** (the key argument was ignored) | `c95b94fa` *fix: support the migrate single key form* | same focused run → BUILD SUCCESSFUL | `MGroup` 126-215 (`parseMigrateArgs` + the parseSlots branch) → 44/44 lines, 13/13 branch groups fully covered; `MGroup` 497-520 (the new migrate() checks) fully covered |
+| 83.7 | `MGroupTest.test migrate` — the destination already had the key → **FAILED** with `redis.clients.jedis.exceptions.JedisDataException: BUSYKEY Target key name already exists.` escaping the command (and the Jedis connection was leaked); the cross worker case → the promise never completed (the `get(10, SECONDS)` timed out) | `b18ed06f` *fix: answer an error when the migrate destination replies with an error* | same focused run → BUILD SUCCESSFUL | `MGroup` 582-588 (the local path catch + finally) and 667-673 (the cross path catch + finally) → fully covered, both branches |
+| 83.5 | `MGroupTest.test mset` — `tooLongKeyReply == ErrorReply.KEY_TOO_LONG` → **FAILED**, actual `AsyncReply` (the key was written); `MGroupTest.test msetnx` — the same case → **FAILED**, actual `AsyncReply` | `bdcb977b` *fix: check the key and the value length in mset and msetnx* | same focused run → BUILD SUCCESSFUL | `MGroup` 348-364 (`checkMSetLength`) and the mset/msetnx call sites → 8/8 lines, 4/4 branch groups fully covered |
+| 83.6 | `MGroupTest.test msetnx` — the deterministic interleave (the concurrent write is queued on the slot eventloop while the check task runs): `raceFuture.get() == IntegerReply.REPLY_0` → **FAILED**, actual `IntegerReply$2` (REPLY_1) and the concurrently written value was overwritten | `9fbf7b4b` *fix: check and write the msetnx keys in the same slot task* | same focused run → BUILD SUCCESSFUL | `MGroup` 493-525 (the write phase with the re-check and the new reply) → the abort branch and the write branch both covered |
+| 83.8 | `MGroupTest.test migrate` — the non numeric timeout → **FAILED** with `java.lang.NumberFormatException: For input string: "xyz"` escaping the command (the same for the db and the port) | `5c744507` *fix: validate the migrate port, db and timeout arguments* | same focused run → BUILD SUCCESSFUL | `MGroup` 540-549 (`parseMigrateTimeout`) and 566-577 (the try/catch) → fully covered, the not positive timeout branch included |
+
+**Regression runs after the fix phase**
+
+- `./gradlew :test --tests "io.velo.command.MGroupTest" --tests "io.velo.command.DGroupTest" --tests "io.velo.reply.RESPReplyTest" --tests "io.velo.BaseCommandTest" --tests "io.velo.RequestHandlerTest"` → BUILD SUCCESSFUL, 71 tests, 0 failures.
+- `./gradlew :test --tests "io.velo.command.*"` (the whole command module) → BUILD SUCCESSFUL, **578 tests, 0 failures, 0 errors**.
+
+**Notes for the re-review**
+
+- 83.1 also carries the folded item of the round 1 *Notes / non-findings*: the cross worker path
+  never validated the dump payload (a `null` payload for an empty collection and the
+  `TYPE_NOT_SUPPORT` payload for a type that can not be dumped). Both are now skipped with a
+  warning, in the local and in the cross worker path, so the cross worker path is safe as soon as
+  83.1 makes it reachable.
+- 83.4 replaced the ad-hoc option scan with one parser (`parseMigrateArgs()`) that is shared by
+  `parseSlots()` and `migrate()`, so the key list and the option list can not drift apart any more.
+- The residual of 83.6 is unchanged and is documented in *Residual Risk*: the cross slot
+  all-or-nothing guarantee of `MSETNX` still needs a coordination mechanism that Velo does not
+  have for multi slot commands; the per slot decision is atomic now and a key created
+  concurrently is never overwritten.
 
 ## Re-review (AI agent 2)
 
 ## Residual Risk
 
+- **83.6 (cross slot `MSETNX`)**: the per slot decision is atomic now and a key that is created
+  concurrently is never overwritten any more, but the *cross slot* all-or-nothing guarantee of
+  Redis is still not provided: when the keys of one `MSETNX` live in different slots and a key is
+  created concurrently, one slot group can be written while another one is skipped, and the reply
+  is `0`. A full guarantee needs a coordination mechanism across the slot workers that Velo does
+  not have for multi slot commands.
+- **83.1 (live multi worker proof)**: the regression test proves the routing input (the migrated
+  keys are registered in `parseSlots()`) and the cross worker path, but the end to end proof on a
+  `slotWorkers > 1` server is left to the re-review, exactly like the reviewer's own reproduction.
+- **83.4 / 83.8 (error wording)**: the `MIGRATE` error replies use the Redis wording for the
+  integer arguments ("value is not an integer or out of range") and for the non empty key
+  argument ("When using MIGRATE KEYS option, the key argument must be set to the empty string"), but
+  the *port* is still rejected with the integer error, while Redis answers an `IOERR` (it never
+  parses the port as an integer, it only uses `atoi()` and then fails to connect). The divergence
+  is documented in the finding and accepted for this round.
+- **`MGET` and the key length**: `MGET` still answers nil for a key that is longer than
+  `CompressedValue.KEY_MAX_LENGTH` while `EXISTS` answers `ERR key too long`. That is the
+  velo-wide key length policy, not an `MGroup` defect, and it is not changed in this round.
+
 ## Summary
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 83.1 | `MIGRATE` registers no slot → wrong slot worker → "Thread id not match" | High | Concurrency / Correctness | CONFIRMED (reproduced) | pending fix |
-| 83.2 | `MIGRATE` uses `REPLACE` instead of `COPY` to decide the source-key deletion | High | Correctness | CONFIRMED (reproduced) | pending fix |
-| 83.3 | `MIGRATE ... AUTH ...` always fails with "syntax error"; no `AUTH2`; `SELECT` before `AUTH` | High | Redis protocol compatibility | CONFIRMED (reproduced) | pending fix |
-| 83.4 | `MIGRATE` rejects Redis's single-key form | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | pending fix |
-| 83.5 | `MSET`/`MSETNX` bypass the key/value length limits → breaks replication | Medium | Correctness / robustness | CONFIRMED (reproduced) | pending fix |
-| 83.6 | `MSETNX` is not atomic in the cross-worker path (check and write are two tasks) | Medium | Concurrency / Correctness | CONFIRMED (reproduced) | pending fix |
-| 83.7 | `MIGRATE` does not handle a destination error → client hangs / connection leaks | Medium | Concurrency / error handling | CONFIRMED (reproduced) | pending fix |
-| 83.8 | `MIGRATE` numeric-argument validation diverges from Redis | Low | Redis protocol compatibility | PARTIALLY CONFIRMED (port oracle refined) | pending fix |
+| 83.1 | `MIGRATE` registers no slot → wrong slot worker → "Thread id not match" | High | Concurrency / Correctness | CONFIRMED (reproduced) | fixed (`aac6ba68`) |
+| 83.2 | `MIGRATE` uses `REPLACE` instead of `COPY` to decide the source-key deletion | High | Correctness | CONFIRMED (reproduced) | fixed (`c8a2f85c`) |
+| 83.3 | `MIGRATE ... AUTH ...` always fails with "syntax error"; no `AUTH2`; `SELECT` before `AUTH` | High | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`4abf7b43`) |
+| 83.4 | `MIGRATE` rejects Redis's single-key form | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`c95b94fa`) |
+| 83.5 | `MSET`/`MSETNX` bypass the key/value length limits → breaks replication | Medium | Correctness / robustness | CONFIRMED (reproduced) | fixed (`bdcb977b`) |
+| 83.6 | `MSETNX` is not atomic in the cross-worker path (check and write are two tasks) | Medium | Concurrency / Correctness | CONFIRMED (reproduced) | fixed (`9fbf7b4b`) |
+| 83.7 | `MIGRATE` does not handle a destination error → client hangs / connection leaks | Medium | Concurrency / error handling | CONFIRMED (reproduced) | fixed (`b18ed06f`) |
+| 83.8 | `MIGRATE` numeric-argument validation diverges from Redis | Low | Redis protocol compatibility | PARTIALLY CONFIRMED (port oracle refined) | fixed (`5c744507`) |
