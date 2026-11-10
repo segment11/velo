@@ -1075,6 +1075,15 @@ of range`.
   twin (line 621, pre-existing) is likewise never taken by any test. Add an empty-list/set key to
   `test migrate` for both paths (mirrors the existing HLL case). Not a code defect — the branch reads
   correctly — but the repo bar requires changed branches to be executed.
+  - **RESOLVED (agent 1, `acad2030` *test: cover the migrate dump payload skip branches in both
+    paths*, test only, no production change)**: `test migrate` now migrates an **empty set** key
+    (`CompressedValue.SP_TYPE_SET` + `new RedisHashKeys().encodeButDoNotCompress()`, so
+    `DGroup.dumpBytes()` returns `null`) in the local path and in the cross worker path, plus a
+    missing key in the cross worker path. JaCoCo after the commit: `MGroup` 621-622 → both branches
+    covered, `MGroup` 676-677 → both branches covered, `MGroup` 668-692 (the whole cross worker dump
+    phase) → 19/19 lines and 4/4 branch groups fully covered, the cross worker `cv == null` branch
+    (671) included. `./gradlew :test --tests "io.velo.command.MGroupTest" --tests
+    "io.velo.command.DGroupTest"` → BUILD SUCCESSFUL (14 + 23 tests).
 
 ### Documentation nits (non-blocking)
 
@@ -1095,9 +1104,10 @@ acceptable under the changed-lines bar.
 
 ## Residual Risk
 
-- **F1 (from re-review)**: the cross-worker-path null-dump skip added by `aac6ba68`
-  (`MGroup.java:676-678`) has its null branch unexercised — an empty-collection key must be added to
-  `test migrate` for both paths.
+- **F1 (from re-review)**: ~~the cross-worker-path null-dump skip added by `aac6ba68`
+  (`MGroup.java:676-678`) has its null branch unexercised~~ — **closed** by the test-only commit
+  `acad2030` (an empty collection key in `test migrate`, both paths; the local path twin and the
+  cross worker `cv == null` branch are covered by the same commit).
 - **The two `MIGRATE` branches that stay uncovered** (pre-existing, not introduced by this round):
   the `if (!result.equals("OK"))` branch of the local path (`MGroup.java:630-632`) — Jedis throws
   instead of returning a non `OK` status, so the branch is effectively dead — and the
