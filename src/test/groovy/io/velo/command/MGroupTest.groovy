@@ -1,10 +1,14 @@
 package io.velo.command
 
+import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.RequestHandler
+import io.velo.SnowFlake
 import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
+import io.velo.decode.Request
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
@@ -13,6 +17,7 @@ import io.velo.test.tools.RedisServer
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 class MGroupTest extends Specification {
     def _MGroup = new MGroup(null, null, null)
@@ -339,6 +344,78 @@ class MGroupTest extends Specification {
         mGroup.byPassGetSet = inMemoryGetSet
         mGroup.from(BaseCommand.mockAGroup())
 
+        when: 'the migrate command must register the migrated keys, so the request is routed to the slot owner'
+        def migrateData = new byte[9][]
+        migrateData[0] = 'migrate'.bytes
+        migrateData[1] = '127.0.0.1'.bytes
+        migrateData[2] = redisServer.port.toString().bytes
+        migrateData[3] = ''.bytes
+        migrateData[4] = '0'.bytes
+        migrateData[5] = '1000'.bytes
+        migrateData[6] = 'keys'.bytes
+        migrateData[7] = 'a'.bytes
+        migrateData[8] = 'b'.bytes
+        def parsedSlots = mGroup.parseSlots('migrate', migrateData, mGroup.slotNumber)
+        then:
+        parsedSlots.size() == 2
+        parsedSlots[0].rawKey == 'a'
+        parsedSlots[1].rawKey == 'b'
+
+        when: 'the request handler parses the slots of a migrate request'
+        def request = new Request(migrateData, false, false)
+        request.setSlotNumber(mGroup.slotNumber)
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), Config.create())
+        requestHandler.parseSlots(request)
+        then:
+        request.getSlotWithKeyHashList().size() == 2
+        request.getSlotWithKeyHashList().get(0).rawKey == 'a'
+        request.getSlotWithKeyHashList().get(1).rawKey == 'b'
+
+        when: 'a migrate command line with an unknown option has no slots'
+        def badMigrateData = migrateData.clone()
+        badMigrateData[6] = 'foo'.bytes
+        then:
+        mGroup.parseSlots('migrate', badMigrateData, mGroup.slotNumber).size() == 0
+
+        when: 'the copy option before the keys option does not hide the migrated keys'
+        def copyMigrateData = new byte[10][]
+        copyMigrateData[0] = 'migrate'.bytes
+        copyMigrateData[1] = '127.0.0.1'.bytes
+        copyMigrateData[2] = redisServer.port.toString().bytes
+        copyMigrateData[3] = ''.bytes
+        copyMigrateData[4] = '0'.bytes
+        copyMigrateData[5] = '1000'.bytes
+        copyMigrateData[6] = 'copy'.bytes
+        copyMigrateData[7] = 'keys'.bytes
+        copyMigrateData[8] = 'a'.bytes
+        copyMigrateData[9] = 'b'.bytes
+        then:
+        mGroup.parseSlots('migrate', copyMigrateData, mGroup.slotNumber).size() == 2
+
+        when: 'the replace option before the keys option does not hide the migrated keys'
+        def replaceMigrateData = copyMigrateData.clone()
+        replaceMigrateData[6] = 'replace'.bytes
+        then:
+        mGroup.parseSlots('migrate', replaceMigrateData, mGroup.slotNumber).size() == 2
+
+        when: 'a migrate command line without the keys option has no slots'
+        def noKeysData = new byte[7][]
+        noKeysData[0] = 'migrate'.bytes
+        noKeysData[1] = '127.0.0.1'.bytes
+        noKeysData[2] = redisServer.port.toString().bytes
+        noKeysData[3] = ''.bytes
+        noKeysData[4] = '0'.bytes
+        noKeysData[5] = '1000'.bytes
+        noKeysData[6] = 'copy'.bytes
+        then:
+        mGroup.parseSlots('migrate', noKeysData, mGroup.slotNumber).size() == 0
+
+        when: 'a migrate command line with too few arguments has no slots'
+        def shortMigrateData = new byte[6][]
+        shortMigrateData[0] = 'migrate'.bytes
+        then:
+        mGroup.parseSlots('migrate', shortMigrateData, mGroup.slotNumber).size() == 0
+
         when:
         def reply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS a b')
         then:
@@ -386,6 +463,23 @@ class MGroupTest extends Specification {
         }.result
         jedis.get('a') == 'value0'
         jedis.get('b') == 'value1'
+
+        when: 'a key with a type that can not be dumped is skipped in the local path'
+        def hllCv = Mock.prepareCompressedValueList(1)[0]
+        hllCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HLL
+        inMemoryGetSet.put('hll', hllCv)
+        mGroup.crossRequestWorker = false
+        def hllReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS hll')
+        then:
+        hllReply == MGroup.NOKEY_REPLY
+
+        when: 'a key with a type that can not be dumped is skipped in the cross worker path'
+        mGroup.crossRequestWorker = true
+        def hllReply2 = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS hll')
+        eventloopCurrent.run()
+        then:
+        hllReply2 instanceof AsyncReply
+        (hllReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == MGroup.NOKEY_REPLY
 
         cleanup:
         jedis.close()

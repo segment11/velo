@@ -126,7 +126,47 @@ public class MGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("migrate".equals(cmd)) {
+            // the migrated keys are inside the command line, register them so the request is
+            // routed to the slot worker that owns them
+            for (var key : migrateKeysOf(data)) {
+                slotWithKeyHashList.add(slot(key, slotNumber));
+            }
+            return slotWithKeyHashList;
+        }
+
         return slotWithKeyHashList;
+    }
+
+    /**
+     * Extracts the keys to migrate from a MIGRATE command line.
+     * <p>
+     * Only the {@code KEYS} option form is supported for now. An empty list is returned when the
+     * command line can not be parsed, so the command answers the error without touching any slot.
+     *
+     * @param data the command arguments, the command name is at index 0
+     * @return the keys to migrate, empty when the command line is not supported
+     */
+    private static ArrayList<String> migrateKeysOf(byte[][] data) {
+        var keys = new ArrayList<String>();
+        if (data.length < 7) {
+            return keys;
+        }
+
+        for (int i = 6; i < data.length; i++) {
+            var arg = new String(data[i]);
+            if (arg.equalsIgnoreCase("keys")) {
+                for (int j = i + 1; j < data.length; j++) {
+                    keys.add(new String(data[j]));
+                }
+                return keys;
+            }
+            if (!arg.equalsIgnoreCase("copy") && !arg.equalsIgnoreCase("replace")) {
+                // any other option is not supported yet, the command answers a syntax error
+                return new ArrayList<>();
+            }
+        }
+        return keys;
     }
 
     /**
@@ -419,15 +459,11 @@ public class MGroup extends BaseCommand {
         String authUsername = null;
         String authPassword = null;
 
-        ArrayList<String> keys = new ArrayList<>();
         for (int i = 6; i < data.length; i++) {
             var arg = new String(data[i]);
             if (arg.equalsIgnoreCase("keys")) {
                 if (i + 1 > data.length) {
                     return ErrorReply.SYNTAX;
-                }
-                for (int j = i + 1; j < data.length; j++) {
-                    keys.add(new String(data[j]));
                 }
                 break;
             } else if (arg.equalsIgnoreCase("copy")) {
@@ -449,6 +485,7 @@ public class MGroup extends BaseCommand {
             }
         }
 
+        var keys = migrateKeysOf(data);
         if (keys.isEmpty()) {
             return ErrorReply.SYNTAX;
         }
@@ -490,6 +527,10 @@ public class MGroup extends BaseCommand {
 
                 var dumpBytes = dGroup.dumpBytes(cv, slotWithKeyHash);
                 if (dumpBytes == null) {
+                    continue;
+                }
+                if (DGroup.isTypeNotSupport(dumpBytes)) {
+                    log.warn("Migrate skip key={}, type not support to dump", key);
                     continue;
                 }
                 long expireAt = cv.getExpireAt();
@@ -534,6 +575,13 @@ public class MGroup extends BaseCommand {
                         }
 
                         var dumpBytes = dGroup.dumpBytes(cv, one.slotWithKeyHash);
+                        if (dumpBytes == null) {
+                            continue;
+                        }
+                        if (DGroup.isTypeNotSupport(dumpBytes)) {
+                            log.warn("Migrate skip key={}, type not support to dump", one.slotWithKeyHash.rawKey());
+                            continue;
+                        }
                         dumpBytesList.add(new DumpBytesAndTtlAndIndex(dumpBytes, cv.getExpireAt(), one.index));
                     }
                     return dumpBytesList;

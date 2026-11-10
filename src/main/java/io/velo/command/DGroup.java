@@ -549,7 +549,15 @@ public class DGroup extends BaseCommand {
         }
     }
 
-    private static final byte[] TYPE_NOT_SUPPORT = "-1-1".getBytes();
+    static final byte[] TYPE_NOT_SUPPORT = "-1-1".getBytes();
+
+    /**
+     * @param dumpBytes the dump payload
+     * @return true when the payload marks a type that can not be dumped
+     */
+    static boolean isTypeNotSupport(byte[] dumpBytes) {
+        return dumpBytes == TYPE_NOT_SUPPORT;
+    }
 
     private Reply dump() {
         var keyBytes = data[1];
