@@ -604,6 +604,49 @@ class PGroupTest extends Specification {
         errorMessage == ErrorReply.WRONG_TYPE.message
     }
 
+    def 'test psubscribe'() {
+        given:
+        AclUsers.instance.initForTest()
+        def socketInspector = initSocketInspector()
+        LocalPersist.instance.socketInspector = socketInspector
+        def socket = SocketInspectorTest.mockTcpSocket()
+        def pGroup = new PGroup('psubscribe', null, socket)
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = pGroup.execute('psubscribe news.*')
+
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 3
+        // redis pushes the confirmation with the first element 'psubscribe'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'psubscribe'.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'news.*'.bytes
+        ((reply as MultiBulkReply).replies[2] as IntegerReply).integer == 1
+    }
+
+    def 'test punsubscribe'() {
+        given:
+        AclUsers.instance.initForTest()
+        def socketInspector = initSocketInspector()
+        LocalPersist.instance.socketInspector = socketInspector
+        def socket = SocketInspectorTest.mockTcpSocket()
+        def pGroup = new PGroup('psubscribe', null, socket)
+        pGroup.from(BaseCommand.mockAGroup())
+        pGroup.execute('psubscribe news.*')
+
+        when:
+        def reply = pGroup.execute('punsubscribe news.*')
+
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 3
+        // redis pushes the confirmation with the first element 'punsubscribe'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'punsubscribe'.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'news.*'.bytes
+        ((reply as MultiBulkReply).replies[2] as IntegerReply).integer == 0
+    }
+
     def 'test publish'() {
         given:
         def data3 = new byte[3][]
