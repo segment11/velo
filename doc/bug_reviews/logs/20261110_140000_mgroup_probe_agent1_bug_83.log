@@ -1,0 +1,30 @@
+Velo MGroup probe (Spock temp spec TempMGroupProbe) - agent 1 discovery evidence
+date: 2026-11-10T13:27:02.439638
+redis oracle: redis-server v=7.2.11 sha=d4c381df
+====================================================================================================
+PROBE mset long key reply = io.velo.reply.OKReply@7cf66cf9
+PROBE mset long key exists = true
+PROBE set long key reply = ErrorReply{message='key too long (max length is 256)'}
+PROBE mset big value reply = io.velo.reply.OKReply@7cf66cf9
+PROBE set big value reply = ErrorReply{message='value too long (max length is 1048576)'}
+PROBE migrate single key form reply = ErrorReply{message='format'}
+/usr/local/bin/redis-server --save "" --appendonly no --port 31002
+13:27:01.935 [Test worker] ?[1;32mINFO ?[m [io.velo.BaseCommand] - Migrate 1 keys to 127.0.0.1:31002
+13:27:01.936 [Test worker] ?[1;32mINFO ?[m [io.velo.BaseCommand] - Close jedis 127.0.0.1:31002
+PROBE migrate no-copy reply = io.velo.reply.OKReply@7cf66cf9
+PROBE migrate no-copy source key still exists = true
+PROBE migrate no-copy target = value0
+13:27:01.979 [Test worker] ?[1;32mINFO ?[m [io.velo.BaseCommand] - Migrate 1 keys to 127.0.0.1:31002
+13:27:01.979 [Test worker] ?[1;32mINFO ?[m [io.velo.BaseCommand] - Close jedis 127.0.0.1:31002
+PROBE migrate copy reply = io.velo.reply.OKReply@7cf66cf9
+PROBE migrate copy source key still exists = true
+13:27:01.981 [Test worker] ?[1;32mINFO ?[m [io.velo.BaseCommand] - Migrate 1 keys to 127.0.0.1:31002
+13:27:01.981 [Test worker] ?[1;32mINFO ?[m [io.velo.BaseCommand] - Close jedis 127.0.0.1:31002
+PROBE migrate copy+replace reply = io.velo.reply.OKReply@7cf66cf9
+PROBE migrate copy+replace source key still exists = false
+/usr/local/bin/redis-server --save "" --appendonly no --port 31003 --requirepass secret
+PROBE migrate auth reply = ErrorReply{message='syntax error'}
+PROBE migrate auth2 reply = ErrorReply{message='syntax error'}
+====================================================================================================
+failures (expected: the NumberFormatException probe aborts on purpose):
+FAIL: java.lang.NumberFormatException: For input string: &quot;abc&quot;

@@ -1,18 +1,28 @@
 package io.velo.command
 
+import io.activej.config.Config
 import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
+import io.velo.RequestHandler
+import io.velo.SnowFlake
 import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
+import io.velo.decode.Request
+import io.velo.mock.ByPassGetSet
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.OneSlot
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.test.tools.RedisServer
+import io.velo.type.RedisHashKeys
+import redis.clients.jedis.Jedis
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 class MGroupTest extends Specification {
     def _MGroup = new MGroup(null, null, null)
@@ -225,6 +235,28 @@ class MGroupTest extends Specification {
         then:
         reply == ErrorReply.FORMAT
 
+        when: 'a key that is too long is rejected'
+        mGroup.crossRequestWorker = false
+        def tooLongKeyReply = mGroup.execute('mset >key value1')
+        then:
+        tooLongKeyReply == ErrorReply.KEY_TOO_LONG
+
+        when: 'a value that is too long is rejected'
+        def tooLongValueReply = mGroup.execute('mset key1 >value')
+        then:
+        tooLongValueReply == ErrorReply.VALUE_TOO_LONG
+
+        when: 'the key and the value length are checked in the cross worker path too'
+        mGroup.crossRequestWorker = true
+        def crossTooLongKeyReply = mGroup.execute('mset >key value1')
+        then:
+        crossTooLongKeyReply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        def crossTooLongValueReply = mGroup.execute('mset key1 >value')
+        then:
+        crossTooLongValueReply == ErrorReply.VALUE_TOO_LONG
+
         cleanup:
         eventloop.breakEventloop()
     }
@@ -316,6 +348,62 @@ class MGroupTest extends Specification {
         then:
         reply == ErrorReply.FORMAT
 
+        when: 'a key that is created while the msetnx is running must not be overwritten'
+        def raceData = new byte[3][]
+        raceData[0] = 'msetnx'.bytes
+        raceData[1] = 'race'.bytes
+        raceData[2] = 'AAA'.bytes
+        def concurrentStore = new ConcurrentWriteStore()
+        concurrentStore.slotEventloop = eventloop
+        concurrentStore.triggerKey = 'race'
+        def concurrentCv = Mock.prepareCompressedValueList(1)[0]
+        concurrentCv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        concurrentCv.compressedData = 'BBB'.bytes
+        concurrentStore.concurrentValue = concurrentCv
+        def raceGroup = new MGroup('msetnx', null, null)
+        raceGroup.setData(raceData)
+        raceGroup.byPassGetSet = concurrentStore
+        raceGroup.from(BaseCommand.mockAGroup())
+        raceGroup.slotWithKeyHashListParsed = raceGroup.parseSlots('msetnx', raceData, raceGroup.slotNumber)
+        raceGroup.crossRequestWorker = true
+        def raceReply = null
+        // the command runs on a reactor, like the server does, so the completion is bounced back to it
+        eventloopCurrent.execute {
+            raceReply = raceGroup.msetnx()
+        }
+        eventloopCurrent.run()
+        def raceFuture = (raceReply as AsyncReply).settablePromise.toCompletableFuture()
+        def raceDeadline = System.currentTimeMillis() + 10000
+        while (!raceFuture.isDone() && System.currentTimeMillis() < raceDeadline) {
+            eventloopCurrent.run()
+            Thread.sleep(10)
+        }
+        then:
+        raceFuture.get() == IntegerReply.REPLY_0
+        concurrentStore.map.get('race') == concurrentCv
+
+        when: 'a key that is too long is rejected'
+        mGroup.crossRequestWorker = false
+        def tooLongKeyReply = mGroup.execute('msetnx >key value1')
+        then:
+        tooLongKeyReply == ErrorReply.KEY_TOO_LONG
+
+        when: 'a value that is too long is rejected'
+        def tooLongValueReply = mGroup.execute('msetnx key1 >value')
+        then:
+        tooLongValueReply == ErrorReply.VALUE_TOO_LONG
+
+        when: 'the key and the value length are checked in the cross worker path too'
+        mGroup.crossRequestWorker = true
+        def crossTooLongKeyReply = mGroup.execute('msetnx >key value1')
+        then:
+        crossTooLongKeyReply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        def crossTooLongValueReply = mGroup.execute('msetnx key1 >value')
+        then:
+        crossTooLongValueReply == ErrorReply.VALUE_TOO_LONG
+
         cleanup:
         eventloop.breakEventloop()
     }
@@ -338,6 +426,82 @@ class MGroupTest extends Specification {
         def mGroup = new MGroup(null, null, null)
         mGroup.byPassGetSet = inMemoryGetSet
         mGroup.from(BaseCommand.mockAGroup())
+
+        when: 'the migrate command must register the migrated keys, so the request is routed to the slot owner'
+        def migrateData = new byte[9][]
+        migrateData[0] = 'migrate'.bytes
+        migrateData[1] = '127.0.0.1'.bytes
+        migrateData[2] = redisServer.port.toString().bytes
+        migrateData[3] = ''.bytes
+        migrateData[4] = '0'.bytes
+        migrateData[5] = '1000'.bytes
+        migrateData[6] = 'keys'.bytes
+        migrateData[7] = 'a'.bytes
+        migrateData[8] = 'b'.bytes
+        def parsedSlots = mGroup.parseSlots('migrate', migrateData, mGroup.slotNumber)
+        then:
+        parsedSlots.size() == 2
+        parsedSlots[0].rawKey == 'a'
+        parsedSlots[1].rawKey == 'b'
+
+        when: 'the request handler parses the slots of a migrate request'
+        def request = new Request(migrateData, false, false)
+        request.setSlotNumber(mGroup.slotNumber)
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, new SnowFlake(1, 1), Config.create())
+        requestHandler.parseSlots(request)
+        then:
+        request.getSlotWithKeyHashList().size() == 2
+        request.getSlotWithKeyHashList().get(0).rawKey == 'a'
+        request.getSlotWithKeyHashList().get(1).rawKey == 'b'
+
+        when: 'a migrate command line with an unknown option has no slots'
+        def badMigrateData = migrateData.clone()
+        badMigrateData[6] = 'foo'.bytes
+        then:
+        mGroup.parseSlots('migrate', badMigrateData, mGroup.slotNumber).size() == 0
+
+        when: 'the copy option before the keys option does not hide the migrated keys'
+        def copyMigrateData = new byte[10][]
+        copyMigrateData[0] = 'migrate'.bytes
+        copyMigrateData[1] = '127.0.0.1'.bytes
+        copyMigrateData[2] = redisServer.port.toString().bytes
+        copyMigrateData[3] = ''.bytes
+        copyMigrateData[4] = '0'.bytes
+        copyMigrateData[5] = '1000'.bytes
+        copyMigrateData[6] = 'copy'.bytes
+        copyMigrateData[7] = 'keys'.bytes
+        copyMigrateData[8] = 'a'.bytes
+        copyMigrateData[9] = 'b'.bytes
+        then:
+        mGroup.parseSlots('migrate', copyMigrateData, mGroup.slotNumber).size() == 2
+
+        when: 'the replace option before the keys option does not hide the migrated keys'
+        def replaceMigrateData = copyMigrateData.clone()
+        replaceMigrateData[6] = 'replace'.bytes
+        then:
+        mGroup.parseSlots('migrate', replaceMigrateData, mGroup.slotNumber).size() == 2
+
+        when: 'a migrate command line without the keys option has no slots'
+        def noKeysData = new byte[7][]
+        noKeysData[0] = 'migrate'.bytes
+        noKeysData[1] = '127.0.0.1'.bytes
+        noKeysData[2] = redisServer.port.toString().bytes
+        noKeysData[3] = ''.bytes
+        noKeysData[4] = '0'.bytes
+        noKeysData[5] = '1000'.bytes
+        noKeysData[6] = 'copy'.bytes
+        then:
+        mGroup.parseSlots('migrate', noKeysData, mGroup.slotNumber).size() == 0
+
+        when: 'a migrate command line with too few arguments has no slots'
+        def shortMigrateData = new byte[5][]
+        shortMigrateData[0] = 'migrate'.bytes
+        shortMigrateData[1] = '127.0.0.1'.bytes
+        shortMigrateData[2] = redisServer.port.toString().bytes
+        shortMigrateData[3] = ''.bytes
+        shortMigrateData[4] = '0'.bytes
+        then:
+        mGroup.parseSlots('migrate', shortMigrateData, mGroup.slotNumber).size() == 0
 
         when:
         def reply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS a b')
@@ -364,6 +528,9 @@ class MGroupTest extends Specification {
         when:
         jedis.del('a')
         jedis.del('b')
+        // the migrate without the copy option deleted the source keys, put them back
+        inMemoryGetSet.put('a', cv0)
+        inMemoryGetSet.put('b', cv1)
         def eventloop = Eventloop.builder()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
@@ -387,8 +554,294 @@ class MGroupTest extends Specification {
         jedis.get('a') == 'value0'
         jedis.get('b') == 'value1'
 
+        when: 'a key with a type that can not be dumped is skipped in the local path'
+        def hllCv = Mock.prepareCompressedValueList(1)[0]
+        hllCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HLL
+        inMemoryGetSet.put('hll', hllCv)
+        mGroup.crossRequestWorker = false
+        def hllReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS hll')
+        then:
+        hllReply == MGroup.NOKEY_REPLY
+
+        when: 'a key with a type that can not be dumped is skipped in the cross worker path'
+        mGroup.crossRequestWorker = true
+        def hllReply2 = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS hll')
+        eventloopCurrent.run()
+        then:
+        hllReply2 instanceof AsyncReply
+        (hllReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == MGroup.NOKEY_REPLY
+
+        when: 'a key with an empty collection is skipped in the local path'
+        def emptySetCv = Mock.prepareCompressedValueList(1)[0]
+        emptySetCv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        emptySetCv.compressedData = new RedisHashKeys().encodeButDoNotCompress()
+        inMemoryGetSet.put('emptyset', emptySetCv)
+        mGroup.crossRequestWorker = false
+        def emptySetReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS emptyset')
+        then:
+        emptySetReply == MGroup.NOKEY_REPLY
+
+        when: 'a key with an empty collection is skipped in the cross worker path'
+        mGroup.crossRequestWorker = true
+        def emptySetReply2 = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS emptyset')
+        eventloopCurrent.run()
+        then:
+        emptySetReply2 instanceof AsyncReply
+        (emptySetReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == MGroup.NOKEY_REPLY
+
+        when: 'a key that does not exist is skipped in the cross worker path'
+        mGroup.crossRequestWorker = true
+        def missingKeyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS nosuchkey')
+        eventloopCurrent.run()
+        then:
+        missingKeyReply instanceof AsyncReply
+        (missingKeyReply as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == MGroup.NOKEY_REPLY
+
+        when: 'migrate without the copy option must delete the source key'
+        def cvC = Mock.prepareCompressedValueList(1)[0]
+        cvC.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvC.compressedData = 'valuec'.bytes
+        inMemoryGetSet.put('c', cvC)
+        mGroup.crossRequestWorker = false
+        def noCopyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS c')
+        then:
+        noCopyReply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'c', 0, 0L) == null
+
+        when: 'migrate with the copy option must keep the source key'
+        def cvD = Mock.prepareCompressedValueList(1)[0]
+        cvD.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvD.compressedData = 'valued'.bytes
+        inMemoryGetSet.put('d', cvD)
+        def copyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 COPY KEYS d')
+        then:
+        copyReply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'd', 0, 0L) != null
+
+        when: 'migrate with the copy and the replace options must keep the source key'
+        def cvE = Mock.prepareCompressedValueList(1)[0]
+        cvE.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvE.compressedData = 'valuee'.bytes
+        inMemoryGetSet.put('e', cvE)
+        def copyReplaceReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 COPY REPLACE KEYS e')
+        then:
+        copyReplaceReply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'e', 0, 0L) != null
+
+        when: 'migrate without the copy option in the cross worker path must delete the source key'
+        def cvF = Mock.prepareCompressedValueList(1)[0]
+        cvF.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvF.compressedData = 'valuef'.bytes
+        inMemoryGetSet.put('f', cvF)
+        mGroup.crossRequestWorker = true
+        def crossNoCopyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS f')
+        eventloopCurrent.run()
+        then:
+        crossNoCopyReply instanceof AsyncReply
+        (crossNoCopyReply as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'f', 0, 0L) == null
+
+        when: 'migrate with the copy option in the cross worker path must keep the source key'
+        def cvG = Mock.prepareCompressedValueList(1)[0]
+        cvG.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvG.compressedData = 'valueg'.bytes
+        inMemoryGetSet.put('g', cvG)
+        def crossCopyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 COPY REPLACE KEYS g')
+        eventloopCurrent.run()
+        then:
+        crossCopyReply instanceof AsyncReply
+        (crossCopyReply as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'g', 0, 0L) != null
+
+        when: 'migrate with the auth option to a password protected destination'
+        def authRedisServer = new RedisServer('test-migrate-auth').noSave().randomPort().args('--requirepass', 'secret')
+        Thread.start {
+            authRedisServer.run()
+        }
+        def authJedis = initAuthJedis('127.0.0.1', authRedisServer.port, 'secret')
+        def cvH = Mock.prepareCompressedValueList(1)[0]
+        cvH.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvH.compressedData = 'valueh'.bytes
+        inMemoryGetSet.put('h', cvH)
+        mGroup.crossRequestWorker = false
+        def authReply = mGroup.execute('migrate 127.0.0.1 ' + authRedisServer.port + ' "" 0 1000 AUTH secret KEYS h')
+        then:
+        authReply == OKReply.INSTANCE
+        authJedis.get('h') == 'valueh'
+
+        when: 'migrate with the auth2 option to a password protected destination'
+        def cvI = Mock.prepareCompressedValueList(1)[0]
+        cvI.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvI.compressedData = 'valuei'.bytes
+        inMemoryGetSet.put('i', cvI)
+        def auth2Reply = mGroup.execute('migrate 127.0.0.1 ' + authRedisServer.port + ' "" 0 1000 AUTH2 default secret KEYS i')
+        then:
+        auth2Reply == OKReply.INSTANCE
+        authJedis.get('i') == 'valuei'
+
+        when: 'the auth option without a password is a syntax error'
+        def authNoPasswordReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH')
+        then:
+        authNoPasswordReply == ErrorReply.SYNTAX
+
+        when: 'the auth2 option without a password is a syntax error'
+        def auth2NoPasswordReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH2 default')
+        then:
+        auth2NoPasswordReply == ErrorReply.SYNTAX
+
+        when: 'migrate the single key form, the key argument is the key to migrate'
+        def cvJ = Mock.prepareCompressedValueList(1)[0]
+        cvJ.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvJ.compressedData = 'valuej'.bytes
+        inMemoryGetSet.put('j', cvJ)
+        mGroup.crossRequestWorker = false
+        def singleKeyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' j 0 1000')
+        then:
+        singleKeyReply == OKReply.INSTANCE
+        jedis.get('j') == 'valuej'
+
+        when: 'the single key form with an empty key argument is a syntax error'
+        def emptyKeyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000')
+        then:
+        emptyKeyReply == ErrorReply.SYNTAX
+
+        when: 'the key argument must be empty when the keys option is used'
+        def notEmptyKeyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' notempty 0 1000 KEYS a')
+        then:
+        notEmptyKeyReply instanceof ErrorReply
+        notEmptyKeyReply.getMessage() == 'When using MIGRATE KEYS option, the key argument must be set to the empty string'
+
+        when: 'the destination already has the key and the replace option is not used'
+        jedis.set('busy', 'old')
+        def cvBusy = Mock.prepareCompressedValueList(1)[0]
+        cvBusy.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvBusy.compressedData = 'newvalue'.bytes
+        inMemoryGetSet.put('busy', cvBusy)
+        mGroup.crossRequestWorker = false
+        def busyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS busy')
+        then:
+        busyReply instanceof ErrorReply
+        busyReply.getMessage() == 'Target instance replied with error: BUSYKEY Target key name already exists.'
+        jedis.get('busy') == 'old'
+
+        when: 'the destination error in the cross worker path must answer an error reply'
+        mGroup.crossRequestWorker = true
+        def busyReply2 = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS busy')
+        eventloopCurrent.run()
+        then:
+        busyReply2 instanceof AsyncReply
+        (busyReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) instanceof ErrorReply
+
+        when: 'the timeout is not an integer'
+        mGroup.crossRequestWorker = false
+        def badTimeoutReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 xyz KEYS a')
+        then:
+        badTimeoutReply instanceof ErrorReply
+        badTimeoutReply.getMessage() == 'value is not an integer or out of range'
+
+        when: 'the destination db is not an integer'
+        def badDbReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" abc 1000 KEYS a')
+        then:
+        badDbReply instanceof ErrorReply
+        badDbReply.getMessage() == 'value is not an integer or out of range'
+
+        when: 'the port is not an integer'
+        def badPortReply = mGroup.execute('migrate 127.0.0.1 abc "" 0 1000 KEYS a')
+        then:
+        badPortReply instanceof ErrorReply
+        badPortReply.getMessage() == 'value is not an integer or out of range'
+
+        when: 'a timeout that is not positive uses the default timeout of redis'
+        def cvTimeout = Mock.prepareCompressedValueList(1)[0]
+        cvTimeout.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvTimeout.compressedData = 'valuetimeout'.bytes
+        inMemoryGetSet.put('timeoutkey', cvTimeout)
+        def zeroTimeoutReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 0 KEYS timeoutkey')
+        then:
+        zeroTimeoutReply == OKReply.INSTANCE
+
+        when: 'a negative timeout uses the default timeout of redis'
+        def cvNegativeTimeout = Mock.prepareCompressedValueList(1)[0]
+        cvNegativeTimeout.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvNegativeTimeout.compressedData = 'valuenegativetimeout'.bytes
+        inMemoryGetSet.put('negativetimeoutkey', cvNegativeTimeout)
+        def negativeTimeoutReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 -1 KEYS negativetimeoutkey')
+        then:
+        negativeTimeoutReply == OKReply.INSTANCE
+
+        when: 'the auth option without the keys option is a syntax error'
+        def authNoKeysReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH secret')
+        then:
+        authNoKeysReply == ErrorReply.SYNTAX
+
+        when: 'the keys option without any key is a syntax error'
+        def noKeysReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS')
+        then:
+        noKeysReply == ErrorReply.SYNTAX
+
+        when: 'an unknown option is a syntax error'
+        def unknownOptionReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 foo KEYS a')
+        then:
+        unknownOptionReply == ErrorReply.SYNTAX
+
+        when: 'the destination is not reachable'
+        def unreachableReply = mGroup.execute('migrate 127.0.0.1 1 "" 0 1000 KEYS a')
+        then:
+        unreachableReply instanceof ErrorReply
+
         cleanup:
         jedis.close()
         redisServer.stop()
+        authJedis?.close()
+        authRedisServer.stop()
+    }
+
+    /**
+     * A mock store that writes a concurrent value into the store when the trigger key is read,
+     * to simulate a client that creates the key while a command is running.
+     */
+    static class ConcurrentWriteStore implements ByPassGetSet {
+        final Map<String, CompressedValue> map = new ConcurrentHashMap<String, CompressedValue>()
+        Eventloop slotEventloop
+        String triggerKey
+        CompressedValue concurrentValue
+        boolean armed = true
+
+        @Override
+        void put(short slot, String key, int bucketIndex, CompressedValue cv) {
+            map.put(key, cv)
+        }
+
+        @Override
+        boolean remove(short slot, String key) {
+            return map.remove(key) != null
+        }
+
+        @Override
+        OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash) {
+            var cv = map.get(key)
+            if (cv == null && armed && key == triggerKey) {
+                armed = false
+                // queue the concurrent write on the slot eventloop, it runs after the current task
+                slotEventloop.execute {
+                    map.put(triggerKey, concurrentValue)
+                }
+            }
+            return cv == null ? null : new OneSlot.BufOrCompressedValue(null, cv)
+        }
+    }
+
+    private static Jedis initAuthJedis(String host, int port, String password) {
+        for (int i = 0; i < 20; i++) {
+            try {
+                def jedis = new Jedis(host, port)
+                jedis.auth(password)
+                jedis.ping()
+                return jedis
+            } catch (Exception ignored) {
+                Thread.sleep(500)
+            }
+        }
+        throw new RuntimeException('redis server with password is not ready')
     }
 }

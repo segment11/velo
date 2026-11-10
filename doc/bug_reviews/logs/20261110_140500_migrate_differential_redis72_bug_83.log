@@ -1,0 +1,42 @@
+Redis 7.2.11 MIGRATE differential - agent 1 discovery evidence (bug 83)
+date: 2026-11-10T13:27:06+08:00
+source: 127.0.0.1:32101 (no password)   target: 127.0.0.1:32102 (requirepass secret)
+====================================================================================================
+== 1) single key form: MIGRATE host port key db timeout ==
+OK
+OK
+   -> source after:   (redis deletes the source key without COPY)
+== 2) AUTH option accepted ==
+OK
+OK
+   -> source after: ''  (empty = source key deleted)
+== 3) AUTH2 option accepted ==
+OK
+OK
+   -> source after: ''  (empty = source key deleted)
+== 4) COPY + REPLACE keeps the source key ==
+OK
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+OK
+OK
+   -> source after: v3  (redis keeps it, velo deletes it)
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+   -> target:       v3
+== 5) KEYS option requires an empty key argument ==
+ERR When using MIGRATE KEYS option, the key argument must be set to the empty string
+
+== 6) invalid timeout / db ==
+OK
+ERR value is not an integer or out of range
+
+ERR value is not an integer or out of range
+
+== 7) target already has the key and no REPLACE ==
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+OK
+OK
+ERR Target instance replied with error: BUSYKEY Target key name already exists.
+
+   -> source after: new  (redis keeps it)
+== 8) timeout <= 0 is clamped to 1000ms ==
+NOKEY

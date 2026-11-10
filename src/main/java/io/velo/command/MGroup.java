@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
+import io.velo.CompressedValue;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.persist.Wal;
@@ -126,7 +127,98 @@ public class MGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("migrate".equals(cmd)) {
+            // the migrated keys are inside the command line, register them so the request is
+            // routed to the slot worker that owns them
+            var args = parseMigrateArgs(data);
+            if (args == null) {
+                return slotWithKeyHashList;
+            }
+            for (var key : args.keys()) {
+                slotWithKeyHashList.add(slot(key, slotNumber));
+            }
+            return slotWithKeyHashList;
+        }
+
         return slotWithKeyHashList;
+    }
+
+    /**
+     * The parsed MIGRATE command line.
+     *
+     * @param isCopy        whether the copy option is present
+     * @param isReplace     whether the replace option is present
+     * @param authUsername  the auth2 username, null when the option is not present
+     * @param authPassword  the auth or auth2 password, null when the option is not present
+     * @param key           the key argument, the single key form
+     * @param keys          the keys to migrate
+     * @param hasKeysOption whether the keys option is present
+     */
+    record MigrateArgs(boolean isCopy, boolean isReplace, String authUsername, String authPassword,
+                       String key, ArrayList<String> keys, boolean hasKeysOption) {
+    }
+
+    /**
+     * Parses the options of a MIGRATE command line.
+     * <p>
+     * The keys to migrate are inside the command line, they are the arguments of the keys option
+     * or the key argument of the single key form.
+     *
+     * @param data the command arguments, the command name is at index 0
+     * @return the parsed arguments, null when the command line is invalid
+     */
+    private static MigrateArgs parseMigrateArgs(byte[][] data) {
+        if (data.length < 6) {
+            return null;
+        }
+
+        boolean isCopy = false;
+        boolean isReplace = false;
+        String authUsername = null;
+        String authPassword = null;
+        var keys = new ArrayList<String>();
+        boolean hasKeysOption = false;
+
+        for (int i = 6; i < data.length; i++) {
+            var arg = new String(data[i]);
+            if (arg.equalsIgnoreCase("keys")) {
+                hasKeysOption = true;
+                for (int j = i + 1; j < data.length; j++) {
+                    keys.add(new String(data[j]));
+                }
+                break;
+            }
+            if (arg.equalsIgnoreCase("copy")) {
+                isCopy = true;
+            } else if (arg.equalsIgnoreCase("replace")) {
+                isReplace = true;
+            } else if (arg.equalsIgnoreCase("auth")) {
+                // the auth option has one argument, the password
+                if (i + 1 >= data.length) {
+                    return null;
+                }
+                i++;
+                authPassword = new String(data[i]);
+            } else if (arg.equalsIgnoreCase("auth2")) {
+                // the auth2 option has two arguments, the username and the password
+                if (i + 2 >= data.length) {
+                    return null;
+                }
+                i++;
+                authUsername = new String(data[i]);
+                i++;
+                authPassword = new String(data[i]);
+            } else {
+                return null;
+            }
+        }
+
+        var key = new String(data[3]);
+        if (!hasKeysOption && !key.isEmpty()) {
+            // the single key form, the key argument is the key to migrate
+            keys.add(key);
+        }
+        return new MigrateArgs(isCopy, isReplace, authUsername, authPassword, key, keys, hasKeysOption);
     }
 
     /**
@@ -254,10 +346,33 @@ public class MGroup extends BaseCommand {
         return asyncReply;
     }
 
+    /**
+     * Checks the key and the value lengths of a MSET or MSETNX command.
+     *
+     * @param data the command arguments, the keys are at the odd indexes and the values at the even ones
+     * @return the error reply when a key or a value is too long, null when all the lengths are ok
+     */
+    private static Reply checkMSetLength(byte[][] data) {
+        for (int i = 1; i < data.length; i += 2) {
+            if (data[i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            if (data[i + 1].length > CompressedValue.VALUE_MAX_LENGTH) {
+                return ErrorReply.VALUE_TOO_LONG;
+            }
+        }
+        return null;
+    }
+
     @VisibleForTesting
     Reply mset() {
         if (data.length < 3 || data.length % 2 == 0) {
             return ErrorReply.FORMAT;
+        }
+
+        var lengthError = checkMSetLength(data);
+        if (lengthError != null) {
+            return lengthError;
         }
 
         if (!isCrossRequestWorker) {
@@ -311,6 +426,11 @@ public class MGroup extends BaseCommand {
     Reply msetnx() {
         if (data.length < 3 || data.length % 2 == 0) {
             return ErrorReply.FORMAT;
+        }
+
+        var lengthError = checkMSetLength(data);
+        if (lengthError != null) {
+            return lengthError;
         }
 
         if (!isCrossRequestWorker) {
@@ -370,17 +490,25 @@ public class MGroup extends BaseCommand {
                 return;
             }
 
-            List<Promise<Void>> writePromises = new ArrayList<>();
+            List<Promise<Boolean>> writePromises = new ArrayList<>();
             for (var entry : groupBySlot.entrySet()) {
                 var slot = entry.getKey();
                 var subList = entry.getValue();
 
                 var oneSlot = localPersist.oneSlot(slot);
-                Promise<Void> p = oneSlot.asyncCall(() -> {
+                Promise<Boolean> p = oneSlot.asyncCall(() -> {
+                    // the check and the write must run in the same slot task, so that no other
+                    // command can create the key between them, the key of another client must
+                    // never be overwritten by the msetnx command
+                    for (var one : subList) {
+                        if (exists(one.slotWithKeyHash)) {
+                            return false;
+                        }
+                    }
                     for (var one : subList) {
                         set(one.valueBytes, one.slotWithKeyHash);
                     }
-                    return null;
+                    return true;
                 });
                 writePromises.add(p);
             }
@@ -391,7 +519,8 @@ public class MGroup extends BaseCommand {
                     finalPromise.setException(writeEx);
                     return;
                 }
-                finalPromise.set(IntegerReply.REPLY_1);
+                var allWritten = writePromises.stream().allMatch(Promise::getResult);
+                finalPromise.set(allWritten ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0);
             });
         });
 
@@ -403,68 +532,67 @@ public class MGroup extends BaseCommand {
 
     static final Reply NOKEY_REPLY = new BulkReply("NOKEY");
 
+    /**
+     * Parses the timeout of the migrate command.
+     *
+     * @param timeout the timeout argument
+     * @return the timeout in milliseconds, a not positive timeout uses the default timeout of redis
+     * @throws NumberFormatException when the timeout is not an integer
+     */
+    private static int parseMigrateTimeout(String timeout) {
+        var timeoutMs = Long.parseLong(timeout);
+        if (timeoutMs <= 0) {
+            // redis uses a default timeout of 1000 ms
+            return 1000;
+        }
+        return (int) Math.min(timeoutMs, Integer.MAX_VALUE);
+    }
+
     private Reply migrate() {
-        if (data.length < 7) {
-            return ErrorReply.FORMAT;
+        var args = parseMigrateArgs(data);
+        if (args == null) {
+            return ErrorReply.SYNTAX;
         }
 
-        var host = new String(data[1]);
-        var port = Integer.parseInt(new String(data[2]));
-        var keyOrBlank = new String(data[3]);
-        var destinationDb = Integer.parseInt(new String(data[4]));
-        var timeoutMs = Integer.parseInt(new String(data[5]));
-
-        boolean isCopy = false;
-        boolean isReplace = false;
-        String authUsername = null;
-        String authPassword = null;
-
-        ArrayList<String> keys = new ArrayList<>();
-        for (int i = 6; i < data.length; i++) {
-            var arg = new String(data[i]);
-            if (arg.equalsIgnoreCase("keys")) {
-                if (i + 1 > data.length) {
-                    return ErrorReply.SYNTAX;
-                }
-                for (int j = i + 1; j < data.length; j++) {
-                    keys.add(new String(data[j]));
-                }
-                break;
-            } else if (arg.equalsIgnoreCase("copy")) {
-                isCopy = true;
-            } else if (arg.equalsIgnoreCase("replace")) {
-                isReplace = true;
-            } else if (arg.equalsIgnoreCase("auth")) {
-                if (i + 2 >= data.length) {
-                    return ErrorReply.SYNTAX;
-                }
-                if (new String(data[i + 2]).equalsIgnoreCase("keys")) {
-                    authPassword = new String(data[i + 1]);
-                } else {
-                    authUsername = new String(data[i + 1]);
-                    authPassword = new String(data[i + 2]);
-                }
-            } else {
-                return ErrorReply.SYNTAX;
-            }
+        if (args.hasKeysOption() && !args.key().isEmpty()) {
+            return ErrorReply.MIGRATE_KEY_NOT_EMPTY;
         }
 
+        var keys = args.keys();
         if (keys.isEmpty()) {
             return ErrorReply.SYNTAX;
         }
+
+        var host = new String(data[1]);
+        int port;
+        int destinationDb;
+        int timeoutMs;
+        try {
+            port = Integer.parseInt(new String(data[2]));
+            destinationDb = Integer.parseInt(new String(data[4]));
+            timeoutMs = parseMigrateTimeout(new String(data[5]));
+        } catch (NumberFormatException e) {
+            log.warn("Migrate invalid argument, error={}", e.getMessage());
+            return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+        }
+
+        boolean isCopy = args.isCopy();
+        boolean isReplace = args.isReplace();
+        String authUsername = args.authUsername();
+        String authPassword = args.authPassword();
 
         // perf bad
         var jedisClientConfig = DefaultJedisClientConfig.builder().timeoutMillis(timeoutMs).build();
         Jedis jedisTo;
         try {
             jedisTo = new Jedis(host, port, jedisClientConfig);
-            jedisTo.select(destinationDb);
-
+            // redis authenticates before selecting the destination db
             if (authUsername != null) {
                 jedisTo.auth(authUsername, authPassword);
             } else if (authPassword != null) {
                 jedisTo.auth(authPassword);
             }
+            jedisTo.select(destinationDb);
         } catch (Exception e) {
             return new ErrorReply(e.getMessage());
         }
@@ -481,35 +609,46 @@ public class MGroup extends BaseCommand {
 
         if (!isCrossRequestWorker) {
             int count = 0;
-            for (var key : keys) {
-                var slotWithKeyHash = slot(key);
-                var cv = getCv(slotWithKeyHash);
-                if (cv == null) {
-                    continue;
-                }
+            try {
+                for (var key : keys) {
+                    var slotWithKeyHash = slot(key);
+                    var cv = getCv(slotWithKeyHash);
+                    if (cv == null) {
+                        continue;
+                    }
 
-                var dumpBytes = dGroup.dumpBytes(cv, slotWithKeyHash);
-                if (dumpBytes == null) {
-                    continue;
-                }
-                long expireAt = cv.getExpireAt();
-                var result = jedisTo.restore(Wal.keyBytes(key), expireAt, dumpBytes, restoreParams);
-                if (!result.equals("OK")) {
-                    log.warn("Migrate error={}, key={}", result, key);
-                    continue;
-                }
+                    var dumpBytes = dGroup.dumpBytes(cv, slotWithKeyHash);
+                    if (dumpBytes == null) {
+                        continue;
+                    }
+                    if (DGroup.isTypeNotSupport(dumpBytes)) {
+                        log.warn("Migrate skip key={}, type not support to dump", key);
+                        continue;
+                    }
+                    long expireAt = cv.getExpireAt();
+                    var result = jedisTo.restore(Wal.keyBytes(key), expireAt, dumpBytes, restoreParams);
+                    if (!result.equals("OK")) {
+                        log.warn("Migrate error={}, key={}", result, key);
+                        continue;
+                    }
 
-                count++;
-                if (isReplace) {
-                    removeDelay(slotWithKeyHash);
+                    count++;
+                    if (!isCopy) {
+                        // the copy option keeps the key on the source instance
+                        removeDelay(slotWithKeyHash);
+                    }
                 }
+                log.info("Migrate {} keys to {}:{}", count, host, port);
+
+                return count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
+            } catch (Exception e) {
+                // the destination instance replied with an error
+                log.error("Migrate error={}", e.getMessage());
+                return new ErrorReply("Target instance replied with error: " + e.getMessage());
+            } finally {
+                jedisTo.close();
+                log.info("Close jedis {}:{}", host, port);
             }
-            log.info("Migrate {} keys to {}:{}", count, host, port);
-
-            jedisTo.close();
-            log.info("Close jedis {}:{}", host, port);
-
-            return count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
         } else {
             ArrayList<IndexAndSlotWithKeyHash> list = new ArrayList<>();
             for (int i = 0; i < keys.size(); i++) {
@@ -534,6 +673,13 @@ public class MGroup extends BaseCommand {
                         }
 
                         var dumpBytes = dGroup.dumpBytes(cv, one.slotWithKeyHash);
+                        if (dumpBytes == null) {
+                            continue;
+                        }
+                        if (DGroup.isTypeNotSupport(dumpBytes)) {
+                            log.warn("Migrate skip key={}, type not support to dump", one.slotWithKeyHash.rawKey());
+                            continue;
+                        }
                         dumpBytesList.add(new DumpBytesAndTtlAndIndex(dumpBytes, cv.getExpireAt(), one.index));
                     }
                     return dumpBytesList;
@@ -541,7 +687,7 @@ public class MGroup extends BaseCommand {
                 promises.add(p);
             }
 
-            final var isReplaceFinal = isReplace;
+            final var isCopyFinal = isCopy;
             SettablePromise<Reply> finalPromise = new SettablePromise<>();
             var asyncReply = new AsyncReply(finalPromise);
 
@@ -567,7 +713,8 @@ public class MGroup extends BaseCommand {
                             }
 
                             count++;
-                            if (isReplaceFinal) {
+                            if (!isCopyFinal) {
+                                // the copy option keeps the key on the source instance
                                 var slotWithKeyHash = one.slotWithKeyHash;
                                 var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
                                 oneSlot.asyncExecute(() -> {
@@ -579,6 +726,10 @@ public class MGroup extends BaseCommand {
 
                     var rr = count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
                     finalPromise.set(rr);
+                } catch (Exception ex) {
+                    // the destination instance replied with an error, the reply must be sent to the client
+                    log.error("Migrate error={}", ex.getMessage());
+                    finalPromise.set(new ErrorReply("Target instance replied with error: " + ex.getMessage()));
                 } finally {
                     jedisTo.close();
                     log.info("Close jedis {}:{}", host, port);

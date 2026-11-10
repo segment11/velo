@@ -33,6 +33,10 @@ public class ErrorReply implements Reply {
     /** Error reply for key too long. */
     public static final ErrorReply KEY_TOO_LONG = new ErrorReply("key too long (max length is " + CompressedValue.KEY_MAX_LENGTH + ")");
 
+    /** Error reply for the migrate command with a not empty key argument and the keys option. */
+    public static final ErrorReply MIGRATE_KEY_NOT_EMPTY = new ErrorReply(
+            "When using MIGRATE KEYS option, the key argument must be set to the empty string");
+
     /** Error reply for value too long. */
     public static final ErrorReply VALUE_TOO_LONG = new ErrorReply("value too long (max length is " + CompressedValue.VALUE_MAX_LENGTH + ")");
 
@@ -68,6 +72,9 @@ public class ErrorReply implements Reply {
 
     /** Error reply for not a float. */
     public static final ErrorReply NOT_FLOAT = new ErrorReply("not float");
+
+    /** Error reply for a value that is not an integer or out of range. */
+    public static final ErrorReply NOT_INTEGER_OR_OUT_OF_RANGE = new ErrorReply("value is not an integer or out of range");
 
     /** Error reply for a NaN or Infinity value. */
     public static final ErrorReply NAN_OR_INFINITY = new ErrorReply("value is NaN or Infinity");
