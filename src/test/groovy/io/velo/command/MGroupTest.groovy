@@ -603,6 +603,27 @@ class MGroupTest extends Specification {
         notEmptyKeyReply instanceof ErrorReply
         notEmptyKeyReply.getMessage() == 'When using MIGRATE KEYS option, the key argument must be set to the empty string'
 
+        when: 'the destination already has the key and the replace option is not used'
+        jedis.set('busy', 'old')
+        def cvBusy = Mock.prepareCompressedValueList(1)[0]
+        cvBusy.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvBusy.compressedData = 'newvalue'.bytes
+        inMemoryGetSet.put('busy', cvBusy)
+        mGroup.crossRequestWorker = false
+        def busyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS busy')
+        then:
+        busyReply instanceof ErrorReply
+        busyReply.getMessage() == 'Target instance replied with error: BUSYKEY Target key name already exists.'
+        jedis.get('busy') == 'old'
+
+        when: 'the destination error in the cross worker path must answer an error reply'
+        mGroup.crossRequestWorker = true
+        def busyReply2 = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS busy')
+        eventloopCurrent.run()
+        then:
+        busyReply2 instanceof AsyncReply
+        (busyReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) instanceof ErrorReply
+
         when: 'the auth option without the keys option is a syntax error'
         def authNoKeysReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH secret')
         then:

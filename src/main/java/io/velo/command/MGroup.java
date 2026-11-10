@@ -547,40 +547,46 @@ public class MGroup extends BaseCommand {
 
         if (!isCrossRequestWorker) {
             int count = 0;
-            for (var key : keys) {
-                var slotWithKeyHash = slot(key);
-                var cv = getCv(slotWithKeyHash);
-                if (cv == null) {
-                    continue;
-                }
+            try {
+                for (var key : keys) {
+                    var slotWithKeyHash = slot(key);
+                    var cv = getCv(slotWithKeyHash);
+                    if (cv == null) {
+                        continue;
+                    }
 
-                var dumpBytes = dGroup.dumpBytes(cv, slotWithKeyHash);
-                if (dumpBytes == null) {
-                    continue;
-                }
-                if (DGroup.isTypeNotSupport(dumpBytes)) {
-                    log.warn("Migrate skip key={}, type not support to dump", key);
-                    continue;
-                }
-                long expireAt = cv.getExpireAt();
-                var result = jedisTo.restore(Wal.keyBytes(key), expireAt, dumpBytes, restoreParams);
-                if (!result.equals("OK")) {
-                    log.warn("Migrate error={}, key={}", result, key);
-                    continue;
-                }
+                    var dumpBytes = dGroup.dumpBytes(cv, slotWithKeyHash);
+                    if (dumpBytes == null) {
+                        continue;
+                    }
+                    if (DGroup.isTypeNotSupport(dumpBytes)) {
+                        log.warn("Migrate skip key={}, type not support to dump", key);
+                        continue;
+                    }
+                    long expireAt = cv.getExpireAt();
+                    var result = jedisTo.restore(Wal.keyBytes(key), expireAt, dumpBytes, restoreParams);
+                    if (!result.equals("OK")) {
+                        log.warn("Migrate error={}, key={}", result, key);
+                        continue;
+                    }
 
-                count++;
-                if (!isCopy) {
-                    // the copy option keeps the key on the source instance
-                    removeDelay(slotWithKeyHash);
+                    count++;
+                    if (!isCopy) {
+                        // the copy option keeps the key on the source instance
+                        removeDelay(slotWithKeyHash);
+                    }
                 }
+                log.info("Migrate {} keys to {}:{}", count, host, port);
+
+                return count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
+            } catch (Exception e) {
+                // the destination instance replied with an error
+                log.error("Migrate error={}", e.getMessage());
+                return new ErrorReply("Target instance replied with error: " + e.getMessage());
+            } finally {
+                jedisTo.close();
+                log.info("Close jedis {}:{}", host, port);
             }
-            log.info("Migrate {} keys to {}:{}", count, host, port);
-
-            jedisTo.close();
-            log.info("Close jedis {}:{}", host, port);
-
-            return count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
         } else {
             ArrayList<IndexAndSlotWithKeyHash> list = new ArrayList<>();
             for (int i = 0; i < keys.size(); i++) {
@@ -658,6 +664,10 @@ public class MGroup extends BaseCommand {
 
                     var rr = count != 0 ? OKReply.INSTANCE : NOKEY_REPLY;
                     finalPromise.set(rr);
+                } catch (Exception ex) {
+                    // the destination instance replied with an error, the reply must be sent to the client
+                    log.error("Migrate error={}", ex.getMessage());
+                    finalPromise.set(new ErrorReply("Target instance replied with error: " + ex.getMessage()));
                 } finally {
                     jedisTo.close();
                     log.info("Close jedis {}:{}", host, port);
