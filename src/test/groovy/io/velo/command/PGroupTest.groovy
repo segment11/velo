@@ -753,6 +753,25 @@ class PGroupTest extends Specification {
         ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'no_such_channel'.bytes
         ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 0
 
+        when: 'the pattern subscriptions are not listed as channels'
+        reply = pGroup.execute('pubsub channels')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+
+        when:
+        reply = pGroup.execute('pubsub channels test_*')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+
+        when: 'a glob that matches no channel returns an empty reply'
+        reply = pGroup.execute('pubsub channels other_*')
+        then:
+        reply == MultiBulkReply.EMPTY
+
         when:
         reply = pGroup.execute('pubsub numsub')
         then:

@@ -639,14 +639,14 @@ public class PGroup extends BaseCommand {
         var subCmd = new String(data[1]).toLowerCase();
         if ("channels".equals(subCmd)) {
             var pattern = data.length == 3 ? new String(data[2]) : null;
-            var ones = pattern == null ? socketInspector.allSubscribeOnes() :
-                    socketInspector.filterSubscribeOnesByChannel(pattern, true);
-            if (ones.isEmpty()) {
+            // redis lists only the channels, the pattern subscriptions are excluded
+            var channels = socketInspector.subscribeChannels(pattern);
+            if (channels.isEmpty()) {
                 return MultiBulkReply.EMPTY;
             } else {
-                var replies = new Reply[ones.size()];
-                for (int i = 0; i < ones.size(); i++) {
-                    replies[i] = new BulkReply(ones.get(i).getChannel());
+                var replies = new Reply[channels.size()];
+                for (int i = 0; i < channels.size(); i++) {
+                    replies[i] = new BulkReply(channels.get(i));
                 }
                 return new MultiBulkReply(replies);
             }

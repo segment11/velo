@@ -368,6 +368,15 @@ public class SocketInspector implements TcpSocket.Inspector {
         }
 
         /**
+         * Returns whether this entry is a pattern subscription.
+         *
+         * @return true if this entry is a pattern subscription, false if it is a channel subscription
+         */
+        public boolean isPattern() {
+            return isPattern;
+        }
+
+        /**
          * @param channel the channel
          * @param isPattern true if the channel is a pattern, false otherwise
          */
@@ -603,6 +612,32 @@ public class SocketInspector implements TcpSocket.Inspector {
          * @param reply  the reply to send
          */
         void doWithSocket(ITcpSocket socket, Reply reply);
+    }
+
+    /**
+     * Returns the subscribed channels, the pattern subscriptions are not included.
+     * Redis lists only the channels with at least one subscriber, the clients subscribed to
+     * patterns are excluded from PUBSUB CHANNELS.
+     *
+     * @param pattern the glob style pattern to match, null means all the channels
+     * @return the list of the subscribed channels
+     */
+    public ArrayList<String> subscribeChannels(@Nullable String pattern) {
+        var result = new ArrayList<String>();
+        ChannelAndIsPattern matcher = null;
+        if (pattern != null) {
+            matcher = new ChannelAndIsPattern(pattern, true);
+        }
+        for (var one : subscribeByChannel.keySet()) {
+            if (one.isPattern()) {
+                continue;
+            }
+            if (matcher != null && !matcher.isMatch(one.getChannel())) {
+                continue;
+            }
+            result.add(one.getChannel());
+        }
+        return result;
     }
 
     /**
