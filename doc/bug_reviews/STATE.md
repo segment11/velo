@@ -5,7 +5,7 @@ Single source of truth for report id allocation and module coverage.
 
 ## next_bug_id
 
-83
+84
 
 ## Allocated
 
@@ -25,6 +25,7 @@ Single source of truth for report id allocation and module coverage.
 | 80 | KGroup commands (keys) | 1 | round 1 rewrite accepted (`d8e41ddd`+`db9564fc`); independent re-review 3 then found 80.8-80.11 (same-ms exclusion, cap slot starvation, knob scope, log noise) — all 4 fixed with red/green + JaCoCo: `512b44fb`, `616ef7ac`, `f25391f3`, log extraction `198b52b4`; **independent re-review 4 ACCEPTED all four** (live pipelined differential: pre-fix 67/200 keys found vs fixed 200/200, matching Redis 7.2) — closable |
 | 81 | GGroup/LGroup commands (getex zero TTL, lpushx/rpushx with a pending blocker) | 1 | 2/2 CONFIRMED (reproduced against live Redis 7.2) and fixed in 2 commits: 81.1 `ccec81b8` (getex rejects a zero TTL), 81.2 `ce727d3e` (lpushx/rpushx keep the key-exists check under a pending blocker; also fixes the LGroupTest static-BlockingList leak); residual: GETEX negative-TTL message text still differs from Redis |
 | 82 | LGroup commands (class LGroup) | 1 | closed — 6/6 CONFIRMED (reproduced, agent-2 temp Spock spec + live Redis 7.2.11 differential, logs `20261109_201500_lgroup_differential_redis72_bug_82.log` / `20261109_204643_lgroup_review_agent2_bug_82.log`) 5 fixed in 5 commits, one per bug: 82.1 `1957a4e5` (LTRIM with a negative `end` deleted the whole list — High), 82.2 `1f0e2dad` (LTRIM empty range now empties the list + OK), 82.3 `2cf0b4e2` (LASTSAVE replies seconds), 82.4 `69d10da5` (LPOS rejects RANK 0), 82.5 `195d89b5` (LPOS rejects unknown option names), 82.6 won't fix, product decision: `LIST_MAX_SIZE` design guard (`a1a08492` → `56fb3137`, type limits documented in `e76f976c`); **re-review ACCEPTED** (worktree RED/GREEN per commit + JaCoCo + regression 148/148, log `20261110_131735_lgroup_rereview_agent2_bug_82.log`) |
+| 83 | MGroup commands (class MGroup: manage/mget/migrate/move/mset/msetnx) | 1 | discovery complete (agent 1) — 8 findings, none verified yet: 83.1 `MIGRATE` registers no slot → random slot worker → "Thread id not match" (High), 83.2 `MIGRATE` uses `REPLACE` instead of `COPY` for the source-key deletion (High), 83.3 `MIGRATE ... AUTH ...` always "syntax error", no `AUTH2`, `SELECT` before `AUTH` (High), 83.4 `MIGRATE` rejects the single-key form (Medium), 83.5 `MSET`/`MSETNX` bypass the key/value length limits → replication breaks (Medium), 83.6 `MSETNX` is not atomic in the cross-worker path (Medium), 83.7 `MIGRATE` destination error → client hangs / connection leaks (Medium), 83.8 `MIGRATE` numeric-argument validation diverges (Low); agent-1 evidence: logs `20261110_140000_mgroup_probe_agent1_bug_83.log` / `20261110_140500_migrate_differential_redis72_bug_83.log` |
 
 ## Module coverage (latest round per module)
 
@@ -46,6 +47,7 @@ Single source of truth for report id allocation and module coverage.
 | KGroup (keys) | bug_80 round 1 | 80.1-80.7 fixed by rewrite (accepted with Redis 7.2.11 differential); 80.8-80.11 from independent re-review 3 also fixed (`512b44fb`, `616ef7ac`, `f25391f3`, `198b52b4`) and **independently re-reviewed + ACCEPTED in re-review 4**; residual: prefixMatch dead code (cleanup candidate), defensive exception branches uncovered |
 | GGroup/LGroup commands (getex zero TTL, lpushx/rpushx with a pending blocker) | bug_81 round 1 | 2/2 fixed (81.1 `ccec81b8`, 81.2 `ce727d3e`, RED→GREEN+JaCoCo each); residual: GETEX negative-TTL message text differs from Redis |
 | LGroup commands (class LGroup) | bug_82 round 1 | closed — 5/6 fixed (82.1 `1957a4e5`, 82.2 `1f0e2dad`, 82.3 `2cf0b4e2`, 82.4 `69d10da5`, 82.5 `195d89b5`; RED→GREEN+JaCoCo each, `LGroupTest.groovy:1094-1100` updated), 82.6 won't fix — `LIST_MAX_SIZE` is a design guard, product decision (`a1a08492` → `56fb3137`); **re-review ACCEPTED**; residuals in report Residual Risk (32-bit arg parsing cross-module, `LSET`/`LPOS` error-text divergences, lastsave not tracking a real snapshot) |
+| MGroup commands (class MGroup: manage/mget/migrate/move/mset/msetnx) | bug_83 round 1 | discovery complete — 8 findings (3 High, 4 Medium, 1 Low), none verified yet; agent-1 probe + live Redis 7.2.11 differential evidence in the report |
 | types / config / metrics / cluster / net / compression / commands (string/hash/list/set/zset/geo/hll) | see doc/bug_reviews/ | check reports |
 
 ## Known id collisions (historical, do not propagate)
