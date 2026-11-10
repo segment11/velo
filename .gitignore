@@ -1,15 +1,13 @@
-/gradle/
 /.idea/
 /.gradle/
 /.settings/
-/gradlew
-/gradlew.bat
 /build/
 /bin/
 /velo-data/
 /segment_common/bin/
 /.worktrees/
 ### test run artifacts written into the repo root
+/acl.conf
 /hs_err_pid*.log
 /perf.data
 /perf.data.old
