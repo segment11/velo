@@ -393,6 +393,26 @@ class PGroupTest extends Specification {
         then:
         ttlReply == IntegerReply.REPLY_1
         ttlCvAfterRewrite.expireAt == expireAt
+
+        when: 'a PFADD that alters the HLL registers but not the estimated cardinality must be persisted'
+        // 2471 elements, the estimated cardinality is 2467
+        def manyElements = (0..2470).collect { "e$it" }.join(' ')
+        def manyReply = pGroup.execute('pfadd big_hll ' + manyElements)
+        def sBigHll = pGroup.slot('big_hll'.bytes, pGroup.slotNumber)
+        def countReply = pGroup.execute('pfcount big_hll')
+        then:
+        manyReply == IntegerReply.REPLY_1
+        (countReply as IntegerReply).integer == 2467
+
+        when: 'the next element alters a register but the estimated cardinality stays the same'
+        def beforeBytes = inMemoryGetSet.getBuf(slot, 'big_hll', sBigHll.bucketIndex(), sBigHll.keyHash()).cv().compressedData
+        def oneMoreReply = pGroup.execute('pfadd big_hll e2471')
+        def afterBytes = inMemoryGetSet.getBuf(slot, 'big_hll', sBigHll.bucketIndex(), sBigHll.keyHash()).cv().compressedData
+        then:
+        // redis answers 1 when at least one HyperLogLog internal register was altered
+        oneMoreReply == IntegerReply.REPLY_1
+        // the altered HLL must not be dropped
+        afterBytes != beforeBytes
     }
 
     def 'test pfcount and pfmerge'() {

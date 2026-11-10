@@ -17,6 +17,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -312,10 +313,16 @@ public class PGroup extends BaseCommand {
     }
 
     private void saveHll(SlotWithKeyHash s, HyperLogLog hll, long expireAt) throws IOException {
+        saveHllBytes(s, serializeHll(hll), expireAt);
+    }
+
+    private static byte[] serializeHll(HyperLogLog hll) throws IOException {
         var os = new ByteArrayOutputStream();
         HyperLogLogUtils.serializeHLL(os, hll);
-        var encoded = os.toByteArray();
+        return os.toByteArray();
+    }
 
+    private void saveHllBytes(SlotWithKeyHash s, byte[] encoded, long expireAt) throws IOException {
         var beginT = System.nanoTime();
         var compressed = Zstd.compress(encoded);
         var costT = (System.nanoTime() - beginT) / 1000;
@@ -335,10 +342,19 @@ public class PGroup extends BaseCommand {
         compressStats.compressedCostTimeTotalUs += costT;
     }
 
-    private HyperLogLog getHll(SlotWithKeyHash s) {
+    /**
+     * The HyperLogLog of a key and the serialized bytes it was loaded from.
+     *
+     * @param hll   the HyperLogLog, null when the key does not exist
+     * @param bytes the serialized bytes of the stored HyperLogLog, null when the key does not exist
+     */
+    private record HllWithBytes(HyperLogLog hll, byte[] bytes) {
+    }
+
+    private HllWithBytes getHllWithBytes(SlotWithKeyHash s) {
         var cv = getCv(s);
         if (cv == null) {
-            return null;
+            return new HllWithBytes(null, null);
         }
 
         if (!cv.isHll()) {
@@ -355,10 +371,14 @@ public class PGroup extends BaseCommand {
 
         var is = new ByteArrayInputStream(decompressed);
         try {
-            return HyperLogLogUtils.deserializeHLL(is);
+            return new HllWithBytes(HyperLogLogUtils.deserializeHLL(is), decompressed);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private HyperLogLog getHll(SlotWithKeyHash s) {
+        return getHllWithBytes(s).hll();
     }
 
     private long getHllExpireAt(SlotWithKeyHash s) {
@@ -376,31 +396,30 @@ public class PGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
-        var hll = getHll(slotWithKeyHash);
+        var hllWithBytes = getHllWithBytes(slotWithKeyHash);
+        var hll = hllWithBytes.hll();
         if (hll == null) {
-            if (data.length == 2) {
-                hll = emptyHll();
-                try {
-                    saveHll(slotWithKeyHash, hll, CompressedValue.NO_EXPIRE);
-                } catch (IOException e) {
-                    return new ErrorReply(e.getMessage());
-                }
-                return IntegerReply.REPLY_1;
-            }
             hll = emptyHll();
         }
 
-        var oldCount = hll.count();
         for (int i = 2; i < data.length; i++) {
             var itemBytes = data[i];
             hll.addBytes(itemBytes);
         }
-        var newCount = hll.count();
-        var isChanged = oldCount != newCount;
+
+        // redis answers 1 when at least one HyperLogLog internal register was altered,
+        // the estimated cardinality may stay the same, so compare the serialized state
+        byte[] hllBytes;
+        try {
+            hllBytes = serializeHll(hll);
+        } catch (IOException e) {
+            return new ErrorReply(e.getMessage());
+        }
+        var isChanged = hllWithBytes.bytes() == null || !Arrays.equals(hllWithBytes.bytes(), hllBytes);
 
         if (isChanged) {
             try {
-                saveHll(slotWithKeyHash, hll, getHllExpireAt(slotWithKeyHash));
+                saveHllBytes(slotWithKeyHash, hllBytes, getHllExpireAt(slotWithKeyHash));
             } catch (IOException e) {
                 return new ErrorReply(e.getMessage());
             }
