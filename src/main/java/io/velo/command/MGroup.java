@@ -541,7 +541,8 @@ public class MGroup extends BaseCommand {
                 }
 
                 count++;
-                if (isReplace) {
+                if (!isCopy) {
+                    // the copy option keeps the key on the source instance
                     removeDelay(slotWithKeyHash);
                 }
             }
@@ -589,7 +590,7 @@ public class MGroup extends BaseCommand {
                 promises.add(p);
             }
 
-            final var isReplaceFinal = isReplace;
+            final var isCopyFinal = isCopy;
             SettablePromise<Reply> finalPromise = new SettablePromise<>();
             var asyncReply = new AsyncReply(finalPromise);
 
@@ -615,7 +616,8 @@ public class MGroup extends BaseCommand {
                             }
 
                             count++;
-                            if (isReplaceFinal) {
+                            if (!isCopyFinal) {
+                                // the copy option keeps the key on the source instance
                                 var slotWithKeyHash = one.slotWithKeyHash;
                                 var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
                                 oneSlot.asyncExecute(() -> {

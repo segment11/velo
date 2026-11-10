@@ -441,6 +441,9 @@ class MGroupTest extends Specification {
         when:
         jedis.del('a')
         jedis.del('b')
+        // the migrate without the copy option deleted the source keys, put them back
+        inMemoryGetSet.put('a', cv0)
+        inMemoryGetSet.put('b', cv1)
         def eventloop = Eventloop.builder()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
@@ -480,6 +483,62 @@ class MGroupTest extends Specification {
         then:
         hllReply2 instanceof AsyncReply
         (hllReply2 as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == MGroup.NOKEY_REPLY
+
+        when: 'migrate without the copy option must delete the source key'
+        def cvC = Mock.prepareCompressedValueList(1)[0]
+        cvC.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvC.compressedData = 'valuec'.bytes
+        inMemoryGetSet.put('c', cvC)
+        mGroup.crossRequestWorker = false
+        def noCopyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS c')
+        then:
+        noCopyReply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'c', 0, 0L) == null
+
+        when: 'migrate with the copy option must keep the source key'
+        def cvD = Mock.prepareCompressedValueList(1)[0]
+        cvD.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvD.compressedData = 'valued'.bytes
+        inMemoryGetSet.put('d', cvD)
+        def copyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 COPY KEYS d')
+        then:
+        copyReply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'd', 0, 0L) != null
+
+        when: 'migrate with the copy and the replace options must keep the source key'
+        def cvE = Mock.prepareCompressedValueList(1)[0]
+        cvE.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvE.compressedData = 'valuee'.bytes
+        inMemoryGetSet.put('e', cvE)
+        def copyReplaceReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 COPY REPLACE KEYS e')
+        then:
+        copyReplaceReply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'e', 0, 0L) != null
+
+        when: 'migrate without the copy option in the cross worker path must delete the source key'
+        def cvF = Mock.prepareCompressedValueList(1)[0]
+        cvF.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvF.compressedData = 'valuef'.bytes
+        inMemoryGetSet.put('f', cvF)
+        mGroup.crossRequestWorker = true
+        def crossNoCopyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS f')
+        eventloopCurrent.run()
+        then:
+        crossNoCopyReply instanceof AsyncReply
+        (crossNoCopyReply as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'f', 0, 0L) == null
+
+        when: 'migrate with the copy option in the cross worker path must keep the source key'
+        def cvG = Mock.prepareCompressedValueList(1)[0]
+        cvG.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvG.compressedData = 'valueg'.bytes
+        inMemoryGetSet.put('g', cvG)
+        def crossCopyReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 COPY REPLACE KEYS g')
+        eventloopCurrent.run()
+        then:
+        crossCopyReply instanceof AsyncReply
+        (crossCopyReply as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(slot, 'g', 0, 0L) != null
 
         cleanup:
         jedis.close()
