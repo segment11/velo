@@ -231,6 +231,28 @@ class MGroupTest extends Specification {
         then:
         reply == ErrorReply.FORMAT
 
+        when: 'a key that is too long is rejected'
+        mGroup.crossRequestWorker = false
+        def tooLongKeyReply = mGroup.execute('mset >key value1')
+        then:
+        tooLongKeyReply == ErrorReply.KEY_TOO_LONG
+
+        when: 'a value that is too long is rejected'
+        def tooLongValueReply = mGroup.execute('mset key1 >value')
+        then:
+        tooLongValueReply == ErrorReply.VALUE_TOO_LONG
+
+        when: 'the key and the value length are checked in the cross worker path too'
+        mGroup.crossRequestWorker = true
+        def crossTooLongKeyReply = mGroup.execute('mset >key value1')
+        then:
+        crossTooLongKeyReply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        def crossTooLongValueReply = mGroup.execute('mset key1 >value')
+        then:
+        crossTooLongValueReply == ErrorReply.VALUE_TOO_LONG
+
         cleanup:
         eventloop.breakEventloop()
     }
@@ -321,6 +343,28 @@ class MGroupTest extends Specification {
         reply = mGroup.msetnx()
         then:
         reply == ErrorReply.FORMAT
+
+        when: 'a key that is too long is rejected'
+        mGroup.crossRequestWorker = false
+        def tooLongKeyReply = mGroup.execute('msetnx >key value1')
+        then:
+        tooLongKeyReply == ErrorReply.KEY_TOO_LONG
+
+        when: 'a value that is too long is rejected'
+        def tooLongValueReply = mGroup.execute('msetnx key1 >value')
+        then:
+        tooLongValueReply == ErrorReply.VALUE_TOO_LONG
+
+        when: 'the key and the value length are checked in the cross worker path too'
+        mGroup.crossRequestWorker = true
+        def crossTooLongKeyReply = mGroup.execute('msetnx >key value1')
+        then:
+        crossTooLongKeyReply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        def crossTooLongValueReply = mGroup.execute('msetnx key1 >value')
+        then:
+        crossTooLongValueReply == ErrorReply.VALUE_TOO_LONG
 
         cleanup:
         eventloop.breakEventloop()

@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
+import io.velo.CompressedValue;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.persist.Wal;
@@ -345,10 +346,33 @@ public class MGroup extends BaseCommand {
         return asyncReply;
     }
 
+    /**
+     * Checks the key and the value lengths of a MSET or MSETNX command.
+     *
+     * @param data the command arguments, the keys are at the odd indexes and the values at the even ones
+     * @return the error reply when a key or a value is too long, null when all the lengths are ok
+     */
+    private static Reply checkMSetLength(byte[][] data) {
+        for (int i = 1; i < data.length; i += 2) {
+            if (data[i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            if (data[i + 1].length > CompressedValue.VALUE_MAX_LENGTH) {
+                return ErrorReply.VALUE_TOO_LONG;
+            }
+        }
+        return null;
+    }
+
     @VisibleForTesting
     Reply mset() {
         if (data.length < 3 || data.length % 2 == 0) {
             return ErrorReply.FORMAT;
+        }
+
+        var lengthError = checkMSetLength(data);
+        if (lengthError != null) {
+            return lengthError;
         }
 
         if (!isCrossRequestWorker) {
@@ -402,6 +426,11 @@ public class MGroup extends BaseCommand {
     Reply msetnx() {
         if (data.length < 3 || data.length % 2 == 0) {
             return ErrorReply.FORMAT;
+        }
+
+        var lengthError = checkMSetLength(data);
+        if (lengthError != null) {
+            return lengthError;
         }
 
         if (!isCrossRequestWorker) {
