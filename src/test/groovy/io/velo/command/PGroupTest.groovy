@@ -302,6 +302,7 @@ class PGroupTest extends Specification {
         when:
         cv.expireAt = System.currentTimeMillis() + 1000
         inMemoryGetSet.put(slot, 'a', 0, cv)
+        def seqBeforePersist = cv.seq
         reply = pGroup.execute('persist a')
         then:
         reply == IntegerReply.REPLY_1
@@ -310,6 +311,8 @@ class PGroupTest extends Specification {
         def bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt == CompressedValue.NO_EXPIRE
+        // the write must allocate a new sequence number, the replication compares the sequences
+        bufOrCv.cv().seq != seqBeforePersist
 
         when:
         reply = pGroup.execute('persist')

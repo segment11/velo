@@ -318,6 +318,9 @@ public class PGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
+        // a new sequence number is needed, the replication compares the sequences to know
+        // which value is the newer one, the expire time change is a new write
+        cv.setSeq(snowFlake.nextId());
         cv.setExpireAt(CompressedValue.NO_EXPIRE);
         putToOneSlot(slotWithKeyHash.slot(), slotWithKeyHash, cv);
         return IntegerReply.REPLY_1;
