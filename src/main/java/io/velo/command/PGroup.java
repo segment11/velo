@@ -651,7 +651,7 @@ public class PGroup extends BaseCommand {
                 return new MultiBulkReply(replies);
             }
         } else if ("numpat".equals(subCmd)) {
-            return NilReply.INSTANCE;
+            return new IntegerReply(socketInspector.subscribePatternCount());
         } else if ("numsub".equals(subCmd)) {
             if (data.length < 3) {
                 return ErrorReply.FORMAT;

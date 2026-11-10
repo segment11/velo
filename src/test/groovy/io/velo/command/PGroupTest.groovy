@@ -724,7 +724,9 @@ class PGroupTest extends Specification {
         when:
         reply = pGroup.execute('pubsub numpat')
         then:
-        reply == NilReply.INSTANCE
+        // redis returns the number of the unique patterns all the clients are subscribed to
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = pGroup.execute('pubsub numsub ' + channel)
@@ -744,6 +746,12 @@ class PGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 1
+
+        when: 'the pattern subscriptions are counted by PUBSUB NUMPAT'
+        reply = pGroup.execute('pubsub numpat')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
 
         when: 'a channel without any subscriber is reported as zero'
         reply = pGroup.execute('pubsub numsub no_such_channel')

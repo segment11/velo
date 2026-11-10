@@ -615,6 +615,21 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
+     * Returns the number of the unique patterns all the clients are subscribed to.
+     *
+     * @return the number of the subscribed patterns
+     */
+    public int subscribePatternCount() {
+        int count = 0;
+        for (var one : subscribeByChannel.keySet()) {
+            if (one.isPattern()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
      * Returns the subscribed channels, the pattern subscriptions are not included.
      * Redis lists only the channels with at least one subscriber, the clients subscribed to
      * patterns are excluded from PUBSUB CHANNELS.
