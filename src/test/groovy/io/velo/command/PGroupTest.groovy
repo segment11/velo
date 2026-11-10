@@ -736,6 +736,23 @@ class PGroupTest extends Specification {
         (reply as MultiBulkReply).replies[1] instanceof IntegerReply
         ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 1
 
+        when: 'a pattern subscription is not counted by PUBSUB NUMSUB'
+        def patternSocket = SocketInspectorTest.mockTcpSocket()
+        socketInspector.subscribe('test_*', true, patternSocket)
+        reply = pGroup.execute('pubsub numsub ' + channel)
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 1
+
+        when: 'a channel without any subscriber is reported as zero'
+        reply = pGroup.execute('pubsub numsub no_such_channel')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'no_such_channel'.bytes
+        ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 0
+
         when:
         reply = pGroup.execute('pubsub numsub')
         then:

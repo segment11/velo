@@ -606,6 +606,18 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
+     * Returns the number of sockets subscribed to the exact channel.
+     * The pattern subscriptions are not counted, redis excludes them from PUBSUB NUMSUB.
+     *
+     * @param channel the channel to count
+     * @return the number of sockets subscribed to the exact channel
+     */
+    public int exactSubscribeSocketCount(@NotNull String channel) {
+        var sockets = subscribeByChannel.get(new ChannelAndIsPattern(channel, false));
+        return sockets == null ? 0 : sockets.size();
+    }
+
+    /**
      * Publishes a message to all sockets subscribed to a channel.
      *
      * @param channel  the channel to publish to

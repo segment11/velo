@@ -665,7 +665,8 @@ public class PGroup extends BaseCommand {
             var replies = new Reply[channels.size() * 2];
             int j = 0;
             for (var channel : channels) {
-                var size = socketInspector.subscribeSocketCount(channel, true);
+                // redis excludes the clients subscribed to patterns from PUBSUB NUMSUB
+                var size = socketInspector.exactSubscribeSocketCount(channel);
                 replies[j++] = new BulkReply(channel);
                 replies[j++] = new IntegerReply(size);
             }
