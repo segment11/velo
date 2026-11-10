@@ -14,6 +14,7 @@ import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.test.tools.RedisServer
+import redis.clients.jedis.Jedis
 import spock.lang.Specification
 
 import java.time.Duration
@@ -540,8 +541,80 @@ class MGroupTest extends Specification {
         (crossCopyReply as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) == OKReply.INSTANCE
         inMemoryGetSet.getBuf(slot, 'g', 0, 0L) != null
 
+        when: 'migrate with the auth option to a password protected destination'
+        def authRedisServer = new RedisServer('test-migrate-auth').noSave().randomPort().args('--requirepass', 'secret')
+        Thread.start {
+            authRedisServer.run()
+        }
+        def authJedis = initAuthJedis('127.0.0.1', authRedisServer.port, 'secret')
+        def cvH = Mock.prepareCompressedValueList(1)[0]
+        cvH.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvH.compressedData = 'valueh'.bytes
+        inMemoryGetSet.put('h', cvH)
+        mGroup.crossRequestWorker = false
+        def authReply = mGroup.execute('migrate 127.0.0.1 ' + authRedisServer.port + ' "" 0 1000 AUTH secret KEYS h')
+        then:
+        authReply == OKReply.INSTANCE
+        authJedis.get('h') == 'valueh'
+
+        when: 'migrate with the auth2 option to a password protected destination'
+        def cvI = Mock.prepareCompressedValueList(1)[0]
+        cvI.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvI.compressedData = 'valuei'.bytes
+        inMemoryGetSet.put('i', cvI)
+        def auth2Reply = mGroup.execute('migrate 127.0.0.1 ' + authRedisServer.port + ' "" 0 1000 AUTH2 default secret KEYS i')
+        then:
+        auth2Reply == OKReply.INSTANCE
+        authJedis.get('i') == 'valuei'
+
+        when: 'the auth option without a password is a syntax error'
+        def authNoPasswordReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH')
+        then:
+        authNoPasswordReply == ErrorReply.SYNTAX
+
+        when: 'the auth2 option without a password is a syntax error'
+        def auth2NoPasswordReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH2 default')
+        then:
+        auth2NoPasswordReply == ErrorReply.SYNTAX
+
+        when: 'the auth option without the keys option is a syntax error'
+        def authNoKeysReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 AUTH secret')
+        then:
+        authNoKeysReply == ErrorReply.SYNTAX
+
+        when: 'the keys option without any key is a syntax error'
+        def noKeysReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 KEYS')
+        then:
+        noKeysReply == ErrorReply.SYNTAX
+
+        when: 'an unknown option is a syntax error'
+        def unknownOptionReply = mGroup.execute('migrate 127.0.0.1 ' + redisServer.port + ' "" 0 1000 foo KEYS a')
+        then:
+        unknownOptionReply == ErrorReply.SYNTAX
+
+        when: 'the destination is not reachable'
+        def unreachableReply = mGroup.execute('migrate 127.0.0.1 1 "" 0 1000 KEYS a')
+        then:
+        unreachableReply instanceof ErrorReply
+
         cleanup:
         jedis.close()
         redisServer.stop()
+        authJedis?.close()
+        authRedisServer.stop()
+    }
+
+    private static Jedis initAuthJedis(String host, int port, String password) {
+        for (int i = 0; i < 20; i++) {
+            try {
+                def jedis = new Jedis(host, port)
+                jedis.auth(password)
+                jedis.ping()
+                return jedis
+            } catch (Exception ignored) {
+                Thread.sleep(500)
+            }
+        }
+        throw new RuntimeException('redis server with password is not ready')
     }
 }

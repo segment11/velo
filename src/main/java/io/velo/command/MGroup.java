@@ -161,7 +161,13 @@ public class MGroup extends BaseCommand {
                 }
                 return keys;
             }
-            if (!arg.equalsIgnoreCase("copy") && !arg.equalsIgnoreCase("replace")) {
+            if (arg.equalsIgnoreCase("auth")) {
+                // the auth option has one argument, the password
+                i++;
+            } else if (arg.equalsIgnoreCase("auth2")) {
+                // the auth2 option has two arguments, the username and the password
+                i += 2;
+            } else if (!arg.equalsIgnoreCase("copy") && !arg.equalsIgnoreCase("replace")) {
                 // any other option is not supported yet, the command answers a syntax error
                 return new ArrayList<>();
             }
@@ -462,24 +468,27 @@ public class MGroup extends BaseCommand {
         for (int i = 6; i < data.length; i++) {
             var arg = new String(data[i]);
             if (arg.equalsIgnoreCase("keys")) {
-                if (i + 1 > data.length) {
-                    return ErrorReply.SYNTAX;
-                }
                 break;
             } else if (arg.equalsIgnoreCase("copy")) {
                 isCopy = true;
             } else if (arg.equalsIgnoreCase("replace")) {
                 isReplace = true;
             } else if (arg.equalsIgnoreCase("auth")) {
+                // the auth option has one argument, the password
+                if (i + 1 >= data.length) {
+                    return ErrorReply.SYNTAX;
+                }
+                i++;
+                authPassword = new String(data[i]);
+            } else if (arg.equalsIgnoreCase("auth2")) {
+                // the auth2 option has two arguments, the username and the password
                 if (i + 2 >= data.length) {
                     return ErrorReply.SYNTAX;
                 }
-                if (new String(data[i + 2]).equalsIgnoreCase("keys")) {
-                    authPassword = new String(data[i + 1]);
-                } else {
-                    authUsername = new String(data[i + 1]);
-                    authPassword = new String(data[i + 2]);
-                }
+                i++;
+                authUsername = new String(data[i]);
+                i++;
+                authPassword = new String(data[i]);
             } else {
                 return ErrorReply.SYNTAX;
             }
@@ -495,13 +504,13 @@ public class MGroup extends BaseCommand {
         Jedis jedisTo;
         try {
             jedisTo = new Jedis(host, port, jedisClientConfig);
-            jedisTo.select(destinationDb);
-
+            // redis authenticates before selecting the destination db
             if (authUsername != null) {
                 jedisTo.auth(authUsername, authPassword);
             } else if (authPassword != null) {
                 jedisTo.auth(authPassword);
             }
+            jedisTo.select(destinationDb);
         } catch (Exception e) {
             return new ErrorReply(e.getMessage());
         }
