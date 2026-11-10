@@ -490,17 +490,25 @@ public class MGroup extends BaseCommand {
                 return;
             }
 
-            List<Promise<Void>> writePromises = new ArrayList<>();
+            List<Promise<Boolean>> writePromises = new ArrayList<>();
             for (var entry : groupBySlot.entrySet()) {
                 var slot = entry.getKey();
                 var subList = entry.getValue();
 
                 var oneSlot = localPersist.oneSlot(slot);
-                Promise<Void> p = oneSlot.asyncCall(() -> {
+                Promise<Boolean> p = oneSlot.asyncCall(() -> {
+                    // the check and the write must run in the same slot task, so that no other
+                    // command can create the key between them, the key of another client must
+                    // never be overwritten by the msetnx command
+                    for (var one : subList) {
+                        if (exists(one.slotWithKeyHash)) {
+                            return false;
+                        }
+                    }
                     for (var one : subList) {
                         set(one.valueBytes, one.slotWithKeyHash);
                     }
-                    return null;
+                    return true;
                 });
                 writePromises.add(p);
             }
@@ -511,7 +519,8 @@ public class MGroup extends BaseCommand {
                     finalPromise.setException(writeEx);
                     return;
                 }
-                finalPromise.set(IntegerReply.REPLY_1);
+                var allWritten = writePromises.stream().allMatch(Promise::getResult);
+                finalPromise.set(allWritten ? IntegerReply.REPLY_1 : IntegerReply.REPLY_0);
             });
         });
 

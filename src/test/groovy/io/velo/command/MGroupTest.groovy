@@ -9,8 +9,10 @@ import io.velo.SnowFlake
 import io.velo.Utils
 import io.velo.dyn.CachedGroovyClassLoader
 import io.velo.decode.Request
+import io.velo.mock.ByPassGetSet
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
+import io.velo.persist.OneSlot
 import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.test.tools.RedisServer
@@ -18,6 +20,7 @@ import redis.clients.jedis.Jedis
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class MGroupTest extends Specification {
@@ -343,6 +346,40 @@ class MGroupTest extends Specification {
         reply = mGroup.msetnx()
         then:
         reply == ErrorReply.FORMAT
+
+        when: 'a key that is created while the msetnx is running must not be overwritten'
+        def raceData = new byte[3][]
+        raceData[0] = 'msetnx'.bytes
+        raceData[1] = 'race'.bytes
+        raceData[2] = 'AAA'.bytes
+        def concurrentStore = new ConcurrentWriteStore()
+        concurrentStore.slotEventloop = eventloop
+        concurrentStore.triggerKey = 'race'
+        def concurrentCv = Mock.prepareCompressedValueList(1)[0]
+        concurrentCv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        concurrentCv.compressedData = 'BBB'.bytes
+        concurrentStore.concurrentValue = concurrentCv
+        def raceGroup = new MGroup('msetnx', null, null)
+        raceGroup.setData(raceData)
+        raceGroup.byPassGetSet = concurrentStore
+        raceGroup.from(BaseCommand.mockAGroup())
+        raceGroup.slotWithKeyHashListParsed = raceGroup.parseSlots('msetnx', raceData, raceGroup.slotNumber)
+        raceGroup.crossRequestWorker = true
+        def raceReply = null
+        // the command runs on a reactor, like the server does, so the completion is bounced back to it
+        eventloopCurrent.execute {
+            raceReply = raceGroup.msetnx()
+        }
+        eventloopCurrent.run()
+        def raceFuture = (raceReply as AsyncReply).settablePromise.toCompletableFuture()
+        def raceDeadline = System.currentTimeMillis() + 10000
+        while (!raceFuture.isDone() && System.currentTimeMillis() < raceDeadline) {
+            eventloopCurrent.run()
+            Thread.sleep(10)
+        }
+        then:
+        raceFuture.get() == IntegerReply.REPLY_0
+        concurrentStore.map.get('race') == concurrentCv
 
         when: 'a key that is too long is rejected'
         mGroup.crossRequestWorker = false
@@ -693,6 +730,41 @@ class MGroupTest extends Specification {
         redisServer.stop()
         authJedis?.close()
         authRedisServer.stop()
+    }
+
+    /**
+     * A mock store that writes a concurrent value into the store when the trigger key is read,
+     * to simulate a client that creates the key while a command is running.
+     */
+    static class ConcurrentWriteStore implements ByPassGetSet {
+        final Map<String, CompressedValue> map = new ConcurrentHashMap<String, CompressedValue>()
+        Eventloop slotEventloop
+        String triggerKey
+        CompressedValue concurrentValue
+        boolean armed = true
+
+        @Override
+        void put(short slot, String key, int bucketIndex, CompressedValue cv) {
+            map.put(key, cv)
+        }
+
+        @Override
+        boolean remove(short slot, String key) {
+            return map.remove(key) != null
+        }
+
+        @Override
+        OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash) {
+            var cv = map.get(key)
+            if (cv == null && armed && key == triggerKey) {
+                armed = false
+                // queue the concurrent write on the slot eventloop, it runs after the current task
+                slotEventloop.execute {
+                    map.put(triggerKey, concurrentValue)
+                }
+            }
+            return cv == null ? null : new OneSlot.BufOrCompressedValue(null, cv)
+        }
     }
 
     private static Jedis initAuthJedis(String host, int port, String password) {
