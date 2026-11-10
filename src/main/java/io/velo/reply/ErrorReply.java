@@ -97,6 +97,10 @@ public class ErrorReply implements Reply {
     /** Error reply for wrong type. */
     public static final ErrorReply WRONG_TYPE = new ErrorReply("wrong type");
 
+    /** Error reply for a wrong type operation on a HyperLogLog key, the text is aligned with redis. */
+    public static final ErrorReply WRONG_TYPE_HLL = new ErrorReply(
+            "WRONGTYPE Key is not a valid HyperLogLog string value.", true);
+
     /** Error reply for list size too long. */
     public static final ErrorReply LIST_SIZE_TO_LONG = new ErrorReply("list size too long");
 

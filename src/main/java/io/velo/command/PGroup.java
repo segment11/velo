@@ -10,6 +10,7 @@ import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.Dict;
+import io.velo.TypeMismatchException;
 import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
 
@@ -18,6 +19,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -218,6 +220,15 @@ public class PGroup extends BaseCommand {
      */
     @Override
     public Reply handle() {
+        try {
+            return handleCommand();
+        } catch (TypeMismatchException e) {
+            // the key holds a value of another type, redis answers WRONGTYPE
+            return ErrorReply.WRONG_TYPE_HLL;
+        }
+    }
+
+    private Reply handleCommand() {
         if ("persist".equals(cmd)) {
             return persist();
         }
@@ -358,7 +369,7 @@ public class PGroup extends BaseCommand {
         }
 
         if (!cv.isHll()) {
-            throw new RuntimeException(ErrorReply.WRONG_TYPE.getMessage());
+            throw new TypeMismatchException(ErrorReply.WRONG_TYPE_HLL.getMessage());
         }
 
         var beginT = System.nanoTime();
@@ -434,6 +445,25 @@ public class PGroup extends BaseCommand {
         }
     }
 
+    /**
+     * Reads the HyperLogLogs of the given keys, must be called on the owner thread of their slot.
+     * The type mismatch is not thrown, so it never escapes into the slot worker event loop.
+     *
+     * @param subList the keys to read
+     * @return the HyperLogLogs, null when one of the keys holds a value of another type
+     */
+    private ArrayList<HyperLogLog> readHllList(List<MGroup.IndexAndSlotWithKeyHash> subList) {
+        var hllList = new ArrayList<HyperLogLog>();
+        for (var one : subList) {
+            try {
+                hllList.add(getHll(one.slotWithKeyHash()));
+            } catch (TypeMismatchException e) {
+                return null;
+            }
+        }
+        return hllList;
+    }
+
     private Reply pfcount() {
         if (data.length < 2) {
             return ErrorReply.FORMAT;
@@ -462,13 +492,7 @@ public class PGroup extends BaseCommand {
             var subList = entry.getValue();
 
             var oneSlot = localPersist.oneSlot(slot);
-            var p = oneSlot.asyncCall(() -> {
-                ArrayList<HyperLogLog> hllList = new ArrayList<>();
-                for (var one : subList) {
-                    hllList.add(getHll(one.slotWithKeyHash()));
-                }
-                return hllList;
-            });
+            var p = oneSlot.asyncCall(() -> readHllList(subList));
             promises.add(p);
         }
 
@@ -484,7 +508,13 @@ public class PGroup extends BaseCommand {
 
             var merged = emptyHll();
             for (var p : promises) {
-                for (var hll : p.getResult()) {
+                var hllList = p.getResult();
+                if (hllList == null) {
+                    // one of the keys holds a value of another type, redis answers WRONGTYPE
+                    finalPromise.set(ErrorReply.WRONG_TYPE_HLL);
+                    return;
+                }
+                for (var hll : hllList) {
                     mergeHllInto(merged, hll);
                 }
             }
@@ -532,14 +562,7 @@ public class PGroup extends BaseCommand {
             var subList = entry.getValue();
 
             var oneSlot = localPersist.oneSlot(slot);
-            var p = oneSlot.asyncCall(() -> {
-                ArrayList<HyperLogLog> hllList = new ArrayList<>();
-                for (var one : subList) {
-                    var hll = getHll(one.slotWithKeyHash());
-                    hllList.add(hll);
-                }
-                return hllList;
-            });
+            var p = oneSlot.asyncCall(() -> readHllList(subList));
             promises.add(p);
         }
 
@@ -556,14 +579,26 @@ public class PGroup extends BaseCommand {
             try {
                 var srcHllList = new ArrayList<HyperLogLog>();
                 for (var p : promises) {
-                    srcHllList.addAll(p.getResult());
+                    var hllList = p.getResult();
+                    if (hllList == null) {
+                        // one of the source keys holds a value of another type, redis answers WRONGTYPE
+                        finalPromise.set(ErrorReply.WRONG_TYPE_HLL);
+                        return;
+                    }
+                    srcHllList.addAll(hllList);
                 }
 
                 // the destination key is owned by its own slot, read and write it on the
                 // destination slot worker thread, never on the source slot worker thread
                 var dstOneSlot = localPersist.oneSlot(dstS.slot());
                 dstOneSlot.asyncCall(() -> {
-                    var dstHll = getHll(dstS);
+                    HyperLogLog dstHll;
+                    try {
+                        dstHll = getHll(dstS);
+                    } catch (TypeMismatchException e1) {
+                        // the destination holds a value of another type, redis answers WRONGTYPE
+                        return Boolean.FALSE;
+                    }
                     if (dstHll == null) {
                         dstHll = emptyHll();
                     }
@@ -571,10 +606,14 @@ public class PGroup extends BaseCommand {
                         mergeHllInto(dstHll, hll);
                     }
                     saveHll(dstS, dstHll, getHllExpireAt(dstS));
-                    return null;
+                    return Boolean.TRUE;
                 }).whenComplete((r1, e1) -> {
                     if (e1 != null) {
                         finalPromise.setException(e1);
+                        return;
+                    }
+                    if (Boolean.FALSE.equals(r1)) {
+                        finalPromise.set(ErrorReply.WRONG_TYPE_HLL);
                         return;
                     }
                     finalPromise.set(OKReply.INSTANCE);

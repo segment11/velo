@@ -336,22 +336,20 @@ class PGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_0
 
-        when:
-        boolean exception = false
-        String errorMessage = null
+        when: 'PFADD on a wrong type key answers WRONGTYPE'
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        try {
-            reply = pGroup.execute('pfadd a abc')
-        } catch (RuntimeException e) {
-            println e.message
-            errorMessage = e.message
-            exception = true
-        }
+        def wrongTypeReply = pGroup.execute('pfadd a abc')
         then:
-        exception
-        errorMessage == ErrorReply.WRONG_TYPE.message
+        wrongTypeReply instanceof ErrorReply
+        (wrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
+
+        when: 'PFCOUNT on a wrong type key answers WRONGTYPE'
+        wrongTypeReply = pGroup.execute('pfcount a')
+        then:
+        wrongTypeReply instanceof ErrorReply
+        (wrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
 
         when: 'PFADD key-only on missing key creates HLL and returns 1'
         inMemoryGetSet.remove(slot, 'hll_empty')
@@ -364,22 +362,15 @@ class PGroupTest extends Specification {
         then:
         keyOnlyReply == IntegerReply.REPLY_0
 
-        when: 'PFADD key-only on wrong type key throws WRONGTYPE'
+        when: 'PFADD key-only on wrong type key answers WRONGTYPE'
         inMemoryGetSet.remove(slot, 'hll_wrong')
         def cvWrong = Mock.prepareCompressedValueList(1)[0]
         cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'hll_wrong', 0, cvWrong)
-        boolean keyOnlyException = false
-        String keyOnlyError = null
-        try {
-            pGroup.execute('pfadd hll_wrong')
-        } catch (RuntimeException e) {
-            keyOnlyError = e.message
-            keyOnlyException = true
-        }
+        def keyOnlyWrongTypeReply = pGroup.execute('pfadd hll_wrong')
         then:
-        keyOnlyException
-        keyOnlyError == ErrorReply.WRONG_TYPE.message
+        keyOnlyWrongTypeReply instanceof ErrorReply
+        (keyOnlyWrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
 
         when:
         inMemoryGetSet.remove(slot, 'ttl_hll')
@@ -498,6 +489,26 @@ class PGroupTest extends Specification {
             result == OKReply.INSTANCE
         }.result
 
+        when: 'a cross worker pfcount on a wrong type key answers WRONGTYPE'
+        def wrongTypeCv = Mock.prepareCompressedValueList(1)[0]
+        wrongTypeCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, 'b', 0, wrongTypeCv)
+        reply = pGroup.execute('pfcount a b')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        waitForReply(reply as AsyncReply) instanceof ErrorReply
+        (waitForReply(reply as AsyncReply) as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
+
+        when: 'a cross worker pfmerge with a wrong type destination answers WRONGTYPE'
+        inMemoryGetSet.put(slot, 'dst_wrong_type', 0, wrongTypeCv)
+        reply = pGroup.execute('pfmerge dst_wrong_type a')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        waitForReply(reply as AsyncReply) instanceof ErrorReply
+        (waitForReply(reply as AsyncReply) as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
+
         when:
         pGroup.crossRequestWorker = false
         reply = pGroup.execute('pfcount dst')
@@ -586,22 +597,15 @@ class PGroupTest extends Specification {
         def countReply = pGroup.execute('pfcount existing_hll')
         (countReply as IntegerReply).integer == 1
 
-        when: 'PFMERGE destkey-only on wrong type key throws WRONGTYPE'
+        when: 'PFMERGE destkey-only on wrong type key answers WRONGTYPE'
         inMemoryGetSet.remove(slot, 'dst_wrong')
         def cvWrong = Mock.prepareCompressedValueList(1)[0]
         cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'dst_wrong', 0, cvWrong)
-        boolean exception = false
-        String errorMessage = null
-        try {
-            pGroup.execute('pfmerge dst_wrong')
-        } catch (RuntimeException e) {
-            errorMessage = e.message
-            exception = true
-        }
+        def wrongTypeReply = pGroup.execute('pfmerge dst_wrong')
         then:
-        exception
-        errorMessage == ErrorReply.WRONG_TYPE.message
+        wrongTypeReply instanceof ErrorReply
+        (wrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
     }
 
     def 'test psubscribe'() {
