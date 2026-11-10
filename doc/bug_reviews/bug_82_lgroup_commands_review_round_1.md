@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2 (independent verification in the same session, oracle = live Redis 7.2.11)
-**Status:** fix phase complete — 6/6 findings CONFIRMED (reproduced) by agent 2 and fixed in 6 commits (`1957a4e5`…`a1a08492`); re-review pending
+**Status:** fix phase complete — 6/6 findings CONFIRMED (reproduced) by agent 2; 5 fixed in 5 commits (`1957a4e5`…`195d89b5`), 82.6 reverted by product decision (`a1a08492` → `56fb3137`); re-review pending
 **Review branch:** `review/lgroup`
 **Reviewed commit:** `7d8ce05aba8e59e6a2b4647242813b787c4522be` (main)
 
@@ -398,7 +398,8 @@ value (as Redis does with `j++`) makes the grammar unambiguous and is the natura
 
 **Severity:** Low
 **Class:** Redis protocol compatibility / edge case
-**Status:** `CONFIRMED (reproduced)` — reviewer temp spec (`40000`/`32767` → `ERR list size too long`, `100` → nil) + live Redis 7.2.11 (all three → nil); see Review Feedback
+**Status:** `CONFIRMED (reproduced)` — reviewer temp spec (`40000`/`32767` → `ERR list size too long`, `100` → nil) + live Redis 7.2.11 (all three → nil); see Review Feedback.
+**Disposition:** the finding is **not** applied — the `RedisList.LIST_MAX_SIZE` guard stays in `lindex()` by product decision (see *Fix Log* / *Residual Risk*)
 
 ### Cited files / lines
 
@@ -580,10 +581,19 @@ match the report (`LGroup.java:1069-1078` raw `start > end` comparison + `reset(
 | 82.3 | RED: `LGroupTest.test handle - lastsave` failed at `LGroupTest.groovy:112` — the reply was `1700000000123` instead of `1700000000` | `2cf0b4e2` `fix: lastsave replies a unix timestamp in seconds` | same command → BUILD SUCCESSFUL | `LGroup.java` 227-229 → covered, all branches |
 | 82.4 | RED: `LGroupTest.test lpos` failed at `LGroupTest.groovy:661` — `LPOS a a rank 0` answered `NilReply` instead of an `ErrorReply` | `69d10da5` `fix: lpos rejects a rank of zero` | same command → BUILD SUCCESSFUL | `LGroup.java` 724-778 → every line covered, all branch lines fully covered, incl. the new `rank == 0` guard |
 | 82.5 | RED: `LGroupTest.test lpos` failed at `LGroupTest.groovy:668` — `LPOS a a foo 1` answered `NilReply` instead of `ErrorReply.SYNTAX` | `195d89b5` `fix: lpos rejects unknown option names` | same command → BUILD SUCCESSFUL | `LGroup.java` 724-778 → every line covered, all branch lines fully covered, incl. the new `default` branch and the option-value skip |
-| 82.6 | RED: `LGroupTest.test lindex` failed at `LGroupTest.groovy:165` — `LINDEX a 65536` answered `ErrorReply{list size too long}` instead of nil | `a1a08492` `fix: lindex replies nil for an index beyond the list size` | same command → BUILD SUCCESSFUL | `LGroup.java` 306-335 → 17/17 lines, 4/4 branch lines fully covered |
+| 82.6 | RED: `LGroupTest.test lindex` failed at `LGroupTest.groovy:165` — `LINDEX a 65536` answered `ErrorReply{list size too long}` instead of nil | `a1a08492` `fix: lindex replies nil for an index beyond the list size` — **reverted by `56fb3137`** (product decision, see below) | same command → BUILD SUCCESSFUL | `LGroup.java` 306-335 → 17/17 lines, 4/4 branch lines fully covered |
 
 **Fix order actually used:** 82.1 → 82.2 → 82.3 → 82.4 → 82.5 → 82.6 (agent 2 suggested 82.4 before
 82.3; the two are independent, so the order difference is immaterial).
+
+**82.6 reverted by product decision.** The `RedisList.LIST_MAX_SIZE` guard stays in
+`LGroup.lindex()`, so an index ≥ 32767 keeps answering `ERR list size too long` instead of Redis
+7.2's `nil`. The revert was done with the same red → green discipline: the test was changed first
+(RED: `LGroupTest.test lindex` failed at `LGroupTest.groovy:164`, the reply was `nil` instead of
+`ErrorReply.LIST_SIZE_TO_LONG`), then the guard was restored (`56fb3137`
+`fix: keep the lindex list size limit error`). The test now pins the boundary from both sides:
+`LINDEX a 32767` → error, `LINDEX a 32766` → nil. `LGroup.java` 312-324 → all lines and all branch
+lines fully covered.
 
 **Regression run after the last fix:**
 `./gradlew :test --tests "io.velo.command.LGroupTest" --tests "io.velo.command.RGroupTest" --tests "io.velo.command.BGroupTest" --tests "io.velo.command.BlockingListTest" --tests "io.velo.command.GGroupTest"` → BUILD SUCCESSFUL.
@@ -606,6 +616,10 @@ Groovy test sources (`compileTestGroovy`). The runs above used
   although Redis accepts them (`LRANGE k 0 3000000000`, `LPOP k 99999999999999`). This is a
   codebase-wide convention (77 `Integer.parseInt` vs 30 `Long.parseLong` in `io/velo/command/*.java`),
   so it stays an observation for a future cross-module round.
+- **82.6 is accepted on purpose:** `LINDEX` answers `ERR list size too long` for an index >= 32767
+  where Redis 7.2 answers `nil` (Redis has no such limit). The product decision keeps the internal
+  `RedisList.LIST_MAX_SIZE` limit visible as a protocol error; the guard is back in `lindex()`
+  (`56fb3137`). Only indexes that cannot address any element of a Velo list are affected.
 - **`LSET` still answers `ERR list size too long`** for an index >= 32767 where Redis answers
   `ERR index out of range`. Both are errors, only the text differs — not filed as a finding.
 - **`LPOS` negative `COUNT`/`MAXLEN` still answer `ERR invalid integer`** where Redis answers
@@ -627,4 +641,4 @@ Groovy test sources (`compileTestGroovy`). The runs above used
 | 82.3 | `LASTSAVE` returns milliseconds, Redis returns seconds | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`2cf0b4e2`) |
 | 82.4 | `LPOS` accepts `RANK 0`, which Redis rejects | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`69d10da5`) |
 | 82.5 | `LPOS` silently ignores unknown option names | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`195d89b5`) |
-| 82.6 | `LINDEX` answers an error for an index >= 32767, Redis answers nil | Low | Redis protocol compatibility / edge case | CONFIRMED (reproduced) | fixed (`a1a08492`) |
+| 82.6 | `LINDEX` answers an error for an index >= 32767, Redis answers nil | Low | Redis protocol compatibility / edge case | CONFIRMED (reproduced) | won't fix — reverted (`a1a08492` → `56fb3137`), the list size limit stays a protocol error |
