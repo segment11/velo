@@ -52,6 +52,24 @@ slot-scoped runtime switches.
 `LocalPersist.initSlotsAgainAfterMultiShardLoadedOrChanged()` also applies any entries from
 `ConfForGlobal.initDynConfigItems`.
 
+### Type Limit Items
+
+The container size and member-length limits of the type layer are `DynConfig` items, so they can be
+adjusted per slot at runtime. The background is in
+[Type System Design](/home/kerry/ws/velo/doc/design/03_type_system_design.md):
+
+| Config key | Constant it writes | Default |
+|---|---|---|
+| `type_list_max_size` | `RedisList.LIST_MAX_SIZE` | 32767 |
+| `type_hash_max_size` | `RedisHashKeys.HASH_MAX_SIZE` | 4096 |
+| `type_zset_max_size` | `RedisZSet.ZSET_MAX_SIZE` | 4096 |
+| `type_set_member_max_length` | `RedisHashKeys.SET_MEMBER_MAX_LENGTH` | 255 |
+| `type_zset_member_max_length` | `RedisZSet.ZSET_MEMBER_MAX_LENGTH` | 255 |
+
+Every value is validated by `parsePositiveShort` (`DynConfig.java:207`): a positive integer that is
+at most `Short.MAX_VALUE`. The targets are `short` fields, so a ceiling can be lowered below 32767
+but never raised above the storage-format limit.
+
 ## Volume Layout
 
 Volume-to-slot mapping is initialized by

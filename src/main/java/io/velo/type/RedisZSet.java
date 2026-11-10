@@ -18,12 +18,23 @@ import java.util.TreeSet;
  */
 public class RedisZSet {
     /**
-     * Maximum zset size (4096).
-     * Encoded and compressed length should be under 4KB.
+     * Maximum number of members a sorted set can hold (4096).
+     * <p>
+     * A sorted set beyond this size is rejected with {@code ERR zset size too long}. Runtime
+     * configurable with {@code type_zset_max_size}.
+     * <p>
+     * See doc/design/03_type_system_design.md (Type Limits).
      */
     public static short ZSET_MAX_SIZE = 4096;
 
-    /** Maximum length of a zset member. */
+    /**
+     * Maximum length of a sorted set member (255).
+     * <p>
+     * A longer member is rejected with {@code ERR zset member length too long}. Runtime
+     * configurable with {@code type_zset_member_max_length}.
+     * <p>
+     * See doc/design/03_type_system_design.md (Type Limits).
+     */
     public static short ZSET_MEMBER_MAX_LENGTH = 255;
 
     /** Header length: size short + dict seq int + body length int + crc int */

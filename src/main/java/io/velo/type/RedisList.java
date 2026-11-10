@@ -15,8 +15,13 @@ import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
  */
 public class RedisList {
     /**
-     * Maximum list size (Short.MAX_VALUE).
-     * Encoded and compressed length should be under 4KB.
+     * Maximum number of elements a list can hold (Short.MAX_VALUE).
+     * <p>
+     * The element count is stored in a 16-bit header field, so 32767 is the hard ceiling of the
+     * storage format. A list that would exceed it is rejected with {@code ERR list size too long}.
+     * Runtime configurable with {@code type_list_max_size}.
+     * <p>
+     * See doc/design/03_type_system_design.md (Type Limits).
      */
     public static short LIST_MAX_SIZE = Short.MAX_VALUE;
 

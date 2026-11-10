@@ -18,13 +18,23 @@ import static io.velo.DictMap.TO_COMPRESS_MIN_DATA_LENGTH;
  */
 public class RedisHashKeys {
     /**
-     * Maximum size of the hash (4096).
-     * Encoded and compressed length should be under 4KB.
+     * Maximum number of fields a hash can hold (4096).
+     * <p>
+     * A hash beyond this size is rejected with {@code ERR hash size too long}; a set, which is
+     * stored as hash keys, with {@code ERR set size too long}. Runtime configurable with
+     * {@code type_hash_max_size}.
+     * <p>
+     * See doc/design/03_type_system_design.md (Type Limits).
      */
     public static short HASH_MAX_SIZE = 4096;
 
     /**
-     * Maximum length of a set member.
+     * Maximum length of a set member (255).
+     * <p>
+     * A longer member is rejected with {@code ERR set member length too long}. Runtime
+     * configurable with {@code type_set_member_max_length}.
+     * <p>
+     * See doc/design/03_type_system_design.md (Type Limits).
      */
     public static short SET_MEMBER_MAX_LENGTH = 255;
 

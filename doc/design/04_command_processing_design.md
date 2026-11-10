@@ -272,6 +272,42 @@ Socket state lives on `VeloUserDataInSocket` and is reached through `SocketInspe
 atomic snapshot, `isResp3` and `replyMode` may change mid-pipeline, and replies already in flight use the older value.
 See [Multithreading](/home/kerry/ws/velo/doc/design/11_multithreading_design.md).
 
+## Container Size Limit Enforcement
+
+Velo's types have hard limits that Redis does not have: a 256-byte key, a 1 MiB value, and a
+16-bit element count per container. The format-level background is in
+[Type System Design](/home/kerry/ws/velo/doc/design/03_type_system_design.md); the limits
+themselves are runtime configurable (see
+[Configuration Design](/home/kerry/ws/velo/doc/design/08_configuration_design.md)).
+
+The command layer checks a limit **before** it touches the stored value and answers a dedicated
+error instead of letting the write fail deep inside the encoder:
+
+| Command | Guard | Reply |
+|---|---|---|
+| any command | key longer than `CompressedValue.KEY_MAX_LENGTH` (256) | `ERR key too long (max length is 256)` |
+| any command | value longer than `CompressedValue.VALUE_MAX_LENGTH` (1 MiB) | `ERR value too long (max length is 1048576)` |
+| `LINDEX key index` | `index >= RedisList.LIST_MAX_SIZE` (`LGroup.java:318`) | `ERR list size too long` |
+| `LSET key index element` | `index >= RedisList.LIST_MAX_SIZE` (`LGroup.java:1031`) | `ERR list size too long` |
+| `LPUSH` / `LPUSHX` / `RPUSH` / `RPUSHX` / `LINSERT` | the list already holds `LIST_MAX_SIZE` elements (`LGroup.addToList()`, `LGroup.java:365`) | `ERR list size too long` |
+| `HSET` and the other hash writes | the hash already holds `HASH_MAX_SIZE` fields (`HGroup.java:1894` split mode, `HGroup.java:1927` HH mode) | `ERR hash size too long` |
+| `SADD` | the set already holds `HASH_MAX_SIZE` members (`SGroup.java:1183`) | `ERR set size too long` |
+| `ZADD` / `ZINCRBY` / the other zset writes | the zset already holds `ZSET_MAX_SIZE` members (`ZGroup.java:863`, `ZGroup.java:1086`, `ZGroup.java:1425`) | `ERR zset size too long` |
+| `SADD` / `SREM` / `SISMEMBER` and the other set commands | member longer than `SET_MEMBER_MAX_LENGTH` (`SGroup.java:1166` and four more) | `ERR set member length too long` |
+| `ZADD` / `ZSCORE` and the other zset commands | member longer than `ZSET_MEMBER_MAX_LENGTH` (`ZGroup.java:803` and five more) | `ERR zset member length too long` |
+| `BF.RESERVE` and the other bloom filter commands | capacity is not positive (`BGroup.java:742`, `BGroup.java:932`) | `ERR capacity must be > 0` |
+
+The list guard compares the size *before* the push, so a multi-element write that starts below the
+ceiling and crosses it (`LPUSH key a b c` on a list one element short of the ceiling) is reported
+by `RedisList.encode()` instead: the `IllegalStateException` becomes an error reply
+(`RequestHandler.java:571`) and the write is not persisted.
+
+An index at or beyond a container ceiling can never address an element of a Velo value, so it is
+reported as a limit error rather than as an ordinary out-of-range index. This differs from Redis 7.2,
+which has no such ceiling and answers `nil` / `index out of range`. The difference is intentional
+(`doc/bug_reviews/bug_82_lgroup_commands_review_round_1.md`, finding 82.6, reverted in `56fb3137`) —
+do not change these replies to the Redis behaviour without a product decision.
+
 ## Special Command Families
 
 - ACL subcommands (`ACL SETUSER`, `ACL LIST`, etc.) live in

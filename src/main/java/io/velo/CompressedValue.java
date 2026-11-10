@@ -89,10 +89,15 @@ public class CompressedValue {
 
     /**
      * Size limits.
+     * <p>
+     * A longer key is rejected with {@code ERR key too long}, a longer value with
+     * {@code ERR value too long}. Both are checked by the command layer before the value is read or
+     * written.
+     * <p>
+     * See doc/design/03_type_system_design.md (Type Limits).
      */
-    public static final short KEY_MAX_LENGTH = 256;    // Maximum allowed key size
+    public static final short KEY_MAX_LENGTH = 256;
     /** Maximum allowed compressed value size, must be less than {@code Wal.ONE_GROUP_BUFFER_SIZE}. */
-    // must < Wal.ONE_GROUP_BUFFER_SIZE
     public static final int VALUE_MAX_LENGTH = 1024 * 1024;  // Maximum compressed value size
 
     /**
