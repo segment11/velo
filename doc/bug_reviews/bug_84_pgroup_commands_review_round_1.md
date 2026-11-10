@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** discovery complete — 10 findings, none verified yet
+**Status:** round 1 fix phase complete — 10/10 CONFIRMED (reproduced) by agent 2 and fixed, 10 commits, re-review pending
 **Review branch:** `review/pgroup`
 **Reviewed commit:** `3d8ee5326ba81b7764e4829a453f9333dd444d40`
 
@@ -87,7 +87,7 @@ WRONGTYPE Key is not a valid HyperLogLog string value.
 
 **Severity:** High
 **Class:** Concurrency
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec + stack trace, see Review Feedback
 
 ### Cited files / lines
 ```java
@@ -178,7 +178,7 @@ Whatever the shape, the callback must also never leave `finalPromise` unsettled:
 
 **Severity:** Medium
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, library repro + end-to-end spec, see Review Feedback
 
 ### Cited files / lines
 ```java
@@ -253,7 +253,7 @@ serialized-bytes comparison is the pragmatic route.)
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec + live Redis 7.2.11
 
 ### Cited files / lines
 ```java
@@ -315,7 +315,7 @@ In `SGroup.subscribe()` / `UGroup.unsubscribe()`, use `isPattern ? "psubscribe" 
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec + live Redis 7.2.11
 
 ### Cited files / lines
 ```java
@@ -382,7 +382,7 @@ add a dedicated method that only looks at the `ChannelAndIsPattern(channel, /* i
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec + live Redis 7.2.11
 
 ### Cited files / lines
 ```java
@@ -440,7 +440,7 @@ The glob matching itself must reuse the same matcher (`ChannelAndIsPattern.isMat
 
 **Severity:** Medium
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec + live Redis 7.2.11
 
 ### Cited files / lines
 ```java
@@ -474,7 +474,7 @@ Implement the subcommand: count the distinct `ChannelAndIsPattern` entries with 
 
 **Severity:** Low
 **Class:** Redis protocol compatibility / error handling
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec (wire text) + live Redis 7.2.11
 
 ### Cited files / lines
 ```java
@@ -536,7 +536,7 @@ starts with `WRONGTYPE` (see `ErrorReply.READONLY` / `ErrorReply.clusterMoved()`
 
 **Severity:** Low
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec + live Redis 7.2.11
 
 ### Cited files / lines
 ```java
@@ -584,7 +584,7 @@ error, so the mistake is not reported.
 
 **Severity:** Low
 **Class:** Correctness
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec + inspection of `putIfSeqBigger`
 
 ### Cited files / lines
 ```java
@@ -627,7 +627,7 @@ Allocate a new sequence in `PGroup.persist()`, exactly as `EGroup.expire()` does
 
 **Severity:** Low
 **Class:** Redis protocol compatibility
-**Status:** `OPEN — not verified`
+**Status:** `CONFIRMED (reproduced)` — agent 2, temp Spock spec + live Redis 7.2.11
 
 ### Cited files / lines
 ```java
@@ -767,39 +767,111 @@ Checked and found **correct** (kept here so later rounds do not re-investigate t
 
 ## Review Feedback (AI agent 2, round 1)
 
-**Method:** <Spock temp spec | live Redis 7.2 differential | JDK repro | static inspection>
+**Method:** Spock temp spec (`Bug84Agent2VerifyTempSpec`, asserted the current behavior, deleted after evidence
+capture) + live Redis 7.2.11 differential (port 47999) + static inspection + ActiveJ 6.0-beta2 bytecode.
+Full evidence log: `doc/bug_reviews/logs/20261110_194025_pgroup_review_agent2_bug_84.log`.
+Verification ran at commit `9556bdf1` (parent = the reviewed commit `3d8ee532`), branch `review/pgroup`.
+Temp spec result: 8 feature methods, all green (each assertion asserts the *buggy* behavior).
 
 | Finding | Verdict | Evidence |
 |---|---|---|
-| 84.1 | | |
-| 84.2 | | |
-| 84.3 | | |
-| 84.4 | | |
-| 84.5 | | |
-| 84.6 | | |
-| 84.7 | | |
-| 84.8 | | |
-| 84.9 | | |
-| 84.10 | | |
+| 84.1 | CONFIRMED (reproduced) | Temp spec with two real OneSlots (slot 0 owned by the dst worker thread, slot 1 rebound to a second eventloop thread B), `crossRequestWorker=true`, no `byPassGetSet`. Control: cross-worker `PFCOUNT` on the same keys settles correctly (`IntegerReply 0`). `PFMERGE dst src`: worker B held busy during subscription so the source promise completes on B, then the `whenComplete` callback runs on B — log shows `java.lang.IllegalStateException: Thread id not match, thread id=53, thread id protected for safe=1` with the stack `OneSlot.get:1752 ← BaseCommand.getCv:768 ← PGroup.getHll:339 ← PGroup.lambda$pfmerge$5:537 ← AbstractPromise completion ← OneSlot.lambda$asyncCall$2:743 ← Eventloop.run` — i.e. the exact cited line inside the promise machinery on the foreign worker. `finalPromise` never settles (`settled=false` after 2.5 s) → the client hangs with no reply; worker B survives (`isAlive` asserted, eventloop kept running). |
+| 84.2 | CONFIRMED (reproduced) | Library repro with the shipped `com.github.prasanthj:hyperloglog:1.1` reproduced agent 1's numbers exactly: first unchanged-estimate-but-altered-register element `e2471`, estimate 2467, 1925/20000 unchanged-estimate events (agent 1 measured 1937 — same phenomenon, immaterial count diff). End-to-end: `pfadd hll e0..e2470` → 1; `pfadd hll e2471` → `REPLY_0` and the stored bytes equal the reference state *without* e2471 and differ from the reference *with* e2471 — the altered HLL is silently dropped. Live Redis 7.2.11: `PFADD dhll e2471` after the same batch → `1` (dup again → `0`). |
+| 84.3 | CONFIRMED (reproduced) | Temp spec: `PSUBSCRIBE news.*` pushes `["subscribe","news.*",1]`, `PUNSUBSCRIBE news.*` pushes `["unsubscribe","news.*",0]`. Live Redis 7.2.11 pushes `psubscribe` / `punsubscribe` as the first element. |
+| 84.4 | CONFIRMED (reproduced) | Temp spec with one exact subscriber of `news.tech` + one pattern subscriber of `news.*`: `PUBSUB NUMSUB news.tech` → `2`. Live Redis 7.2.11 same setup → `news.tech 1`. |
+| 84.5 | CONFIRMED (reproduced) | Same setup: `PUBSUB CHANNELS` → `[news.*, news.tech]` and `PUBSUB CHANNELS news.*` → `[news.*, news.tech]` (the pattern name itself is listed). Live Redis 7.2.11 → `[news.tech]` for both. |
+| 84.6 | CONFIRMED (reproduced) | Temp spec: `PUBSUB NUMPAT` → `NilReply.INSTANCE` (null bulk `$-1`) with one pattern subscription active. Live Redis 7.2.11 → `(integer) 1`. |
+| 84.7 | CONFIRMED (reproduced) | Temp spec: `pfadd str a` on a hash key throws bare `RuntimeException("wrong type")`; the RequestHandler generic path (`new ErrorReply(e.getMessage())`) renders the wire text `-ERR wrong type\r\n`. Live Redis 7.2.11 answers `WRONGTYPE Key is not a valid HyperLogLog string value.` for `PFADD`/`PFCOUNT`/`PFMERGE` on a string key (all three quoted). |
+| 84.8 | CONFIRMED (reproduced) | Temp spec: `pubsub numsub` → `ErrorReply.FORMAT` (arity error), `pubsub bogus` → `NilReply.INSTANCE`. Live Redis 7.2.11: `PUBSUB NUMSUB` → empty array; `PUBSUB bogus` → `ERR unknown subcommand 'bogus'. Try PUBSUB HELP.` |
+| 84.9 | CONFIRMED (reproduced) | Temp spec: cv with `expireAt` set and seq S; `PERSIST` → `REPLY_1`, stored cv has `expireAt == NO_EXPIRE` but `seq == S` — no new sequence allocated (contrast `EGroup.expire()` line 321 `cv.setSeq(snowFlake.nextId())`, inspection). Impact chain by inspection: `OneSlot.putIfSeqBigger()` lines 2058/2063 skip the incoming value when the local seq `>=` the incoming seq, so a full-sync merge of the PERSIST-rewritten value is dropped on a replica that already holds seq S. |
+| 84.10 | CONFIRMED (reproduced) | Temp spec: `pexpire k abc`/`pexpireat k abc`/`psetex k abc v` → `-ERR not integer`; `psetex k 0 v` → `-ERR invalid integer`. Live Redis 7.2.11: first three → `ERR value is not an integer or out of range`, last → `ERR invalid expire time in 'psetex' command`. All four rows of the table in the finding match. |
 
 ### Additional observations
 
+1. **84.1 refinement — three interleavings, two of them broken.** ActiveJ `AbstractPromise.map()` runs the
+   callback inline on the *subscribing* thread when the source promise is already complete, and its `next0`
+   (verified in the 6.0-beta2 bytecode) asserts `!isComplete()` while subscribing:
+   - *pending-subscribe* (the production norm with ≥ 2 foreign source slots): callback runs on the foreign
+     worker → guard throws → **no reply ever** (reproduced deterministically above);
+   - *complete-before-subscribe*: callback runs inline on the subscribing thread. In production the request is
+     dispatched to the first key's (destination's) worker, so this interleaving works by luck — the bug is
+     interleaving-dependent, which makes it nastier to observe, not less real;
+   - *complete-during-subscribe* (observed once during verification): `Promises.all` throws `AssertionError`
+     from `next0`'s assert under `-ea`; in production (assertions disabled by default) the subscriber is
+     attached to an already-complete promise and never fires — a second no-reply hang path inside the same bug.
+2. **84.1 checklist question answered:** the slot worker thread **survives** — the ActiveJ eventloop catches the
+   task exception via its exception handler (the ISE + stack appears in the log) and keeps running. Damage is
+   the silent hang + lost write, not a dead worker.
+3. **84.1 scope note:** with `slotWorkers=1` nothing is cross-worker, so the bug needs ≥ 2 slot workers; the
+   non-cross path of `pfmerge()` is unaffected (verified green in the existing `PGroupTest`).
+4. **84.2 note:** the reviewer's HLL estimate (`2467` for e0..e2470) and Redis's own (`2453`) differ because the
+   two implementations approximate differently; that is expected and *not* the bug — the bug is the reply
+   semantics (register-altered vs estimate-moved) and the dropped write, both reproduced.
+5. **84.9 note:** `Mock.prepareCompressedValueList` seeds seq=0, so the spec proves "seq unchanged" with 0; a
+   real write path always carries a snowflake seq, and the reuse is what matters (inspection + spec).
+6. **Non-findings spot-checked live:** `PFADD key` key-only → 1 then 0; `PFMERGE` on a string destination →
+   WRONGTYPE with the destination untouched; `PFMERGE` preserves the destination TTL (ttl 100 before and
+   after). All match the report's non-findings list.
+
 ### Recommended fix order (for the fix agent)
+
+1. **84.1** (High) — move the destination read+merge+write into the destination slot's own task and make the
+   callback exception-safe so `finalPromise` is always settled; one bug one commit.
+2. **84.2** (Medium) — detect the change on the serialized register state, persist and reply 1 when altered.
+3. **84.3, 84.4, 84.5, 84.6** (Medium) — pubsub compatibility cluster; 84.6 is the smallest (implement NUMPAT),
+   84.4/84.5 need an exact-channel count/list helper on `SocketInspector`, 84.3 needs the keyword derived from
+   `isPattern` in `SGroup.subscribe()`/`UGroup.unsubscribe()`.
+4. **84.7, 84.8** (Low) — typed `TypeMismatchException` + WRONGTYPE text; numsub empty array + unknown
+   subcommand error.
+5. **84.9** (Low) — `cv.setSeq(snowFlake.nextId())` in `PGroup.persist()`.
+6. **84.10** (Low, cross-module) — the fix lives in `EGroup.expire()` / `SGroup.set()` shared with the
+   EXPIRE/EXPIREAT/SET commands (bug 75 / string-module territory): coordinate or split into a cross-module
+   follow-up so the shared error texts change once, deliberately.
+
+## Response (AI agent 1, round 1)
+
+Stage 3 was skipped on the user's instruction (all ten findings were confirmed by agent 2, no disagreement to
+express), the fix phase started directly.
 
 ## Fix Log (AI agent 1, round 1 fix phase)
 
+Every bug was fixed with the TDD cycle of `doc/write_better_test_cases_for_ai_agents.md`: the regression test was
+added first and watched failing for the expected reason, then the minimal production change was made, then the
+focused test was re-run green, then the JaCoCo report of the touched class was inspected. One bug = one commit.
+
+The permanent regression tests live in `src/test/groovy/io/velo/command/PGroupTest.groovy` (the new cases were added
+to the existing per-command methods: `test pfadd`, `test pfcount and pfmerge`, `test pfmerge destkey-only`,
+`test persist`, `test pexpire`, `test pexpireat`, `test pubsub`, plus the new `test psetex`, `test psubscribe`,
+`test punsubscribe` methods).
+
 | Bug | Failing test evidence | Fix commit | Focused test | JaCoCo |
 |---|---|---|---|---|
-| 84.1 | | | | |
-| 84.2 | | | | |
-| 84.3 | | | | |
-| 84.4 | | | | |
-| 84.5 | | | | |
-| 84.6 | | | | |
-| 84.7 | | | | |
-| 84.8 | | | | |
-| 84.9 | | | | |
-| 84.10 | | | | |
+| 84.1 | RED `PGroupTest.'test pfcount and pfmerge'`: `recordingGetSet.putThreadId[dstKey] == dstOwnerThreadId.get()` → **false** (`putThreadId=[pfmerge_key_3:1]` vs the destination owner `54`) — the destination key was written on the *source* slot thread (the test worker, id 1) instead of the destination slot owner (id 54) | `8870d553` `fix: pfmerge cross worker writes the destination key on its own slot thread` | `./gradlew :test --tests "io.velo.command.PGroupTest"` → 21 tests, 0 failures | `PGroup.java` 530-566 (the aggregation + the new destination slot task): **covered**; the two defensive `catch` branches (557-559, 563-565) stay uncovered |
+| 84.2 | RED `PGroupTest.'test pfadd'`: `oneMoreReply == IntegerReply.REPLY_1` → **false** (`REPLY_0`); the count assertion `2467` passed first, so the scenario was the intended one (the register was altered, the estimate was not) | `21a91799` `fix: pfadd detects the hll register change, not the estimated cardinality` | same focused run → green | `PGroup.java` 314-435 (`serializeHll`, `saveHllBytes`, `getHllWithBytes`, the new `isChanged` computation 418, the save 420-428): **covered**, all 4 branches of 418 covered; only the unreachable `IOException` branch of `serializeHll` (415-417) is uncovered |
+| 84.3 | RED `PGroupTest.'test psubscribe'` / `'test punsubscribe'`: the first element of the confirmation was `subscribe` / `unsubscribe` (`[115,117,98,115,...]`) instead of `psubscribe` / `punsubscribe` | `1383e019` `fix: psubscribe and punsubscribe reply with the redis confirmation keyword` | `:test --tests "io.velo.command.PGroupTest" --tests "io.velo.command.SGroupTest" --tests "io.velo.command.UGroupTest"` → green | `SGroup.java:2295` and `UGroup.java:81`: **both branches covered** (the pattern and the plain keyword) |
+| 84.4 | RED `PGroupTest.'test pubsub'`: `PUBSUB NUMSUB test_channel` → **2** instead of 1 (the pattern subscriber `test_*` was counted) | `090a0a48` `fix: pubsub numsub excludes the pattern subscribers` | `:test --tests "io.velo.command.PGroupTest"` → green | `PGroup.java:669` and `SocketInspector.java:616-617` (`exactSubscribeSocketCount`): **covered**, both branches (a channel with and without a subscriber) |
+| 84.5 | RED `PGroupTest.'test pubsub'`: `PUBSUB CHANNELS` → **2** replies (`test_channel` **and** the pattern `test_*`), `PUBSUB CHANNELS test_*` → 2 replies as well | `8a233333` `fix: pubsub channels lists only the channels, not the pattern subscriptions` | same focused run → green | `PGroup.java:640-651` and `SocketInspector.java:626-640` (`subscribeChannels` + the new `isPattern()` accessor): **covered**, all 4 branches of the glob match |
+| 84.6 | RED `PGroupTest.'test pubsub'`: `PUBSUB NUMPAT` → `NilReply.INSTANCE` (a null bulk reply) instead of an integer | `73170e07` `fix: pubsub numpat returns the number of the subscribed patterns` | same focused run → green | `PGroup.java:693` and `SocketInspector.java:623-629` (`subscribePatternCount`): **covered**, both branches |
+| 84.7 | RED `PGroupTest.'test pfadd'` / `'test pfmerge destkey-only'`: the `RuntimeException("wrong type")` escaped the command (`java.lang.RuntimeException: wrong type at io.velo.command.PGroup.getHllWithBytes(PGroup.java:361)`) instead of an error reply | `900ed778` `fix: pf commands answer the redis WRONGTYPE error for a wrong type key` | `:test --tests "io.velo.command.PGroupTest"` → green, and the whole command module (`--tests "io.velo.command.*"`) → green | `PGroup.java` 223-224 (the `TypeMismatchException` catch in `handle()`), 354-362 (`getHllWithBytes`), 447-470 (`readHllList`), the async wrong-type branches: **covered**; the `e != null` promise-error branches stay uncovered (pre-existing) |
+| 84.8 | RED `PGroupTest.'test pubsub'`: `PUBSUB NUMSUB` (no channel) → `ErrorReply{message='format'}` instead of an empty list; `PUBSUB xxx` → `NilReply.INSTANCE` instead of an error | `73775785` `fix: pubsub numsub without a channel returns an empty list, unknown subcommand is an error` | same focused run → green | `PGroup.java:692-715`: **covered**, all 5 branches |
+| 84.9 | RED `PGroupTest.'test persist'`: `bufOrCv.cv().seq != seqBeforePersist` → **false** (`seq=0` before and after, i.e. the write reused the old sequence) | `6cfd1409` `fix: persist allocates a new sequence number for the write` | same focused run → green | `PGroup.java:306-328`: **covered**, all 3 branches |
+| 84.10 | RED `PGroupTest.'test pexpire'` / `'test pexpireat'` / `'test psetex'`: the message was `not integer` / `invalid integer` instead of `value is not an integer or out of range` / `invalid expire time in 'psetex' command` | `53a62389` `fix: pexpire, pexpireat and psetex answer the redis error texts` | `:test --tests "io.velo.command.PGroupTest" --tests "io.velo.command.SGroupTest" --tests "io.velo.command.EGroupTest"` → 67 tests green, and the whole command module → green | `EGroup.java:263-275` and `SGroup.java:893-905`: **covered**, all branches |
+
+### Cross-module impact of the 84.10 fix (declared)
+
+The root cause of 84.10 is shared: `EGroup.expire()` (used by `EXPIRE`, `EXPIREAT`, `PEXPIRE`, `PEXPIREAT`) and
+`SGroup.set()` (used by `SET` and by `PSETEX` through `PGroup.psetex()`). The fix was applied in the shared code, so
+the error texts of the commands outside the `P` group changed as well — they now match Redis 7.2 exactly:
+
+| command | before | after (= Redis 7.2) |
+|---|---|---|
+| `EXPIRE` / `EXPIREAT` / `PEXPIRE` / `PEXPIREAT` `<not a number>` | `-ERR not integer` | `-ERR value is not an integer or out of range` |
+| `SET ... EX\|PX\|EXAT\|PXAT <not a number>` | `-ERR not integer` | `-ERR value is not an integer or out of range` |
+| `SET ... EX\|PX\|EXAT\|PXAT <not positive>` | `-ERR invalid integer` | `-ERR invalid expire time in 'set' command` |
+| `PSETEX <not positive>` | `-ERR invalid integer` | `-ERR invalid expire time in 'psetex' command` |
+
+The affected existing assertions were updated: `EGroupTest.groovy` (the `expire` case) and `SGroupTest.groovy`
+(the seven `set` option cases of `'test set'`). No other module behaviour changed.
 
 ## Re-review (AI agent 2)
 
@@ -807,17 +879,42 @@ Checked and found **correct** (kept here so later rounds do not re-investigate t
 
 ## Residual Risk
 
+1. **The ActiveJ promise race is not closed by 84.1 (velo-wide).** Agent 2's observation: a listener that is
+   registered on a promise which completes concurrently can be lost (`AbstractPromise.next0()` only asserts
+   `!isComplete()`, and without `-ea` the listener is silently dropped → the callback never fires → the reply is
+   never sent). The 84.1 fix removes the *PGroup-specific* trigger (the destination slot was read and written from a
+   foreign worker thread, which raised the `IllegalStateException` that left `finalPromise` unsettled), but the
+   underlying `Promises.all(...).whenComplete(...)` pattern is exposed to the same race in **every** cross-worker
+   command group (`EGroup.exists`, `MGroup`, `GGroup`, `ZGroup`, `SGroup`, …). A follow-up round on the shared
+   promise usage is recommended; it is out of the scope of the `P` group.
+2. **`PUBSUB CHANNELS` still lists a channel whose last subscriber left.** `SocketInspector.unsubscribe()` removes the
+   socket but keeps the (now empty) map entry, so the channel stays in the registry. Redis only lists the channels with
+   at least one subscriber. The 84.5 fix removed the pattern entries from the answer but did not touch the empty
+   entries — the fix is in `SocketInspector`, shared with the publish path.
+3. **The glob matching is Java's, not Redis'.** `SocketInspector.ChannelAndIsPattern` builds a
+   `java.nio.file.PathMatcher` with the `glob:` syntax, while Redis uses its own `stringmatchlen()`: a Java glob `*`
+   does not cross a `/` and the `\` escape and the `[^...]` class differ. The `PSUBSCRIBE` matching and the
+   `PUBSUB CHANNELS <pattern>` filter share that matcher, so the divergence is pre-existing and out of the scope of
+   the `P` group findings.
+4. **PFADD now serializes the HLL on every call.** The 84.2 fix compares the serialized state instead of the
+   estimate, so a PFADD pays one HLL serialization (8 KB for a dense HLL) even when nothing changed. Redis compares
+   the sparse register set instead. The cost is O(m) per PFADD, in line with the compression cost that Velo already
+   pays for every saved HLL.
+5. **The HLL cardinality estimate still differs from Redis.** Velo uses `com.github.prasanthj:hyperloglog` and Redis
+   uses its own implementation, so `PFCOUNT` returns a slightly different number for the same elements
+   (2467 vs 2453 for the 2471 elements of the 84.2 scenario). This is expected and is not a bug.
+
 ## Summary
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 84.1 | PFMERGE across workers touches the destination slot from a foreign thread and never answers the client | High | Concurrency | | |
-| 84.2 | PFADD uses the estimated cardinality as the change detector → the altered HLL is dropped | Medium | Correctness | | |
-| 84.3 | PSUBSCRIBE / PUNSUBSCRIBE answer with "subscribe" / "unsubscribe" | Medium | Redis protocol compatibility | | |
-| 84.4 | PUBSUB NUMSUB counts the pattern subscribers | Medium | Redis protocol compatibility | | |
-| 84.5 | PUBSUB CHANNELS lists the pattern subscriptions | Medium | Redis protocol compatibility | | |
-| 84.6 | PUBSUB NUMPAT answers a null bulk reply | Medium | Redis protocol compatibility | | |
-| 84.7 | The wrong-type path throws a bare RuntimeException → `-ERR wrong type` | Low | Redis protocol compatibility | | |
-| 84.8 | `PUBSUB <unknown>` / `PUBSUB NUMSUB` (no channel) diverge | Low | Redis protocol compatibility | | |
-| 84.9 | PERSIST writes the value back with the old sequence number | Low | Correctness | | |
-| 84.10 | The PEXPIRE / PEXPIREAT / PSETEX error texts diverge from Redis | Low | Redis protocol compatibility | | |
+| 84.1 | PFMERGE across workers touches the destination slot from a foreign thread and never answers the client | High | Concurrency | CONFIRMED (reproduced) | fixed |
+| 84.2 | PFADD uses the estimated cardinality as the change detector → the altered HLL is dropped | Medium | Correctness | CONFIRMED (reproduced) | fixed |
+| 84.3 | PSUBSCRIBE / PUNSUBSCRIBE answer with "subscribe" / "unsubscribe" | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed |
+| 84.4 | PUBSUB NUMSUB counts the pattern subscribers | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed |
+| 84.5 | PUBSUB CHANNELS lists the pattern subscriptions | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed |
+| 84.6 | PUBSUB NUMPAT answers a null bulk reply | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed |
+| 84.7 | The wrong-type path throws a bare RuntimeException → `-ERR wrong type` | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed |
+| 84.8 | `PUBSUB <unknown>` / `PUBSUB NUMSUB` (no channel) diverge | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed |
+| 84.9 | PERSIST writes the value back with the old sequence number | Low | Correctness | CONFIRMED (reproduced) | fixed |
+| 84.10 | The PEXPIRE / PEXPIREAT / PSETEX error texts diverge from Redis | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed |
