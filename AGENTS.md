@@ -225,7 +225,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 
 1. Run relevant tests: `./gradlew test --tests "*YourTest*"`
 2. Run full test suite if changes are significant
-3. Check code coverage with JaCoCo report, if coverage is below 80%, show warnings and consider adding more tests
+3. Check the line coverage of the class you changed with `python3 scripts/jacoco_cover.py <FullyQualifiedClassName> <startLine> <endLine>`. Do NOT judge coverage by the aggregate Total row in `build/reports/jacocoHtml/index.html` — that number only reflects whatever test class ran last, so it is not a property of the codebase. If the changed class is below 80% line coverage, show warnings and consider adding more tests
 4. After running relevant tests, inspect the JaCoCo HTML report under `build/reports/jacocoHtml/` and confirm the changed code lines or branches were actually executed; a passing test alone is not enough
 5. Test Redis protocol compatibility if applicable
 6. Verify performance with JMH benchmarks if relevant
