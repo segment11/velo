@@ -1,0 +1,23 @@
+=== Bug 82 agent-2 re-review: independent RED/GREEN per commit (worktree at each parent, fix-commit test staged) ===
+82.1 1957a4e5 RED @7d8ce05a: test ltrim | readList(inMemoryGetSet,'a') == ['0','1','2'] -> null (map empty, LTRIM a 0 -1 deleted the list) | GREEN: tests=41 failures=0 (bytecode recompiled post-checkout verified)
+82.2 1f0e2dad RED @1957a4e5: test ltrim | reply == OKReply.INSTANCE -> ErrorReply{invalid integer} (LTRIM a -100 -90) | GREEN: tests=41 failures=0
+82.3 2cf0b4e2 RED @1f0e2dad: test handle - lastsave | getInteger() == 1_700_000_000 -> 1_700_000_000_123 (raw ms) | GREEN: tests=41 failures=0
+82.4 69d10da5 RED @2cf0b4e2: test lpos | reply instanceof ErrorReply -> NilReply (LPOS a a rank 0) | GREEN: tests=41 failures=0
+82.5 195d89b5 RED @69d10da5: test lpos | reply == ErrorReply.SYNTAX -> NilReply (LPOS a a foo 1) | GREEN: tests=41 failures=0
+82.6 a1a08492 RED @195d89b5: test lindex | reply == NilReply.INSTANCE -> ErrorReply{list size too long} | GREEN: tests=41 failures=0
+revert 56fb3137 RED @f56c3d71 (true parent; f3609dfb is AFTER the revert): test lindex | reply == ErrorReply.LIST_SIZE_TO_LONG -> NilReply | GREEN: tests=41 failures=0
+
+=== Final-state regression at HEAD e76f976c ===
+LGroupTest: 41/41, RGroupTest: 28/28, BGroupTest: 46/46, BlockingListTest: 3/3, GGroupTest: 30/30
+
+=== JaCoCo at HEAD (scripts/jacoco_cover.py io.velo.command.LGroup) ===
+lastsave 232-236: 2/2 lines, branch lines 1/1 fully covered (line 234 /1000)
+lindex 316-340: 16/16 lines covered, line 318 guard both branches covered
+lpos 726-775: 33/33 lines, 7/7 branch lines fully covered (737 RANK-zero, 770 default, value skips)
+ltrim 1080-1105: 14/14 lines, 4/4 branch lines fully covered (1089 end=size+end, 1092/1099 removeDelay)
+
+=== Fixed-behavior temp spec Bug82ReReviewSpec at HEAD: 8/8 PASS ===
+82.1 keeps range; 82.2 OK+deleted x3; 82.3 seconds; 82.4 RANK-zero error; 82.5 SYNTAX + value-skip; 82.6 guard stays (32767 err, 32766 nil)
+
+=== e76f976c audit: production-file changes are JavaDoc/comment-only, no behavior change ===
+Note: intermittent gradle-daemon heap death on first run after each checkout (known bug-73 follow-up); every RED/GREEN above re-run to fresh XML before recording.

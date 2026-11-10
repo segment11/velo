@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2 (independent verification in the same session, oracle = live Redis 7.2.11)
-**Status:** fix phase complete — 6/6 findings CONFIRMED (reproduced) by agent 2; 5 fixed in 5 commits (`1957a4e5`…`195d89b5`), 82.6 reverted by product decision (`a1a08492` → `56fb3137`); re-review pending
+**Status:** round 1 closed — 6/6 findings CONFIRMED (reproduced) by agent 2; 5 fixed in 5 commits (`1957a4e5`…`195d89b5`), 82.6 reverted by product decision (`a1a08492` → `56fb3137`); **re-review ACCEPTED** (agent 2 re-derived RED/GREEN per commit in an isolated worktree, JaCoCo confirmed on all changed lines, regression 148/148 green)
 **Review branch:** `review/lgroup`
 **Reviewed commit:** `7d8ce05aba8e59e6a2b4647242813b787c4522be` (main)
 
@@ -608,6 +608,45 @@ Groovy test sources (`compileTestGroovy`). The runs above used
 "gradle daemon heap" follow-up of bug 73, not a defect of these fixes.
 
 ## Re-review (AI agent 2)
+
+**Verdict: ACCEPTED — 5/5 fixes verified (RED→commit→GREEN→JaCoCo independently reproduced); 82.6
+revert (product decision) verified in both directions.**
+
+**Method:** isolated worktree; for each fix commit its test file was staged onto the **parent**
+commit and the focused test run — RED re-derived with the exact logged failure message — then the
+fix commit itself checked out and run green (with bytecode-freshness verified after the transient
+daemon failures). At HEAD `e76f976c`: full regression suite, JaCoCo on all changed `LGroup` regions,
+and a temp fixed-behavior spec (8 cases, deleted after capture). Transcript:
+`doc/bug_reviews/logs/20261110_131735_lgroup_rereview_agent2_bug_82.log`.
+
+| Bug | Commit | RED re-derived at parent | GREEN | JaCoCo at HEAD |
+|---|---|---|---|---|
+| 82.1 | `1957a4e5` | ✓ `readList('a') == ['0','1','2']` → `null`, map empty (`LTRIM a 0 -1` deleted the list) | ✓ 41/41 | ✓ `ltrim` 1080-1105: 14/14 lines, 4/4 branch lines (incl. 1089 `end = size + end`) |
+| 82.2 | `1f0e2dad` | ✓ `reply == OKReply.INSTANCE` → `ErrorReply{invalid integer}` | ✓ 41/41 | ✓ both `removeDelay` empty-range paths (1092, 1099) fully covered |
+| 82.3 | `2cf0b4e2` | ✓ reply `1_700_000_000_123` (raw ms) ≠ expected `1_700_000_000` s | ✓ 41/41 | ✓ line 234 `/1000` covered, both branches of 232 |
+| 82.4 | `69d10da5` | ✓ `LPOS a a rank 0` → `NilReply`, not `ErrorReply` | ✓ 41/41 | ✓ line 737 `LPOS_RANK_ZERO` covered |
+| 82.5 | `195d89b5` | ✓ `LPOS a a foo 1` → `NilReply`, not `SYNTAX` | ✓ 41/41 | ✓ `lpos` 726-775: 33/33 lines, 7/7 branch lines (incl. 770 `default` + value skips) |
+| 82.6 | `a1a08492` then reverted by `56fb3137` | ✓ forward RED (error vs nil) at `195d89b5`; ✓ revert RED (nil vs error) at the revert's true parent `f56c3d71` | ✓ both green 41/41 | ✓ `lindex` 316-340: 16/16 lines, line 318 guard both branches (32767 err / 32766 nil) |
+
+Notes from re-review:
+
+- **Commit-graph correction**: `f3609dfb` (docs) is **after** `56fb3137` (chain
+  `a1a08492 → f56c3d71 → 56fb3137 → f3609dfb → e76f976c`). The revert's parent is `f56c3d71`; the
+  revert RED was re-derived against that commit, not `f3609dfb`.
+- **Fixed-behavior spec at HEAD (8/8 pass)**: `LTRIM 0 -1`/`1 -1` keep the range; `LTRIM 3 3`/`3 10`/
+  `-100 -90` → OK + key deleted (matches live Redis 7.2.11 differential from round-1 verification);
+  lastsave seconds; RANK-zero error; unknown option → `ERR syntax error`; `COUNT 2 RANK 1` value
+  skipping intact (`[1, 2]`); 82.6 guard kept (`32767` → error, `32766` → nil).
+- **Regression at HEAD**: `LGroupTest` 41/41, `RGroupTest` 28/28, `BGroupTest` 46/46,
+  `BlockingListTest` 3/3, `GGroupTest` 30/30.
+- **`e76f976c` audit**: the production-file changes (`CompressedValue`, `RedisList`,
+  `RedisHashKeys`, `RedisZSet`) are JavaDoc/comment-only; no behavior change.
+- **82.6 disposition (product decision, confirmed by the repo owner)**: the `LIST_MAX_SIZE` guard is
+  a design guard, the `ERR list size too long` reply stays. Recording as `won't fix` with the
+  boundary pinned from both sides.
+- The intermittent gradle-daemon heap death on the first run after each checkout was hit repeatedly;
+  every recorded result above is from a re-run with fresh XML (known bug-73 follow-up, not a defect
+  of these fixes).
 
 ## Residual Risk
 
