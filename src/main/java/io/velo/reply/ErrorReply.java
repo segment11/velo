@@ -92,7 +92,7 @@ public class ErrorReply implements Reply {
     public static final ErrorReply RANGE_OUT_OF_INDEX = new ErrorReply("range out of index");
 
     /** Error reply for key does not exist. */
-    public static final ErrorReply NO_SUCH_KEY = new ErrorReply("not such key");
+    public static final ErrorReply NO_SUCH_KEY = new ErrorReply("no such key");
 
     /** Error reply for wrong type. */
     public static final ErrorReply WRONG_TYPE = new ErrorReply("wrong type");
@@ -160,6 +160,9 @@ public class ErrorReply implements Reply {
 
     /** Error reply for target key busy. */
     public static final ErrorReply TARGET_KEY_BUSY = new ErrorReply("target key name is busy");
+
+    /** Error reply for the redis BUSYKEY error, the reply is BUSYKEY prefixed. */
+    public static final ErrorReply BUSYKEY = new ErrorReply("BUSYKEY Target key name already exists.", true);
 
     /**
      * @param toClientSlot the target slot index

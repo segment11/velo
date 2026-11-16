@@ -401,6 +401,12 @@ class RGroupTest extends Specification {
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
+        when: 'bug 85.11: the no such key error is the redis one'
+        def noSuchKeyReply = rGroup.execute('rename missing_key other_key')
+        then:
+        noSuchKeyReply == ErrorReply.NO_SUCH_KEY
+        (noSuchKeyReply as ErrorReply).getMessage() == 'no such key'
+
         when: 'bug 85.3: a cross worker rename whose destination write fails must answer the client'
         List<SlotWorker> workers = [startWorkerThread('velo-rgroup-rename-w1'),
                                     startWorkerThread('velo-rgroup-rename-w2')]
@@ -589,12 +595,12 @@ class RGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = rGroup.execute('restore a 1000 bbb')
         then:
-        reply == ErrorReply.TARGET_KEY_BUSY
+        reply == ErrorReply.BUSYKEY
 
         when:
         reply = rGroup.execute('restore a 1000 bbb absttl')
         then:
-        reply == ErrorReply.TARGET_KEY_BUSY
+        reply == ErrorReply.BUSYKEY
 
         when:
         reply = rGroup.execute('restore a 0 bbb replace absttl idletime 0 freq -1')
@@ -645,6 +651,17 @@ class RGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        when: 'bug 85.11: the busy key error is the redis one'
+        inMemoryGetSet.remove(slot, 'busy_key')
+        inMemoryGetSet.put(slot, 'busy_key', 0, Mock.prepareCompressedValueList(1)[0])
+        def busyKeyReply = rGroup.execute('restore busy_key 0 bbb') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        busyKeyReply instanceof ErrorReply
+        (busyKeyReply as ErrorReply).getMessage() == 'BUSYKEY Target key name already exists.'
+        new String((busyKeyReply as ErrorReply).buffer().array()) == '-BUSYKEY Target key name already exists.\r\n'
+
         when: 'bug 85.6: a non numeric ttl is rejected'
         reply = rGroup.execute('restore ttl_not_int abc bbb') { data ->
             data[3] = RDBParser.dumpString('values'.bytes)
@@ -673,7 +690,7 @@ class RGroupTest extends Specification {
             data[3] = RDBParser.dumpString('values'.bytes)
         }
         then:
-        reply == ErrorReply.TARGET_KEY_BUSY
+        reply == ErrorReply.BUSYKEY
 
         when: 'bug 85.5: a too long key is rejected'
         reply = rGroup.execute('restore >key 0 bbb') { data ->

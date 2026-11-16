@@ -525,7 +525,7 @@ public class RGroup extends BaseCommand {
         if (!replace) {
             // only the existence of the key matters here, do not read the value
             if (exists(slotWithKeyHash)) {
-                return ErrorReply.TARGET_KEY_BUSY;
+                return ErrorReply.BUSYKEY;
             }
         }
 
