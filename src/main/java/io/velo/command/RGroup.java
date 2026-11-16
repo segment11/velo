@@ -387,6 +387,9 @@ public class RGroup extends BaseCommand {
 
         // refer kvrocks: cmd_server.cc redis::CommandRestore
         var keyBytes = data[1];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
         var ttlBytes = data[2];
         var serializedValue = data[3];
 

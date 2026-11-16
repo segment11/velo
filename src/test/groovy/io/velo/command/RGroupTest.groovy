@@ -535,6 +535,13 @@ class RGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        when: 'bug 85.5: a too long key is rejected'
+        reply = rGroup.execute('restore >key 0 bbb') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
         when: 'bug 85.4: a restored list keeps the ttl'
         reply = rGroup.execute('restore list_ttl 100000 bbb') { data ->
             def rlTtl = new RedisList()
