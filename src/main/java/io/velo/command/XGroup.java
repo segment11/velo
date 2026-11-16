@@ -116,6 +116,11 @@ public class XGroup extends BaseCommand {
      */
     @Override
     public Reply handle() {
+        if (!X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH.equals(cmd)) {
+            // the stream commands are not implemented, redis answers an unknown command error
+            return ErrorReply.UNKNOWN_COMMAND(cmd);
+        }
+
         if (data.length < 2) {
             return NilReply.INSTANCE;
         }

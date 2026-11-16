@@ -3,6 +3,8 @@ package io.velo.reply;
 import io.activej.bytebuf.ByteBuf;
 import io.velo.CompressedValue;
 
+import java.util.Objects;
+
 /**
  * Error reply with server error messages.
  */
@@ -201,6 +203,23 @@ public class ErrorReply implements Reply {
         return "ErrorReply{" +
                 "message='" + message + '\'' +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        var that = (ErrorReply) obj;
+        return rawErrorPrefix == that.rawErrorPrefix && Objects.equals(message, that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(message, rawErrorPrefix);
     }
 
     @Override

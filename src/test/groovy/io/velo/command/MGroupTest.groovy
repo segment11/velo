@@ -94,7 +94,7 @@ class MGroupTest extends Specification {
         'mset'   | ErrorReply.FORMAT
         'msetnx' | ErrorReply.FORMAT
         'move'   | ErrorReply.NOT_SUPPORT
-        'zzz'    | NilReply.INSTANCE
+        'zzz'    | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test handle - manage'() {

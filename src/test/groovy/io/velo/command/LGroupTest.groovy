@@ -92,7 +92,7 @@ class LGroupTest extends Specification {
         'lset'     | ErrorReply.FORMAT
         'ltrim'    | ErrorReply.FORMAT
         'load-rdb' | ErrorReply.FORMAT
-        'zzz'      | NilReply.INSTANCE
+        'zzz'      | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test handle - lastsave'() {

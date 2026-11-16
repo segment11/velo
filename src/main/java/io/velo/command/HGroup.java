@@ -421,7 +421,8 @@ public class HGroup extends BaseCommand {
             return hvals();
         }
 
-        return NilReply.INSTANCE;
+        // the command is not implemented, redis answers an unknown command error
+        return ErrorReply.UNKNOWN_COMMAND(cmd);
     }
 
     /**

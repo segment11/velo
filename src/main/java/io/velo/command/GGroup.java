@@ -227,7 +227,8 @@ public class GGroup extends BaseCommand {
             return getset();
         }
 
-        return NilReply.INSTANCE;
+        // the command is not implemented, redis answers an unknown command error
+        return ErrorReply.UNKNOWN_COMMAND(cmd);
     }
 
     private Reply getbit() {
@@ -1048,11 +1049,9 @@ public class GGroup extends BaseCommand {
 
                 // handle() runs on the src key's slot worker, dispatch the dst write to the
                 // dst slot eventloop so it stays on the owning slot thread
-                var p = dstOneSlot.asyncRun(() -> {
+                dstOneSlot.asyncRun(() -> {
                     saveRedisGeo(dstRg, dstS);
-                });
-
-                p.whenComplete((v, t) -> {
+                }).whenComplete((v, t) -> {
                     if (t != null) {
                         finalPromise.setException(t);
                     } else {

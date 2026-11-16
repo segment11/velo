@@ -251,7 +251,7 @@ zunionstore
         replyList.every { it == ErrorReply.FORMAT }
 
         expect:
-        zGroup.execute('zzz') == NilReply.INSTANCE
+        zGroup.execute('zzz') == ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     private RedisZSet fromMem(InMemoryGetSet inMemoryGetSet, String key) {

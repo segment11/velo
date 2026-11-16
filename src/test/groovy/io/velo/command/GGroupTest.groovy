@@ -69,7 +69,7 @@ class GGroupTest extends Specification {
         'getrange' | ErrorReply.FORMAT
         'getset'   | ErrorReply.FORMAT
         'geoadd'   | ErrorReply.FORMAT
-        'zzz'      | NilReply.INSTANCE
+        'zzz'      | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test handle - georadius not support'() {

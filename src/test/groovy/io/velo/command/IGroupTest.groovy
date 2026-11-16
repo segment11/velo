@@ -66,7 +66,7 @@ class IGroupTest extends Specification {
         'incrbyfloat' | ErrorReply.FORMAT
         'ingest'      | ErrorReply.FORMAT
         'ingest_sst'  | ErrorReply.FORMAT
-        'zzz'         | NilReply.INSTANCE
+        'zzz'         | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test handle - incrby incrbyfloat info'() {

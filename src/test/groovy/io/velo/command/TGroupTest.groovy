@@ -53,7 +53,7 @@ class TGroupTest extends Specification {
         input  | expected
         'ttl'  | ErrorReply.FORMAT
         'type' | ErrorReply.FORMAT
-        'zzz'  | NilReply.INSTANCE
+        'zzz'  | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test handle - time'() {

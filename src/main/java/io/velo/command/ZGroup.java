@@ -698,7 +698,8 @@ public class ZGroup extends BaseCommand {
             return zdiffstore(false, true);
         }
 
-        return NilReply.INSTANCE;
+        // the command is not implemented, redis answers an unknown command error
+        return ErrorReply.UNKNOWN_COMMAND(cmd);
     }
 
     private RedisZSet getRedisZSet(SlotWithKeyHash slotWithKeyHash) {

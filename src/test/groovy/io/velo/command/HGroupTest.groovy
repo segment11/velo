@@ -105,7 +105,7 @@ httl
 
         expect:
         hGroup.execute('hello 4') instanceof ErrorReply
-        hGroup.execute('zzz') == NilReply.INSTANCE
+        hGroup.execute('zzz') == ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     final short slot = 0

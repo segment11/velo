@@ -56,7 +56,7 @@ class CGroupTest extends Specification {
         'clusterx' | ErrorReply.FORMAT
         'config'   | ErrorReply.FORMAT
         'copy'     | ErrorReply.FORMAT
-        'zzz'      | NilReply.INSTANCE
+        'zzz'      | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test client'() {

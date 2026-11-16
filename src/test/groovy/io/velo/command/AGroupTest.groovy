@@ -73,7 +73,7 @@ class AGroupTest extends Specification {
         input    | expected
         'append' | ErrorReply.FORMAT
         'acl'    | ErrorReply.FORMAT
-        'zzz'    | NilReply.INSTANCE
+        'zzz'    | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test append'() {

@@ -56,12 +56,12 @@ class FGroupTest extends Specification {
         reply instanceof ErrorReply
         (reply as ErrorReply).message == 'No failover in progress.'
 
-        when: 'unknown command falls through to nil'
+        when: 'an unknown command answers an unknown command error'
         def fGroup3 = new FGroup('zzz', data2, null)
         fGroup3.from(BaseCommand.mockAGroup())
         reply = fGroup3.handle()
         then:
-        reply == NilReply.INSTANCE
+        reply == ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     final short slot = 0

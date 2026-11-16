@@ -77,7 +77,7 @@ class DGroupTest extends Specification {
         'decrby'      | ErrorReply.FORMAT
         'decrbyfloat' | ErrorReply.FORMAT
         'dbsize a'    | ErrorReply.FORMAT
-        'zzz'         | NilReply.INSTANCE
+        'zzz'         | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test handle - decr decrby decrbyfloat'() {

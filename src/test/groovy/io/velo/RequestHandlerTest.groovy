@@ -81,11 +81,12 @@ class RequestHandlerTest extends Specification {
 
         when:
         // a non-error reply does not increment the counter
-        def pingData = new byte[1][]
-        pingData[0] = 'ping'.bytes
-        def pingReply = requestHandler.handle(new Request(pingData, false, false), socket)
+        def echoData = new byte[2][]
+        echoData[0] = 'echo'.bytes
+        echoData[1] = 'hello'.bytes
+        def echoReply = requestHandler.handle(new Request(echoData, false, false), socket)
         then:
-        !(pingReply instanceof ErrorReply)
+        !(echoReply instanceof ErrorReply)
         requestHandler.errorReplyCountTotal == 1
 
         when:
@@ -520,14 +521,15 @@ class RequestHandlerTest extends Specification {
         }
         reply = requestHandler.handle(authRequestAsHttp, socket2)
         then:
-        reply == NilReply.INSTANCE
+        // the auth command is not a command group command, it answers an unknown command error
+        reply == ErrorReply.UNKNOWN_COMMAND('auth')
 
         when:
         SocketInspector.clearUserData(socket2)
         authRequestAsHttp.httpHeaders = ['authorization': 'Basic ' + base64Encoded]
         reply = requestHandler.handle(authRequestAsHttp, socket2)
         then:
-        reply == NilReply.INSTANCE
+        reply == ErrorReply.UNKNOWN_COMMAND('auth')
 
         when:
         AclUsers.instance.delete('test-user')
@@ -559,7 +561,8 @@ class RequestHandlerTest extends Specification {
         ConfForGlobal.PASSWORD = null
         reply = requestHandler.handle(authRequestAsHttp, socket3)
         then:
-        reply == NilReply.INSTANCE
+        // the auth command is not a command group command, it answers an unknown command error
+        reply == ErrorReply.UNKNOWN_COMMAND('auth')
 
         when:
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())

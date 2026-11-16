@@ -46,7 +46,7 @@ class WGroupTest extends Specification {
         where:
         input  | expected
         'wait' | ErrorReply.FORMAT
-        'wx'   | NilReply.INSTANCE
+        'wx'   | ErrorReply.UNKNOWN_COMMAND('wx')
     }
 
     def 'test wait'() {

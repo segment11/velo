@@ -87,7 +87,8 @@ public class FGroup extends BaseCommand {
             return flushdb();
         }
 
-        return NilReply.INSTANCE;
+        // the command is not implemented, redis answers an unknown command error
+        return ErrorReply.UNKNOWN_COMMAND(cmd);
     }
 
     /** Per-slot failover outcome: the readonly state before this command fenced the slot, and the first error (null when ok). */

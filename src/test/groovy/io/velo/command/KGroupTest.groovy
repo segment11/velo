@@ -42,7 +42,7 @@ class KGroupTest extends Specification {
         where:
         input   | expected
         'keys'  | ErrorReply.FORMAT
-        'zzz'   | NilReply.INSTANCE
+        'zzz'   | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test keys'() {

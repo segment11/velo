@@ -139,7 +139,7 @@ class PGroupTest extends Specification {
         'psetex' | ErrorReply.FORMAT
         'publish'| ErrorReply.FORMAT
         'pubsub' | ErrorReply.FORMAT
-        'pxxx'   | NilReply.INSTANCE
+        'pxxx'   | ErrorReply.UNKNOWN_COMMAND('pxxx')
     }
 
     def 'test handle - functional'() {

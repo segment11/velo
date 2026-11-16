@@ -37,7 +37,7 @@ class UGroupTest extends Specification {
         where:
         input         | expected
         'unsubscribe' | ErrorReply.FORMAT
-        'ux'          | NilReply.INSTANCE
+        'ux'          | ErrorReply.UNKNOWN_COMMAND('ux')
     }
 
     def 'test unsubscribe'() {

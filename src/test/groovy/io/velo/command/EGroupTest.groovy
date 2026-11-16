@@ -67,7 +67,7 @@ class EGroupTest extends Specification {
         'expireat'    | ErrorReply.FORMAT
         'expiretime'  | ErrorReply.FORMAT
         'echo'        | ErrorReply.FORMAT
-        'zzz'         | NilReply.INSTANCE
+        'zzz'         | ErrorReply.UNKNOWN_COMMAND('zzz')
     }
 
     def 'test handle - echo and extend'() {

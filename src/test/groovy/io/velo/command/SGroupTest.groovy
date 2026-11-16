@@ -175,7 +175,7 @@ sunionstore
         sGroup.execute('select 1') == ErrorReply.NOT_SUPPORT
         sGroup.execute('subscribe') == ErrorReply.FORMAT
         sGroup.execute('slaveof') == ErrorReply.FORMAT
-        sGroup.execute('zzz') == NilReply.INSTANCE
+        sGroup.execute('zzz') == ErrorReply.UNKNOWN_COMMAND('zzz')
 
         when:
         def data2 = new byte[2][]
