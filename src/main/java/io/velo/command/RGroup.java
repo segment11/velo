@@ -5,6 +5,7 @@ import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
+import io.velo.persist.ReadonlyException;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.type.RedisHH;
@@ -343,19 +344,30 @@ public class RGroup extends BaseCommand {
         var asyncReply = new AsyncReply(finalPromise);
 
         dstOneSlot.asyncCall(() -> {
-            if (isNx) {
-                var isExist = exists(dstS);
-                if (isExist) {
-                    finalPromise.set(IntegerReply.REPLY_0);
-                    return false;
+            try {
+                if (isNx) {
+                    var isExist = exists(dstS);
+                    if (isExist) {
+                        finalPromise.set(IntegerReply.REPLY_0);
+                        return false;
+                    }
                 }
-            }
 
-            setCv(srcCv, dstS);
-            finalPromise.set(isNx ? IntegerReply.REPLY_1 : OKReply.INSTANCE);
-            return true;
+                setCv(srcCv, dstS);
+                finalPromise.set(isNx ? IntegerReply.REPLY_1 : OKReply.INSTANCE);
+                return true;
+            } catch (ReadonlyException e) {
+                // the destination slot rejected the write, the client must get an answer
+                finalPromise.set(ErrorReply.READONLY);
+                return false;
+            } catch (Exception e) {
+                log.error("Rename to destination slot={} failed", dstSlot, e);
+                finalPromise.setException(e);
+                return false;
+            }
         }).whenComplete((r, e) -> {
-            if (r) {
+            // only remove the source key when the destination write succeeded
+            if (Boolean.TRUE.equals(r)) {
                 removeDelay(srcSlotWithKeyHash);
             }
         });

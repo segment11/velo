@@ -14,10 +14,60 @@ import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 
 class RGroupTest extends Specification {
     final short slot = 0
     def _RGroup = new RGroup(null, null, null)
+
+    /**
+     * A slot worker eventloop running on its own thread.
+     *
+     * @param eventloop the worker eventloop
+     * @param threadId  the id of the worker thread
+     * @param thread    the worker thread
+     */
+    static record SlotWorker(Eventloop eventloop, long threadId, Thread thread) {
+    }
+
+    /**
+     * A mock that fails every write of one slot, to drive the unexpected error path.
+     */
+    static class FailingPutGetSet extends InMemoryGetSet {
+        /** The slot whose writes fail. */
+        short failSlot = -1
+
+        @Override
+        void put(short slot, String key, int bucketIndex, CompressedValue cv) {
+            if (slot == failSlot) {
+                throw new RuntimeException("mock write failure")
+            }
+            super.put(slot, key, bucketIndex, cv)
+        }
+    }
+
+    /**
+     * Starts a slot worker eventloop on its own thread.
+     *
+     * @param name the worker thread name
+     * @return the started slot worker
+     */
+    private static SlotWorker startWorkerThread(String name) {
+        LinkedBlockingQueue<Eventloop> loopQ = new LinkedBlockingQueue<Eventloop>()
+        Eventloop eventloop = Eventloop.builder().withIdleInterval(Duration.ofMillis(20)).build()
+        eventloop.keepAlive(true)
+        Thread thread = Thread.start({
+            loopQ.put(eventloop)
+            eventloop.run()
+        })
+        Eventloop loop = loopQ.take()
+        CountDownLatch ready = new CountDownLatch(1)
+        loop.execute({ ready.countDown() })
+        ready.await(5, TimeUnit.SECONDS)
+        return new SlotWorker(loop, loop.getEventloopThread().threadId(), thread)
+    }
 
     def 'test parse slot - single key'() {
         given:
@@ -234,8 +284,77 @@ class RGroupTest extends Specification {
         then:
         reply == ErrorReply.KEY_TOO_LONG
 
+        when: 'bug 85.3: a cross worker rename whose destination write fails must answer the client'
+        List<SlotWorker> workers = [startWorkerThread('velo-rgroup-rename-w1'),
+                                    startWorkerThread('velo-rgroup-rename-w2')]
+        Eventloop loop1 = workers[0].eventloop()
+        Eventloop loop2 = workers[1].eventloop()
+        LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
+        LocalPersist.instance.initSlotRuntimeBindings([loop1, loop2] as Eventloop[], new io.velo.RequestHandler[2],
+                [workers[0].threadId(), workers[1].threadId()] as long[])
+
+        and: 'a source key on worker 1 and a destination key on worker 2'
+        def renameGroup = new RGroup(null, null, null)
+        renameGroup.from(BaseCommand.mockAGroup(0 as byte, 2 as byte, 2 as short))
+        renameGroup.crossRequestWorker = true
+        def srcKey85 = (1..500).collect { 'src85_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def dstKey85 = (1..500).collect { 'dst85_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+        def seeded85 = new CountDownLatch(1)
+        loop1.execute({
+            renameGroup.set('v'.bytes, BaseCommand.slot(srcKey85, 2))
+            seeded85.countDown()
+        })
+        seeded85.await(5, TimeUnit.SECONDS)
+
+        and: 'the destination slot is readonly, so the destination write fails'
+        LocalPersist.instance.oneSlot(1 as short).setReadonly(true)
+        def asyncRename85 = []
+        def done85 = new CountDownLatch(1)
+        loop1.execute({
+            asyncRename85 << renameGroup.execute("rename ${srcKey85} ${dstKey85}")
+            done85.countDown()
+        })
+        done85.await(5, TimeUnit.SECONDS)
+        def renamePromise85 = (asyncRename85[0] as AsyncReply).settablePromise
+        for (int i = 0; i < 100 && !renamePromise85.isComplete(); i++) {
+            Thread.sleep(20)
+        }
+
+        then: 'the reply promise is settled instead of hanging forever'
+        renamePromise85.isComplete()
+        renamePromise85.isResult()
+        renamePromise85.getResult() == ErrorReply.READONLY
+
+        when: 'bug 85.3: a cross worker rename whose destination write fails with an unexpected error answers the client too'
+        def failMock85 = new FailingPutGetSet()
+        failMock85.failSlot = 1 as short
+        def failGroup85 = new RGroup(null, null, null)
+        failGroup85.byPassGetSet = failMock85
+        failGroup85.from(BaseCommand.mockAGroup(0 as byte, 2 as byte, 2 as short))
+        failGroup85.crossRequestWorker = true
+        failMock85.put(0 as short, srcKey85, BaseCommand.slot(srcKey85, 2).bucketIndex(),
+                Mock.prepareCompressedValueList(1)[0])
+        def asyncFail85 = []
+        def doneFail85 = new CountDownLatch(1)
+        loop1.execute({
+            asyncFail85 << failGroup85.execute("rename ${srcKey85} ${dstKey85}")
+            doneFail85.countDown()
+        })
+        doneFail85.await(5, TimeUnit.SECONDS)
+        def failPromise85 = (asyncFail85[0] as AsyncReply).settablePromise
+        for (int i = 0; i < 100 && !failPromise85.isComplete(); i++) {
+            Thread.sleep(20)
+        }
+
+        then: 'the failure is reported to the client and the source key is kept'
+        failPromise85.isComplete()
+        failPromise85.isException()
+        failPromise85.getException().getMessage() == 'mock write failure'
+        failMock85.getBuf(0 as short, srcKey85, BaseCommand.slot(srcKey85, 2).bucketIndex(), 0L) != null
+
         cleanup:
         eventloop.breakEventloop()
+        workers?.each { SlotWorker w -> w.thread().interrupt() }
     }
 
     def 'test restore'() {
