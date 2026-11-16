@@ -1,0 +1,538 @@
+=== Bug 85 round 1 review — agent 2 verification log ===
+Date: 2026-11-16 14:35:55; commit: a5064790
+
+=== Temp spec test result (8 tests, 0 failures) ===
+tests="8" failures="0" errors="0"
+verify 85.1 rpoplpush dst type pre-check reads the dst slot from the src worker -> PASS
+verify 85.2 and 85.3 cross worker rename both caller modes -> PASS
+verify 85.4 restore drops the ttl for non-string payloads -> PASS
+verify 85.5 restore accepts an over-long key and Wal.V.decode rejects it -> PASS
+verify 85.6 and 85.7 restore ttl parse and option handling -> PASS
+verify 85.8 and 85.9 randomkey slot coverage and bucket bias -> PASS
+verify 85.12 unknown r command answers nil -> PASS
+verify 85.13 split hash mode rename and restore busy check -> PASS
+
+=== Live Redis 7.2.11 differential (port 47999) ===
+READONLY      -> ERR This instance has cluster support disabled
+READWRITE     -> ERR This instance has cluster support disabled
+RENAME missing other -> ERR no such key
+RESTORE existing 0 <dump> (no REPLACE) -> BUSYKEY Target key name already exists.
+RESTORE k abc <dump> -> ERR value is not an integer or out of range
+RESTORE k 0 <dump> badoption -> ERR syntax error
+RESTORE k -1 <dump> -> ERR Invalid TTL value, must be >= 0
+RESTORE k 0 <dump> idletime 5 freq 3 -> ERR syntax error
+RESTORE existing abc <dump> -> BUSYKEY Target key name already exists.  (busykey precedes ttl parse)
+RESTORE lst 60000 <list dump> -> OK; TYPE=list; PTTL=60000  (ttl applied to restored list)
+
+=== Temp spec source (deleted after reproduction) ===
+package io.velo.command
+
+import io.activej.eventloop.Eventloop
+import io.velo.*
+import io.velo.mock.InMemoryGetSet
+import io.velo.persist.*
+import io.velo.rdb.RDBParser
+import io.velo.reply.*
+import io.velo.type.*
+import spock.lang.Specification
+
+import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+
+// TEMP spec for bug 85 round 1 verification (agent 2). Deleted after the reproduction.
+class RGroupBug85VerifyTempSpec extends Specification {
+
+    private static List startWorkerThread(String name) {
+        var loopQ = new LinkedBlockingQueue<Eventloop>()
+        def eventloop = Eventloop.builder().withIdleInterval(Duration.ofMillis(20)).build()
+        eventloop.keepAlive(true)
+        def thread = Thread.start {
+            loopQ.put(eventloop)
+            eventloop.run()
+        }
+        def loop = loopQ.take()
+        def ready = new CountDownLatch(1)
+        loop.execute { ready.countDown() }
+        ready.await(5, TimeUnit.SECONDS)
+        return [loop, loop.getEventloopThread().threadId(), thread]
+    }
+
+    private static seedListCv(OneSlot oneSlot, String key, List<String> elements) {
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        def rl = new RedisList()
+        elements.each { rl.addLast(it.bytes) }
+        cv.compressedData = rl.encode()
+        def swkh = BaseCommand.slot(key, 1)
+        cv.keyHash = swkh.keyHash
+        def walGroupIndex = Wal.calcWalGroupIndex(swkh.bucketIndex)
+        oneSlot.putKvInTargetWalGroupIndexLRU(walGroupIndex, key, cv.encode())
+    }
+
+    def 'verify 85.1 rpoplpush dst type pre-check reads the dst slot from the src worker'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+        def localPersist = LocalPersist.instance
+        def w1 = startWorkerThread('bug85-851-w1')
+        def w2 = startWorkerThread('bug85-851-w2')
+        def loop1 = w1[0] as Eventloop
+        def loop2 = w2[0] as Eventloop
+        LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
+        localPersist.initSlotRuntimeBindings([loop1, loop2] as Eventloop[], new RequestHandler[2],
+                [w1[1] as long, w2[1] as long] as long[])
+        def oneSlot0 = localPersist.oneSlot(0 as short)
+        def oneSlot1 = localPersist.oneSlot(1 as short)
+
+        and:
+        def rGroup = new RGroup(null, null, null)
+        rGroup.from(BaseCommand.mockAGroup(0 as byte, 2 as byte, 2 as short))
+        def srcKey = (1..500).collect { 'src851_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def dstKey = (1..500).collect { 'dst851_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+
+        and: 'a list lives in the src key (slot 0, owned by worker 1)'
+        def seeded = new CountDownLatch(1)
+        loop1.execute {
+            seedListCv(oneSlot0, srcKey, ['e1', 'e2'])
+            seeded.countDown()
+        }
+        seeded.await(5, TimeUnit.SECONDS)
+
+        when: 'RPOPLPUSH runs on the src worker (production routing: first key decides the worker)'
+        rGroup.crossRequestWorker = true
+        def caught = new AtomicReference<Throwable>()
+        def done = new CountDownLatch(1)
+        loop1.execute {
+            try {
+                rGroup.execute("rpoplpush $srcKey $dstKey")
+            } catch (Throwable t) {
+                caught.set(t)
+            } finally {
+                done.countDown()
+            }
+        }
+        done.await(5, TimeUnit.SECONDS)
+
+        then: 'the dst pre-check getCv(dst) trips the owner-thread guard of slot 1'
+        caught.get() instanceof IllegalStateException
+        (caught.get() as IllegalStateException).message.contains('Thread id not match')
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        [w1, w2].each { w -> (w[2] as Thread).interrupt() }
+    }
+
+    def 'verify 85.2 and 85.3 cross worker rename both caller modes'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+        def localPersist = LocalPersist.instance
+        def w1 = startWorkerThread('bug85-852-w1')
+        def w2 = startWorkerThread('bug85-852-w2')
+        def loop1 = w1[0] as Eventloop
+        def loop2 = w2[0] as Eventloop
+        LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
+        localPersist.initSlotRuntimeBindings([loop1, loop2] as Eventloop[], new RequestHandler[2],
+                [w1[1] as long, w2[1] as long] as long[])
+        def oneSlot0 = localPersist.oneSlot(0 as short)
+        def oneSlot1 = localPersist.oneSlot(1 as short)
+
+        and:
+        def rGroup = new RGroup(null, null, null)
+        rGroup.from(BaseCommand.mockAGroup(0 as byte, 2 as byte, 2 as short))
+        def srcKey = (1..500).collect { 'src852_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def dstKey = (1..500).collect { 'dst852_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+        def srcS = BaseCommand.slot(srcKey, 2)
+        def dstS = BaseCommand.slot(dstKey, 2)
+
+        when: 'PRODUCTION MODE: rename runs on the src worker reactor, Promise.ofFuture bounces the dst completion back'
+        def seeded1 = new CountDownLatch(1)
+        def diag = new AtomicReference<String>()
+        loop1.execute {
+            try {
+                seedListCv(oneSlot0, srcKey, ['v'])
+                diag.set("thread=${Thread.currentThread().threadId()} slot0.tid=${oneSlot0.threadIdProtectedForSafe} " +
+                        "srcS.slot=${srcS.slot()} srcS.bucket=${srcS.bucketIndex} srcS.keyHash=${srcS.keyHash} " +
+                        "get=${oneSlot0.get(srcKey, srcS.bucketIndex, srcS.keyHash)} " +
+                        "getCv=${rGroup.getCv(srcS)}")
+            } catch (Throwable t) {
+                def sw = new java.io.StringWriter()
+                t.printStackTrace(new java.io.PrintWriter(sw))
+                diag.set('SEED THREW: ' + sw.toString())
+            }
+            seeded1.countDown()
+        }
+        seeded1.await(5, TimeUnit.SECONDS)
+        println 'DIAG ' + diag.get()
+        rGroup.crossRequestWorker = true
+        def replyP = new AtomicReference<Reply>()
+        def doneP = new CountDownLatch(1)
+        loop1.execute {
+            replyP.set(rGroup.execute("rename $srcKey $dstKey"))
+            doneP.countDown()
+        }
+        doneP.await(5, TimeUnit.SECONDS)
+        def promiseP = (replyP.get() as AsyncReply).settablePromise
+        for (int i = 0; i < 200 && !promiseP.isComplete(); i++) Thread.sleep(10)
+        Thread.sleep(300)
+        def srcAfterP = new AtomicReference<Object>()
+        def readP = new CountDownLatch(1)
+        loop1.execute {
+            srcAfterP.set(rGroup.getCv(srcS))
+            readP.countDown()
+        }
+        readP.await(5, TimeUnit.SECONDS)
+
+        then: 'client got +OK and the src key WAS deleted on the src worker (bounce path) — no duplication in production'
+        promiseP.getResult() == OKReply.INSTANCE
+        srcAfterP.get() == null
+
+        when: 'FALLBACK MODE: the same rename called from a plain (non-reactor) thread that owns slot 0'
+        def srcKeyF = (1..500).collect { 'src852f_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def srcSF = BaseCommand.slot(srcKeyF, 2)
+        localPersist.fixSlotThreadId(0 as short, Thread.currentThread().threadId())
+        seedListCv(oneSlot0, srcKeyF, ['v'])
+        def replyF = rGroup.execute("rename $srcKeyF $dstKey")
+        def promiseF = (replyF as AsyncReply).settablePromise
+        for (int i = 0; i < 200 && !promiseF.isComplete(); i++) Thread.sleep(10)
+        Thread.sleep(300)
+
+        then: 'client still gets +OK but the src key SURVIVES — removeDelay ran on the dst worker and the guard threw'
+        promiseF.getResult() == OKReply.INSTANCE
+        rGroup.getCv(srcSF) != null
+
+        when: '85.3 PRODUCTION MODE: the dst slot is readonly, the dst task throws inside the dst worker'
+        def srcKeyR = (1..500).collect { 'src852r_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        localPersist.fixSlotThreadId(0 as short, w1[1] as long)
+        oneSlot0.setSlotWorkerEventloop(loop1)
+        seedListCvOnLoop(loop1, oneSlot0, srcKeyR, ['v'])
+        oneSlot1.setReadonly(true)
+        def replyR = new AtomicReference<Reply>()
+        def doneR = new CountDownLatch(1)
+        loop1.execute {
+            replyR.set(rGroup.execute("rename $srcKeyR $dstKey"))
+            doneR.countDown()
+        }
+        doneR.await(5, TimeUnit.SECONDS)
+        def promiseR = (replyR.get() as AsyncReply).settablePromise
+        for (int i = 0; i < 200 && !promiseR.isComplete(); i++) Thread.sleep(10)
+
+        then: 'the reply promise is NEVER settled — the client would hang; the real error is invisible'
+        !promiseR.isComplete()
+        (w2[2] as Thread).isAlive()
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        [w1, w2].each { w -> (w[2] as Thread).interrupt() }
+    }
+
+    private static seedListCvOnLoop(Eventloop loop, OneSlot oneSlot, String key, List<String> elements) {
+        def latched = new CountDownLatch(1)
+        loop.execute {
+            seedListCv(oneSlot, key, elements)
+            latched.countDown()
+        }
+        latched.await(5, TimeUnit.SECONDS)
+    }
+
+    def 'verify 85.4 restore drops the ttl for non-string payloads'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def rGroup = new RGroup(null, null, null)
+        rGroup.byPassGetSet = inMemoryGetSet
+        rGroup.from(BaseCommand.mockAGroup())
+
+        when: 'string payload with ttl'
+        def reply = rGroup.execute('restore str0 100000 bbb') { data ->
+            data[3] = RDBParser.dumpString('v'.bytes)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(0 as short, 'str0', 0, 0L).cv().getExpireAt() > 0
+
+        when: 'list payload with ttl'
+        reply = rGroup.execute('restore list0 100000 bbb') { data ->
+            def rl = new RedisList()
+            rl.addLast('a'.bytes)
+            rl.addLast('b'.bytes)
+            data[3] = RDBParser.dumpList(rl)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(0 as short, 'list0', 0, 0L).cv().getExpireAt() == CompressedValue.NO_EXPIRE
+
+        when: 'set payload with ttl'
+        reply = rGroup.execute('restore set0 100000 bbb') { data ->
+            def rhk = new RedisHashKeys()
+            rhk.add('a')
+            data[3] = RDBParser.dumpSet(rhk)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(0 as short, 'set0', 0, 0L).cv().getExpireAt() == CompressedValue.NO_EXPIRE
+
+        when: 'zset payload with ttl'
+        reply = rGroup.execute('restore zset0 100000 bbb') { data ->
+            def rz = new RedisZSet()
+            rz.add(1.0d, 'a')
+            data[3] = RDBParser.dumpZSet(rz)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(0 as short, 'zset0', 0, 0L).cv().getExpireAt() == CompressedValue.NO_EXPIRE
+
+        when: 'hash payload with ttl'
+        reply = rGroup.execute('restore hash0 100000 bbb') { data ->
+            def rhh = new RedisHH()
+            rhh.put('f', 'v'.bytes)
+            data[3] = RDBParser.dumpHash(rhh)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(0 as short, 'hash0', 0, 0L).cv().getExpireAt() == CompressedValue.NO_EXPIRE
+    }
+
+    def 'verify 85.5 restore accepts an over-long key and Wal.V.decode rejects it'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def rGroup = new RGroup(null, null, null)
+        rGroup.byPassGetSet = inMemoryGetSet
+        rGroup.from(BaseCommand.mockAGroup())
+
+        when: 'RESTORE with a 257-byte key (> key max length 256)'
+        def reply = rGroup.execute('restore >key 0 bbb') { data ->
+            data[3] = RDBParser.dumpString('v'.bytes)
+        }
+        then: 'accepted with +OK — every other key command answers KEY_TOO_LONG'
+        reply == OKReply.INSTANCE
+        def bigKey = new String(new byte[CompressedValue.KEY_MAX_LENGTH + 1])
+        inMemoryGetSet.getBuf(0 as short, bigKey, 0, 0L) != null
+
+        when: 'the same over-long key goes through the WAL record codec'
+        def cvS = new CompressedValue()
+        cvS.compressedData = 'v'.bytes
+        def v = new Wal.V(1L, 0, 1L, CompressedValue.NO_EXPIRE, CompressedValue.NULL_DICT_SEQ,
+                bigKey, cvS.encodeAsShortString(), false)
+        def encoded = v.encode(true)
+        def bais = new java.io.ByteArrayInputStream(encoded)
+        Wal.V.decode(new java.io.DataInputStream(bais))
+
+        then: 'the read path can never decode it again'
+        thrown(IllegalStateException)
+    }
+
+    def 'verify 85.6 and 85.7 restore ttl parse and option handling'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def rGroup = new RGroup(null, null, null)
+        rGroup.byPassGetSet = inMemoryGetSet
+        rGroup.from(BaseCommand.mockAGroup())
+
+        when: 'non-numeric ttl'
+        rGroup.execute('restore k85 abc bbb')
+        then:
+        thrown(NumberFormatException)
+
+        when: 'unknown option is silently ignored'
+        def reply = rGroup.execute('restore k85 0 bbb badoption') { data ->
+            data[3] = RDBParser.dumpString('v'.bytes)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        inMemoryGetSet.getBuf(0 as short, 'k85', 0, 0L) != null
+
+        when: 'negative ttl is accepted'
+        reply = rGroup.execute('restore k85neg -1 bbb') { data ->
+            data[3] = RDBParser.dumpString('v'.bytes)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        // born already expired
+        inMemoryGetSet.getBuf(0 as short, 'k85neg', 0, 0L).cv().getExpireAt() < System.currentTimeMillis()
+    }
+
+    def 'verify 85.8 and 85.9 randomkey slot coverage and bucket bias'() {
+        given:
+        ConfForSlot.global = ConfForSlot.debugMode
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist(1 as byte, 2 as short)
+        def eventloopB = Eventloop.builder().withIdleInterval(Duration.ofMillis(50)).build()
+        eventloopB.keepAlive(true)
+        Thread.start { eventloopB.run() }
+        def dl = System.currentTimeMillis() + 5000
+        while (eventloopB.eventloopThread == null && System.currentTimeMillis() < dl) Thread.sleep(10)
+        localPersist.oneSlot(1 as short).setSlotWorkerEventloop(eventloopB)
+        localPersist.fixSlotThreadId(0 as short, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId(1 as short, eventloopB.eventloopThread.threadId())
+
+        and: '10 keys live ONLY in slot 1 (bucket 3), slot 0 is empty'
+        def oneSlot1 = localPersist.oneSlot(1 as short)
+        def seeded = new CountDownLatch(1)
+        eventloopB.execute {
+            oneSlot1.keyLoader.persistShortValueListBatchInOneWalGroup(
+                    Wal.calcWalGroupIndex(3), Mock.prepareShortValueList(10, 3))
+            seeded.countDown()
+        }
+        seeded.await(5, TimeUnit.SECONDS)
+
+        and:
+        def rGroup = new RGroup(null, null, null)
+        rGroup.from(BaseCommand.mockAGroup(0 as byte, 2 as byte, 2 as short))
+
+        when: 'RANDOMKEY runs on the worker owning slot 0'
+        def reply = rGroup.execute('randomkey')
+
+        then: 'answers nil although the keyspace (slot 1) is not empty'
+        reply == NilReply.INSTANCE
+
+        when: 'slot 0 bucket 3 gets 10 keys too, randomkey is called many times'
+        def oneSlot0 = localPersist.oneSlot(0 as short)
+        oneSlot0.keyLoader.persistShortValueListBatchInOneWalGroup(
+                Wal.calcWalGroupIndex(3), Mock.prepareShortValueList(10, 3))
+        def found = [] as Set
+        for (int i = 0; i < 2000 && found.size() < 2; i++) {
+            def r = rGroup.execute('randomkey')
+            if (r instanceof BulkReply) {
+                found << new String((r as BulkReply).raw)
+            }
+        }
+
+        then: 'only ONE distinct key is ever returned from the 10-key bucket — the random index is not honoured'
+        found.size() == 1
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        eventloopB.breakEventloop()
+    }
+
+    def 'verify 85.12 unknown r command answers nil'() {
+        given:
+        def rGroup = new RGroup(null, null, null)
+        rGroup.byPassGetSet = new InMemoryGetSet()
+        rGroup.from(BaseCommand.mockAGroup())
+
+        expect:
+        rGroup.execute('rfoo') == NilReply.INSTANCE
+    }
+
+    def 'verify 85.13 split hash mode rename and restore busy check'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def rGroup = new RGroup(null, null, null)
+        rGroup.byPassGetSet = inMemoryGetSet
+        rGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def hGroup = new HGroup(null, null, null)
+        hGroup.byPassGetSet = inMemoryGetSet
+        hGroup.from(BaseCommand.mockAGroup())
+        LocalPersist.instance.hashSaveMemberTogether = false
+
+        when: 'a hash is written in split mode'
+        hGroup.execute('hset h85 f1 v1')
+        then: 'the main key does not exist, the derived keys do'
+        inMemoryGetSet.getBuf(0 as short, 'h85', 0, 0L) == null
+        inMemoryGetSet.getBuf(0 as short, 'h_k_{h85}', 0, 0L) != null
+        inMemoryGetSet.getBuf(0 as short, 'h_f_{h85}.f1', 0, 0L) != null
+
+        when: 'RENAME of the existing hash'
+        def reply = rGroup.execute('rename h85 h85x')
+        then: 'answers no-such-key although the hash exists'
+        reply == ErrorReply.NO_SUCH_KEY
+
+        when: 'RESTORE onto the existing split hash without REPLACE'
+        reply = rGroup.execute('restore h85 0 bbb') { data ->
+            def rhh = new RedisHH()
+            rhh.put('f9', 'v9'.bytes)
+            data[3] = RDBParser.dumpHash(rhh)
+        }
+        then: 'the busy check misses the hash and the restore proceeds with +OK'
+        reply == OKReply.INSTANCE
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = true
+    }
+}
+
+=== Differential script (deleted after reproduction) ===
+#!/usr/bin/env python3
+# Temp Redis 7.2 differential for bug 85 verification (85.4/85.6/85.7/85.10/85.11). Delete after use.
+import socket, sys
+
+HOST, PORT = '127.0.0.1', 47999
+
+def encode_cmd(*args):
+    out = b'*%d\r\n' % len(args)
+    for a in args:
+        if isinstance(a, str):
+            a = a.encode()
+        out += b'$%d\r\n%s\r\n' % (len(a), a)
+    return out
+
+def read_reply(f):
+    line = f.readline()
+    if not line:
+        raise EOFError
+    t, rest = line[:1], line[1:-2]
+    if t == b'+':
+        return rest.decode()
+    if t == b'-':
+        return 'ERR-TYPE-REPLY: ' + rest.decode()
+    if t == b':':
+        return int(rest)
+    if t == b'$':
+        n = int(rest)
+        if n == -1:
+            return None
+        data = f.read(n + 2)[:-2]
+        return data
+    if t == b'*':
+        n = int(rest)
+        return [read_reply(f) for _ in range(n)]
+    raise ValueError('bad type %r' % t)
+
+s = socket.create_connection((HOST, PORT), timeout=3)
+f = s.makefile('rb')
+
+def cmd(*args):
+    s.sendall(encode_cmd(*args))
+    return read_reply(f)
+
+print('== 85.10 READONLY on non-cluster ==')
+print('READONLY      ->', cmd('READONLY'))
+print('READWRITE     ->', cmd('READWRITE'))
+
+print('== 85.11 error texts ==')
+print('RENAME missing other ->', cmd('RENAME', 'missing85', 'other85'))
+
+cmd('DEL', 'src85', 'existing85', 'dst85', 'k85a', 'k85b', 'k85c', 'k85d', 'lst85src', 'lst85dst')
+cmd('SET', 'src85', 'v')
+cmd('SET', 'existing85', 'v')
+dump = cmd('DUMP', 'src85')
+
+print('RESTORE existing85 0 <dump> (no REPLACE) ->', cmd('RESTORE', 'existing85', '0', dump))
+
+print('== 85.6 non-numeric ttl ==')
+print('RESTORE k85a abc <dump> ->', cmd('RESTORE', 'k85a', 'abc', dump))
+
+print('== 85.7 unknown option / negative ttl / idletime+freq ==')
+print('RESTORE k85b 0 <dump> badoption ->', cmd('RESTORE', 'k85b', '0', dump, 'badoption'))
+print('RESTORE k85c -1 <dump> ->', cmd('RESTORE', 'k85c', '-1', dump))
+print('RESTORE k85d 0 <dump> idletime 5 freq 3 ->', cmd('RESTORE', 'k85d', '0', dump, 'idletime', '5', 'freq', '3'))
+
+print('== 85.6/85.7 ordering: busykey vs bad ttl ==')
+print('RESTORE existing85 abc <dump> ->', cmd('RESTORE', 'existing85', 'abc', dump))
+
+print('== 85.4 redis side: ttl applied to a restored list ==')
+cmd('RPUSH', 'lst85src', 'a', 'b', 'c')
+ldump = cmd('DUMP', 'lst85src')
+print('RESTORE lst85dst 60000 <list dump> ->', cmd('RESTORE', 'lst85dst', '60000', ldump))
+print('TYPE lst85dst  ->', cmd('TYPE', 'lst85dst'))
+print('PTTL lst85dst  ->', cmd('PTTL', 'lst85dst'))
+print('EXISTS k85b (badoption key) ->', cmd('EXISTS', 'k85b'))
+s.close()

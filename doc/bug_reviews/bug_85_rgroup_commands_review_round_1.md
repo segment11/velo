@@ -6,7 +6,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** round 1 closed on the fix side — 12 fixed in 12 commits (one commit per bug), 85.2 **won't fix** (latent, production safe), 85.13 partly fixed (the `RESTORE` data loss half; the `RENAME` half needs a product decision); the whole command module is green, **re-review pending**
+**Status:** round 1 closed — re-review (agent 2) **accepted all 13 fix commits**; 85.2 won't fix (latent, production safe); 85.13 partly fixed (the `RESTORE` data loss half; the `RENAME` half needs a product decision); see Residual Risk for the open follow-ups
 **Review branch:** `review/rgroup`
 **Reviewed commit:** `bb7fb2fa8a3991162bf75830eb86ba99fffd4ff9` (main, merge of `review/pgroup`)
 
@@ -1176,7 +1176,78 @@ well) is also left open: it needs a product decision on the split hash storage m
 
 ## Re-review (AI agent 2)
 
+**Method:** per-commit diff review at HEAD `d3b8d9cb`; focused tests re-run at HEAD
+(`RGroupTest` 27/27, `LGroupTest` 41/41, `SGroupTest` 29/29, `ZGroupTest` 32/32, `HGroupTest` 57/57,
+`DGroupTest` 23/23 — all green); JaCoCo re-inspected with `scripts/jacoco_cover.py`; **RED independently
+reproduced** for the two High fixes and one restore sample in a throwaway worktree at each fix commit's parent
+with only the fix commit's test file applied.
+
+### RED re-verification (worktree at parent + fix-commit test file)
+
+| Bug | Parent | Re-produced RED failure |
+|---|---|---|
+| 85.3 | `608cb077^` = `a5064790` | `test rename` FAILED: `Condition not satisfied: renamePromise85.isComplete() … SettablePromise false` — identical to the Fix Log quote |
+| 85.1 | `ffde6e8e^` = `608cb077` | `test rpoplpush` FAILED: `Condition not satisfied: asyncMove[0] != null … [] null` — identical to the Fix Log quote |
+| 85.5 | `c0c5a516^` = `a4f31233` | `test restore` FAILED: `reply == ErrorReply.KEY_TOO_LONG … <OKReply@…>` — identical to the Fix Log quote |
+
+The remaining RED quotes (85.4/85.6/85.7/85.8/85.9/85.10-85.13/85.14) match the failure shapes agent 2
+independently reproduced in the round 1 verification (list ttl 0, `NumberFormatException`, badoption `+OK`,
+`not such key`, nil vs unknown command, randomkey nil / 1-distinct-key bias, split-hash busy miss) and the
+tests are mechanical asserts on public APIs — accepted without a per-commit worktree re-run.
+
+### Per-commit verdicts
+
+| Bug | Commit | Diff review | Test at HEAD | JaCoCo | Verdict |
+|---|---|---|---|---|---|
+| 85.1 | `ffde6e8e` | 3-step handoff (dst type check on dst worker → pop on src worker → push on dst worker); source untouched on `WRONGTYPE` (Redis semantics kept); sync path behavior-preserving (`checkDstTypeOnCurrentWorker` + `popFromList` extract) | green | `moveCrossWorker` happy path + `WRONGTYPE` covered; only the defensive catches and the source-emptied race uncovered (as declared) | **ACCEPTED** |
+| 85.3 | `608cb077` | dst task wrapped: `ReadonlyException` → `ErrorReply.READONLY`, generic → `setException` (mapped to an error reply by `transferAsyncReply`); `whenComplete` null-safe `Boolean.TRUE.equals(r)` | green | all three dst-task branches covered | **ACCEPTED** |
+| 85.14 | `dee8ffd0` | step-2 (`popFromSource`) and step-3 (`pushToDestination`) failures settle the promise; `ReadonlyException` → `ERR READONLY` | green | `pushToDestination` failure path covered (906 partial, as declared) | **ACCEPTED** |
+| 85.4 | `a4f31233` | `expireAt` threaded through new `saveRedisList/Set/ZSet/HashKeys/HH` overloads; old callers default `NO_EXPIRE` (behavior-preserving); split-mode field values also get the ttl | green (5 classes) | overloads executed in L/S/Z/HGroup (partials only on the pre-existing `preferDict == null` branches) | **ACCEPTED** |
+| 85.5 | `c0c5a516` | up-front `KEY_MAX_LENGTH` guard, same reply as sibling commands | green | guard covered | **ACCEPTED** |
+| 85.6 | `05c08552` | `try/catch` on ttl/idletime/freq parses → `NOT_INTEGER_OR_OUT_OF_RANGE`; **busy-key check moved before the ttl parse** — matches the Redis ordering confirmed by the round 1 differential | green | parse branches covered | **ACCEPTED** |
+| 85.7 | `aebb27dd` | unknown option → `SYNTAX` (with `else`), negative ttl → `"Invalid TTL value, must be >= 0"` (exact Redis text), `idletime`+`freq` → `SYNTAX`, option args consumed (`i++`), busy check via `exists()` | green | option branches covered — **one coverage regression, see Follow-ups** | **ACCEPTED** (with follow-up) |
+| 85.8 | `52b95928` | searches all slots of the current worker inline, then `doSthInSlots` fan-out to the other workers (each slot searched on its owning thread); empty-keyspace early exit when the worker owns all slots | green | `currentThreadSlots` 653-661 covered; the "no key anywhere" fan-out branch uncovered (as declared) | **ACCEPTED** |
+| 85.9 | `1ad59c79` | new `randomKeyInBucket`: found-flag stops the overwrite, `skipN` honoured, expired keys skipped, null returns instead of `BulkReply(null)` NPE | green | covered except the null-`keyBucket` continue | **ACCEPTED** |
+| 85.10 | `a6306ef6` | both `READONLY`/`READWRITE` error when `!clusterEnabled` — matches the differential (both commands rejected by Redis); cluster mode still `+OK` | green | both branches covered | **ACCEPTED** |
+| 85.11 | `a944f57b` | `NO_SUCH_KEY` → `"no such key"`; new `BUSYKEY` constant using the existing `rawErrorPrefix` mechanism (like `MOVED`) → raw bytes `-BUSYKEY Target key name already exists.\r\n` — exactly the Redis wire reply | green (`DGroupTest` re-run for the shared constant) | constant covered | **ACCEPTED** |
+| 85.12 | `f645ca48` | fall-through → `ErrorReply.UNKNOWN_COMMAND(cmd)` | green | covered | **ACCEPTED** |
+| 85.13 | `059c0674` | busy check extended with the split-mode derived key (`h_k_{key}`) — fixes the silent-overwrite half; the `RENAME` half stays open for a product decision (declared) | green | covered | **ACCEPTED** (half, as declared) |
+| 85.2 | — | **won't fix accepted** — agent 1's reasoning matches agent 2's round 1 refinement: production always calls `handle()` on a reactor, so the bounce guarantees the src removal runs on the src worker; the fallback path cannot be repaired by dispatch and is unit-test-only; the reliance is documented in the code comment from `a5064790` | n/a | n/a | **ACCEPTED (won't fix)** |
+
+### Follow-ups (non-blocking)
+
+1. **Coverage regression from `aebb27dd` (85.7):** the legacy test case `restore a 0 bbb replace absttl idletime 0
+   freq -1` now returns `SYNTAX` at the earlier `hasIdleTime`+`FREQ` guard, so the freq range branch
+   (`RGroup.java:521-522`) is no longer executed and the assertion `reply instanceof ErrorReply` passes vacuously.
+   Replace the case with `freq 300` alone (no `idletime`) — and keep one `idletime+freq` case for the new guard.
+2. Fix Log says "28 features" — `RGroupTest` currently has 27 (doc nit only).
+3. `608cb077` maps a generic destination failure via `finalPromise.setException(e)`;
+   `transferAsyncReply` builds the error text from `getMessage()`, which is null for some exception types
+   (e.g. `CannotReadException`) — consider the null-message wrapping `CGroup.copy` already does (bug 84 pattern).
+
+### Verdict
+
+**All 13 fix commits ACCEPTED** (RED → GREEN → JaCoCo verified per the sampled worktree re-runs and the at-HEAD
+evidence); 85.2 won't-fix accepted; 85.13 half fixed as declared. The fix round is complete.
+
 ## Residual Risk
+
+- **Element loss on a failing cross-worker push (pre-existing, unchanged):** in `moveCrossWorker` the source
+  element is popped and saved (step 2) before the destination push (step 3). If step 3 fails (e.g. the destination
+  turns readonly in between), the client now gets `ERR READONLY` (85.14 fixed the hang) but the element is already
+  gone from the source and never delivered — `RPOPLPUSH` is not atomic across workers. The sync path always had the
+  same shape; a full fix needs a rollback/undo write on the source worker.
+- **Cross-worker type races:** the destination type is validated at step 1 and re-validated inside
+  `moveDstCallback` at push time, but another client can still interleave between the two — a dst that became a
+  non-list between step 1 and step 3 answers `WRONGTYPE` after the element was popped (same window as above).
+- **`RANDOMKEY` randomness is first-slot-wins across workers** (the fan-out returns the first non-null key in slot
+  order) and the fan-out re-searches the current worker's slots — a bias/waste, not a correctness issue.
+- **85.2 latent path** (non-reactor caller of `OneSlot.asyncCall`) remains by design; safe as long as every
+  production caller stays on a reactor — the `a5064790` comment documents the reliance.
+- **85.13 `RENAME` half** open: renaming a split-mode hash still answers `no such key` — awaiting the product
+  decision on the split hash storage mode.
+- The follow-ups listed above (freq-range test case, `getMessage()` null wrapping) are small, non-blocking items
+  for the next round.
 
 ## Summary
 

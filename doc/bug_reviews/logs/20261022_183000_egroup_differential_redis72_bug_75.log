@@ -1,0 +1,36 @@
+# bug 75 EGroup round 1 - evidence log
+# date: 2026-10-22 18:26:29
+# velo baseline commit: 5a0c1529997ea2aeb960b78417204f14f5aeff8d
+
+=== redis 7.2.11 ground truth (port 6399) ===
+$ redis-cli -p 6399 set k v
+OK
+$ redis-cli -p 6399 expire k 100 gt   # key has no TTL
+0
+$ redis-cli -p 6399 ttl k
+-1
+$ redis-cli -p 6399 expire k 100 FOO
+ERR Unsupported option FOO
+
+$ redis-cli -p 6399 expire k 100 nx xx
+ERR NX and XX, GT or LT options at the same time are not compatible
+
+$ redis-cli -p 6399 expire k 9223372036854775807
+ERR invalid expire time in 'expire' command
+
+$ redis-cli -p 6399 expire k 9223372036854775
+ERR invalid expire time in 'expire' command
+
+$ redis-cli -p 6399 set n v; redis-cli -p 6399 expire n -1; redis-cli -p 6399 exists n
+OK
+1
+0
+$ redis-cli -p 6399 pexpireat r3 1792664774700; redis-cli -p 6399 expiretime r3  # rounding
+OK
+1
+-2
+-2
+
+=== velo temp spec (io.velo.command.Bug75TempSpec) ===
+BUILD SUCCESSFUL in 495ms
+13 actionable tasks: 13 up-to-date

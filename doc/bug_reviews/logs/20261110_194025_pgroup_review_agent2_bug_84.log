@@ -1,0 +1,232 @@
+================================================================================
+Bug 84 PGroup review round 1 - agent 2 verification evidence
+Date: 2026-11-10 19:40, branch review/pgroup, code at commit 9556bdf1 (parent of docs commit = reviewed commit 3d8ee532)
+Method: Spock temp spec (Bug84Agent2VerifyTempSpec, deleted after evidence capture) +
+        live Redis 7.2.11 differential (port 47999) + static inspection + ActiveJ 6.0-beta2 bytecode
+================================================================================
+
+----- PART 1: temp spec run (./gradlew :test --tests io.velo.command.Bug84Agent2VerifyTempSpec) -----
+8 tests completed, 0 failed - every assertion below asserts the CURRENT (buggy) behavior
+
+Bug84Agent2VerifyTempSpec > 84.1 cross-worker PFMERGE: dst slot is touched from the source worker thread and the reply never arrives STANDARD_OUT
+    SnowFlake config:
+    START_STAMP=1701354128058
+    SEQUENCE_BIT=12
+    MACHINE_BIT=5
+    DATACENTER_BIT=5
+    MAX_DATACENTER_NUM=31
+    MAX_MACHINE_NUM=31
+    MAX_SEQUENCE=4095
+    MACHINE_LEFT=12
+    DATACENTER_LEFT=17
+    TIMESTAMP_LEFT=22
+    19:38:36.561 [Test worker] [1;33mWARN [m [io.velo.repl.cluster.MultiShard] - Repl clusterx meta file not found=/tmp/velo-data/test-persist/nodes.json
+    19:38:36.609 [Test worker] [1;33mWARN [m [io.velo.repl.cluster.MultiShard] - Repl clusterx meta saved, shards size=1
+    19:38:36.619 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU max size for big string=1000, maybe one big string bytes length is 4096B, memory require=3MB, slot=0
+    19:38:36.620 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU prepare, type=big_string, MB=3, slot=0
+    19:38:36.626 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Init dyn config, data={}, slot=0
+    19:38:36.629 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=masterUuid, value=389888191257251840, slot=0
+    19:38:36.630 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=binlogOn, value=false, slot=0
+    19:38:36.631 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Binlog on=false
+    19:38:36.632 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - One slot wal group number=2048, slot=0
+    19:38:36.633 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, MB=0, slot=0
+    19:38:36.633 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, short value, MB=0, slot=0
+    19:38:36.634 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - Static memory init, type=wal_cache_init, MB=0, slot=0
+    19:38:36.634 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU max size for each wal group=48, all wal group number=2048, maybe one compressed value encoded length is 200B, memory require=19MB, slot=0
+    19:38:36.634 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_read_group_by_wal_group, MB=19, slot=0
+    19:38:36.658 [Test worker] [1;32mINFO [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Static memory init, type=meta_chunk_segment_flag_seq, MB=3, slot=0
+    19:38:36.663 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - Meta key bucket initial split number=1
+    19:38:36.668 [Test worker] [1;32mINFO [m [io.velo.persist.StatKeyCountInBuckets] - Key count in buckets=0, slot=0
+    19:38:36.673 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=key_bucket_split_0_slot_0, file length=0MB
+    19:38:36.673 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Key bucket lru max size for one key bucket fd=0, one inner length=4096， compress ratio maybe=0.25, memory require=0.0MB, name=key_bucket_split_0_slot_0
+    19:38:36.673 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_key_bucket, MB=0.0, fd=key_bucket_split_0_slot_0, key buckets
+    19:38:36.676 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=key_bucket_split_0_slot_0
+    19:38:36.676 [Test worker] [1;32mINFO [m [io.velo.persist.KeyLoader] - Persist key bucket files fd opened, split number=1, slot=0
+    19:38:36.676 [Test worker] [1;32mINFO [m [io.velo.persist.Chunk] - Chunk init slot=0, segment number per fd=262144, fd per chunk=1, max segment index=262143, half segment number=131072
+    19:38:36.678 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=chunk_data_index_0_slot_0, file length=0MB
+    19:38:36.678 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Chunk lru max size for one chunk fd=0, one inner length=4096, memory require=0MB, name=chunk_data_index_0_slot_0
+    19:38:36.678 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_chunk_data, MB=0, fd=chunk_data_index_0_slot_0, chunk
+    19:38:36.678 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=chunk_data_index_0_slot_0
+    19:38:36.679 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU max size for big string=1000, maybe one big string bytes length is 4096B, memory require=3MB, slot=1
+    19:38:36.679 [Test worker] [1;32mINFO [m [io.velo.persist.BigStringFiles] - LRU prepare, type=big_string, MB=3, slot=1
+    19:38:36.679 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Init dyn config, data={}, slot=1
+    19:38:36.680 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=masterUuid, value=389888191479549952, slot=1
+    19:38:36.680 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=binlogOn, value=false, slot=1
+    19:38:36.680 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Binlog on=false
+    19:38:36.680 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - One slot wal group number=2048, slot=1
+    19:38:36.680 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, MB=0, slot=1
+    19:38:36.681 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, short value, MB=0, slot=1
+    19:38:36.681 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - Static memory init, type=wal_cache_init, MB=0, slot=1
+    19:38:36.681 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU max size for each wal group=48, all wal group number=2048, maybe one compressed value encoded length is 200B, memory require=19MB, slot=1
+    19:38:36.681 [Test worker] [1;32mINFO [m [io.velo.persist.OneSlot] - LRU prepare, type=kv_read_group_by_wal_group, MB=19, slot=1
+    19:38:36.685 [Test worker] [1;32mINFO [m [io.velo.persist.MetaChunkSegmentFlagSeq] - Static memory init, type=meta_chunk_segment_flag_seq, MB=3, slot=1
+    19:38:36.686 [Test worker] [1;32mINFO [m [io.velo.persist.MetaKeyBucketSplitNumber] - Meta key bucket initial split number=1
+    19:38:36.687 [Test worker] [1;32mINFO [m [io.velo.persist.StatKeyCountInBuckets] - Key count in buckets=0, slot=1
+    19:38:36.687 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=key_bucket_split_0_slot_1, file length=0MB
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Key bucket lru max size for one key bucket fd=0, one inner length=4096， compress ratio maybe=0.25, memory require=0.0MB, name=key_bucket_split_0_slot_1
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_key_bucket, MB=0.0, fd=key_bucket_split_0_slot_1, key buckets
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=key_bucket_split_0_slot_1
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.KeyLoader] - Persist key bucket files fd opened, split number=1, slot=1
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.Chunk] - Chunk init slot=1, segment number per fd=262144, fd per chunk=1, max segment index=262143, half segment number=131072
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Opened name=chunk_data_index_0_slot_1, file length=0MB
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Chunk lru max size for one chunk fd=0, one inner length=4096, memory require=0MB, name=chunk_data_index_0_slot_1
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_chunk_data, MB=0, fd=chunk_data_index_0_slot_1, chunk
+    19:38:36.688 [Test worker] [1;32mINFO [m [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=chunk_data_index_0_slot_1
+    19:38:36.688 [Test worker] [1;33mWARN [m [io.velo.persist.OneSlot] - Init global metrics collect, slot=0
+    19:38:36.723 [Test worker] [1;33mWARN [m [io.velo.persist.LocalPersist] - Fix slot thread id, s=0, tid=1
+    19:38:36.724 [Test worker] [1;33mWARN [m [io.velo.persist.LocalPersist] - Fix slot thread id, s=1, tid=53
+    19:38:36.729 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=canRead, value=true, slot=0
+    19:38:36.729 [Test worker] [1;32mINFO [m [io.velo.persist.DynConfig] - Update dyn config, key=canRead, value=true, slot=1
+    19:38:38.936 [Thread-4] [1;31mERROR[m [io.activej.eventloop.Eventloop] - Fatal error in .whenComplete(io.velo.command.PGroup$$Lambda/0x00007d1d843d1d28@9289f30)
+    java.lang.IllegalStateException: Thread id not match, thread id=53, thread id protected for safe=1
+    	at io.velo.persist.OneSlot.checkCurrentThreadId(OneSlot.java:1603)
+    	at io.velo.persist.OneSlot.get(OneSlot.java:1752)
+    	at io.velo.BaseCommand.getCv(BaseCommand.java:768)
+    	at io.velo.command.PGroup.getHll(PGroup.java:339)
+    	at io.velo.command.PGroup.lambda$pfmerge$5(PGroup.java:537)
+    	at io.activej.promise.AbstractPromise$14.acceptNext(AbstractPromise.java:686)
+    	at io.activej.promise.AbstractPromise.complete(AbstractPromise.java:114)
+    	at io.activej.promise.AbstractPromise$1.acceptNext(AbstractPromise.java:203)
+    	at io.activej.promise.AbstractPromise.complete(AbstractPromise.java:114)
+    	at io.activej.promise.SettablePromise.set(SettablePromise.java:60)
+    	at io.velo.persist.OneSlot.lambda$asyncCall$2(OneSlot.java:743)
+    	at io.activej.eventloop.Eventloop.executeTask(Eventloop.java:578)
+    	at io.activej.eventloop.Eventloop.executeConcurrentTasks(Eventloop.java:645)
+    	at io.activej.eventloop.Eventloop.run(Eventloop.java:476)
+    	at org.codehaus.groovy.vmplugin.v8.IndyInterface.fromCache(IndyInterface.java:321)
+    	at io.velo.command.Bug84Agent2VerifyTempSpec$__spock_feature_0_0_closure1.doCall(Bug84Agent2VerifyTempSpec.groovy:71)
+    	at io.velo.command.Bug84Agent2VerifyTempSpec$__spock_feature_0_0_closure1.doCall(Bug84Agent2VerifyTempSpec.groovy)
+    	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    	at org.codehaus.groovy.reflection.CachedMethod.invoke(CachedMethod.java:343)
+    	at groovy.lang.MetaMethod.doMethodInvoke(MetaMethod.java:328)
+    	at org.codehaus.groovy.runtime.metaclass.ClosureMetaClass.invokeMethod(ClosureMetaClass.java:279)
+    	at groovy.lang.MetaClassImpl.invokeMethod(MetaClassImpl.java:1006)
+    	at groovy.lang.Closure.call(Closure.java:418)
+    	at groovy.lang.Closure.call(Closure.java:412)
+    	at groovy.lang.Closure.run(Closure.java:500)
+    	at java.base/java.lang.Thread.run(Thread.java:1583)
+    84.1 pfmerge settled=false, ex=null, settlingThread=null (main tid=1, workerB tid=53), blockerDone=true
+    84.1 dst access from the source worker thread => IllegalStateException: Thread id not match, thread id=53, thread id protected for safe=1
+    19:38:41.541 [Thread-4] [1;32mINFO [m [io.activej.eventloop.Eventloop] - Eventloop{loop=44} finished
+    19:38:41.542 [Test worker] [1;33mWARN [m [io.velo.persist.LocalPersist] - Fix slot thread id, s=1, tid=1
+    Close wal raf success, slot=0
+    Close wal short value raf success, slot=0
+    Meta chunk segment flag seq file closed.
+    Meta chunk segment index file closed
+    Clean up fd read, name=chunk_data_index_0_slot_0, one inner address=137567868887040
+    Clean up fd write, name=chunk_data_index_0_slot_0, write segment batch address=137567823466496
+    Clean up fd read, name=chunk_data_index_0_slot_0, for repl address=137567188279296
+    Clean up fd read, name=chunk_data_index_0_slot_0, read for merge batch address=137567734935552
+    Closed raf, name=chunk_data_index_0_slot_0
+    Clean up fd read, name=key_bucket_split_0_slot_0, one inner address=137567868891136
+    Clean up fd read, name=key_bucket_split_0_slot_0, for one wal group address=137567735066624
+    Closed raf, name=key_bucket_split_0_slot_0
+    Meta key bucket split number file closed
+    Stat key count in buckets file closed
+    Repl close binlog current raf success, slot=0
+    Close wal raf success, slot=1
+    Close wal short value raf success, slot=1
+    Meta chunk segment flag seq file closed.
+    Meta chunk segment index file closed
+    Clean up fd read, name=chunk_data_index_0_slot_1, one inner address=137567867580416
+    Clean up fd write, name=chunk_data_index_0_slot_1, write segment batch address=137567734919168
+    Clean up fd read, name=chunk_data_index_0_slot_1, for repl address=137565705076736
+    Clean up fd read, name=chunk_data_index_0_slot_1, read for merge batch address=137565704945664
+    Closed raf, name=chunk_data_index_0_slot_1
+    Clean up fd read, name=key_bucket_split_0_slot_1, one inner address=137567868882944
+    Clean up fd read, name=key_bucket_split_0_slot_1, for one wal group address=137567188148224
+    Closed raf, name=key_bucket_split_0_slot_1
+    Meta key bucket split number file closed
+    Stat key count in buckets file closed
+    Repl close binlog current raf success, slot=1
+Bug84Agent2VerifyTempSpec > 84.2 library level: registers change while the estimate stays put (prasanthj hyperloglog 1.1) STANDARD_OUT
+    84.2 library: first unchanged-estimate-but-altered-register element=e2471, estimate=2467, unchanged events=1925/20000
+Bug84Agent2VerifyTempSpec > 84.2 end to end: PFADD drops the altered HLL when the estimate does not move STANDARD_OUT
+    84.2 e2e: reply for e2471=io.velo.reply.IntegerReply$2@10b36d8a, stored == state-without-e2471: true, stored == state-with-e2471: false
+Bug84Agent2VerifyTempSpec > 84.3 PSUBSCRIBE / PUNSUBSCRIBE confirmation keyword STANDARD_OUT
+    84.3 PSUBSCRIBE confirmation first element='subscribe' (Redis 7.2 pushes 'psubscribe')
+    84.3 PUNSUBSCRIBE confirmation first element='unsubscribe' (Redis 7.2 pushes 'punsubscribe')
+Bug84Agent2VerifyTempSpec > 84.4/84.5/84.6/84.8 PUBSUB subcommands vs Redis 7.2 STANDARD_OUT
+    84.4 PUBSUB NUMSUB news.tech => 2 (Redis 7.2: 1, pattern subscribers excluded)
+    84.5 PUBSUB CHANNELS => [news.*, news.tech] (Redis 7.2: [news.tech] only)
+    84.5 PUBSUB CHANNELS news.* => [news.*, news.tech] (Redis 7.2: [news.tech], not the pattern name)
+    84.6 PUBSUB NUMPAT => io.velo.reply.NilReply@526a1b51 (Redis 7.2: (integer) 1)
+    84.8 PUBSUB NUMSUB (no channel) => ErrorReply{message='format'} (Redis 7.2: empty array)
+    84.8 PUBSUB bogus => io.velo.reply.NilReply@526a1b51 (Redis 7.2: ERR unknown subcommand 'bogus'. Try PUBSUB HELP.)
+Bug84Agent2VerifyTempSpec > 84.7 wrong type: bare RuntimeException -> -ERR wrong type instead of -WRONGTYPE STANDARD_OUT
+    84.7 wire reply => -ERR wrong type (Redis 7.2: -WRONGTYPE Key is not a valid HyperLogLog string value.)
+Bug84Agent2VerifyTempSpec > 84.9 PERSIST writes the value back with the old sequence number STANDARD_OUT
+    84.9 seq before=0, seq after PERSIST=0 (EGroup.expire() allocates snowFlake.nextId() for the same kind of metadata-only rewrite)
+Bug84Agent2VerifyTempSpec > 84.10 PEXPIRE / PSETEX error texts vs Redis 7.2 STANDARD_OUT
+    84.10 PEXPIRE k abc        => -ERR not integer  (Redis: value is not an integer or out of range)
+    84.10 PEXPIREAT k abc     => -ERR not integer  (Redis: value is not an integer or out of range)
+    84.10 PSETEX k abc v      => -ERR not integer  (Redis: value is not an integer or out of range)
+    84.10 PSETEX k 0 v        => -ERR invalid integer  (Redis: invalid expire time in 'psetex' command)
+> Task :jacocoTestReport
+[Incubating] Problems report is available at: file:///home/kerry/ws/velo/build/reports/problems/problems-report.html
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+BUILD SUCCESSFUL in 12s
+13 actionable tasks: 2 executed, 11 up-to-date
+
+----- the IllegalStateException raised on the source worker thread inside the pfmerge whenComplete -----
+    java.lang.IllegalStateException: Thread id not match, thread id=53, thread id protected for safe=1
+    	at io.velo.persist.OneSlot.checkCurrentThreadId(OneSlot.java:1603)
+    	at io.velo.persist.OneSlot.get(OneSlot.java:1752)
+    	at io.velo.BaseCommand.getCv(BaseCommand.java:768)
+    	at io.velo.command.PGroup.getHll(PGroup.java:339)
+    	at io.velo.command.PGroup.lambda$pfmerge$5(PGroup.java:537)
+    	at io.activej.promise.AbstractPromise$14.acceptNext(AbstractPromise.java:686)
+    	at io.activej.promise.AbstractPromise.complete(AbstractPromise.java:114)
+    	at io.activej.promise.AbstractPromise$1.acceptNext(AbstractPromise.java:203)
+    	at io.activej.promise.AbstractPromise.complete(AbstractPromise.java:114)
+    	at io.activej.promise.SettablePromise.set(SettablePromise.java:60)
+    	at io.velo.persist.OneSlot.lambda$asyncCall$2(OneSlot.java:743)
+    	at io.activej.eventloop.Eventloop.executeTask(Eventloop.java:578)
+    	at io.activej.eventloop.Eventloop.executeConcurrentTasks(Eventloop.java:645)
+    	at io.activej.eventloop.Eventloop.run(Eventloop.java:476)
+
+----- PART 2: live Redis 7.2.11 differential -----
+== 84.2 PFADD semantics: 1 if at least one register was altered ==
+0
+batch e0..e2470 reply: 1
+pfadd dhll e2471 reply: 1
+pfadd dhll e2471 again (dup): 0
+pfcount dhll: 2453
+
+== 84.7 wrong type ==
+pfadd str a: WRONGTYPE Key is not a valid HyperLogLog string value.
+pfcount str: WRONGTYPE Key is not a valid HyperLogLog string value.
+pfmerge str dhll: WRONGTYPE Key is not a valid HyperLogLog string value.
+
+== 84.10 error texts ==
+pexpire k abc: ERR value is not an integer or out of range
+pexpireat k abc: ERR value is not an integer or out of range
+psetex k abc v: ERR value is not an integer or out of range
+psetex k 0 v: ERR invalid expire time in 'psetex' command
+
+== 84.8 pubsub arity/unknown ==
+pubsub numsub (no channel): []
+pubsub bogus: ERR unknown subcommand 'bogus'. Try PUBSUB HELP.
+
+== 84.3 psubscribe/punsubscribe confirmations ==
+psubscribe
+news.*
+1
+punsubscribe
+news.*
+0
+
+== 84.4/84.5/84.6 with one exact + one pattern subscriber ==
+pubsub channels: [news.tech]
+pubsub channels 'news.*': [news.tech]
+pubsub numsub news.tech: [news.tech 1 ]
+pubsub numpat: 1
+
+----- PART 3: non-findings sanity checks (live Redis 7.2.11) -----
+pfadd k1 (key-only, missing): 1
+pfadd k1 again: 0
+pfmerge dst k2 on a string dst: WRONGTYPE Key is not a valid HyperLogLog string value.
+pfmerge dst k2 on an HLL dst with ttl 100: OK; ttl dst after merge: 100

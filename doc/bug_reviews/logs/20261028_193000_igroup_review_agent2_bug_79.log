@@ -1,0 +1,133 @@
+# Bug 79 — IGroup round 1 — REVIEWER (AI agent 2) evidence log
+# date: 2026-10-28, reviewer branch: review/igroup, HEAD: 03821ace
+# method: Spock temp spec (src/test/groovy/io/velo/command/Bug79ReviewTempSpec.groovy)
+#         + live Redis 7.2.11 differential (port 31999) + static inspection
+
+===============================================================
+§1  LIVE REDIS 7.2.11 DIFFERENTIAL
+===============================================================
+### redis-server version
+Redis server v=7.2.11 sha=d4c381df:0 malloc=jemalloc-5.3.0 bits=64 build=e3db856fd57ff434
+
+### 79.2 INCRBY with Long.MIN_VALUE delta
+$ set k 0
+OK
+$ incrby k -9223372036854775808
+-9223372036854775808
+$ set k2 -5
+OK
+$ incrby k2 -9223372036854775808
+ERR increment or decrement would overflow
+
+$ get k2
+-5
+
+### 79.1 INCRBYFLOAT precision
+$ incrbyfloat g 0.001 (x3)
+0.004
+0.005
+0.006
+$ set h 10.50
+OK
+$ incrbyfloat h 0.1
+10.6
+
+### 79.8 literal parsing
+$ incrby jj +5   => ERR value is not an integer or out of range
+
+$ incrby jj 05   => ERR value is not an integer or out of range
+
+$ incrby jj -0   => ERR value is not an integer or out of range
+
+$ incrbyfloat ff 1.5d     => ERR value is not a valid float
+
+$ incrbyfloat ff  1.5     => ERR value is not a valid float
+
+$ incrbyfloat ff .5       => 1001.0015
+$ incrbyfloat ff 1e3      => 2001.00150000000000006
+$ incrbyfloat ff inf      => ERR increment would produce NaN or Infinity
+
+$ incrbyfloat ff nan      => ERR value is not a valid float
+
+
+### 79.9 / 79.10 INFO sections
+$ info SERVER | grep -c '^#'
+1
+$ info server | grep -c '^#'
+1
+$ info foo | wc -c
+0
+$ info all | grep -c '^#'
+13
+$ info everything | grep -c '^#'
+13
+$ info default | grep -c '^#'
+11
+$ info (no arg) | grep -c '^#'
+11
+
+--- fresh key variant of the INCRBYFLOAT precision probe ---
+$ incrbyfloat g2 0.001 (x3, fresh key)
+0.001
+0.002
+0.003
+$ set h2 10.50
+OK
+$ incrbyfloat h2 0.1
+10.6
+
+===============================================================
+§2  SPOCK TEMP SPEC OUTPUT (Velo side)
+===============================================================
+--- Bug79ReviewTempSpec > 79.1 incrbyfloat quantizes to doubleScale STANDARD_OUT
+79.1 raw r1 = $4\r\n0.00\r\n
+79.1 raw r2 = $4\r\n0.00\r\n
+79.1 raw r3 = $4\r\n0.00\r\n
+79.1 stored = 0.0
+79.1 raw 10.50+0.1 = $5\r\n10.60\r\n
+79.1 stored f2 = 10.6
+--- Bug79ReviewTempSpec > 79.2 incrby with Long.MIN_VALUE delta STANDARD_OUT
+79.2 value 0 -> ErrorReply('increment or decrement would overflow')
+79.2 stored k1 = 0
+79.2 value -5 -> Int(9223372036854775803)
+79.2 stored k2 = 9223372036854775803
+79.2 control -5 -> ErrorReply('increment or decrement would overflow')
+79.2 stored k3 = -5
+--- Bug79ReviewTempSpec > 79.8 incrby and incrbyfloat accept java only literals STANDARD_OUT
+79.8 incrby +5 -> Int(5)
+79.8 incrby 05 -> Int(10)
+79.8 incrby -0 -> Int(10)
+79.8 incrbyfloat 1.5d -> Double(1.5)
+79.8 incrbyfloat ' 1.5 ' -> Double(1.5)
+79.8 incrbyfloat .5 -> Double(0.5)
+--- Bug79ReviewTempSpec > 79.9 and 79.10 info section matching STANDARD_OUT
+79.9 info server = '# Server
+79.9 info server headers = [# Server]
+79.9 info SERVER = '# Server
+79.9 info SERVER headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+79.9 info MEMORY = '# Server
+79.9 info MEMORY headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+79.10 info foo = '# Server
+79.10 info foo headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+79.10 info foo length = 1048
+79.10 info all = '# Server
+79.10 info all headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+--- Bug79ReviewTempSpec > 79.3 ingest json value_fields star STANDARD_OUT
+79.3 star reply = io.velo.reply.AsyncReply@27cfc534
+79.3 star stored value = {"*":null}
+79.3 count-equal reply = io.velo.reply.AsyncReply@30090808
+79.3 count-equal stored value = {"name":"name0","age":20,"address":"address0"}
+--- Bug79ReviewTempSpec > 79.4 ingest file_pattern is a java regex STANDARD_OUT
+79.4 glob reply = ErrorReply('dir: /tmp/velo-data/test-persist/ingest79_4 file_pattern: test* not match any file')
+79.4 regex reply = io.velo.reply.AsyncReply@93bc31f
+79.4 invalid regex = THROWN java.util.regex.PatternSyntaxException: Unclosed character class near index 8
+--- Bug79ReviewTempSpec > 79.5 ingest csv out of range indexes STANDARD_OUT
+79.5 value index over length = io.velo.reply.AsyncReply@3caf87e6
+79.5 value index over length exception = java.lang.ArrayIndexOutOfBoundsException: Index 5 out of bounds for length 4
+79.5 stored after partial write = true
+79.5 negative key index = io.velo.reply.AsyncReply@1b5a6a1c
+79.5 negative key index exception = java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 3
+--- Bug79ReviewTempSpec > 79.6 bulk load flag is cleared by the per file reset STANDARD_OUT
+79.6 bulkLoad after setBulkLoad = true
+79.6 bulkLoad after reset = false
+

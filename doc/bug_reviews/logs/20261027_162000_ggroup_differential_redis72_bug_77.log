@@ -1,0 +1,85 @@
+# Redis 7.2.11 differential log — bug 77 (GGroup) — reviewer: AI agent 2
+# server: Redis server v=7.2.11 sha=d4c381df:0 malloc=jemalloc-5.3.0 bits=64 build=e3db856fd57ff434
+# date: 2026-10-27T16:26:49+08:00
+
+$ redis-cli -p 7799 lpush l a ; redis-cli -p 7799 getdel l
+1
+WRONGTYPE Operation against a key holding the wrong kind of value
+
+$ redis-cli -p 7799 lpush l2 a ; redis-cli -p 7799 getset l2 x
+1
+WRONGTYPE Operation against a key holding the wrong kind of value
+
+$ redis-cli -p 7799 lpush l3 a ; redis-cli -p 7799 getex l3
+1
+WRONGTYPE Operation against a key holding the wrong kind of value
+
+$ redis-cli -p 7799 lpush l4 a ; redis-cli -p 7799 getrange l4 0 1
+1
+WRONGTYPE Operation against a key holding the wrong kind of value
+
+$ redis-cli -p 7799 set k v ; redis-cli -p 7799 getex k EX 9223372036854775807
+OK
+ERR invalid expire time in 'getex' command
+
+$ redis-cli -p 7799 set k v ; redis-cli -p 7799 getex k PX 9223372036854775807
+OK
+ERR invalid expire time in 'getex' command
+
+$ redis-cli -p 7799 set k v ; redis-cli -p 7799 getex k EXAT 9223372036854775807
+OK
+ERR invalid expire time in 'getex' command
+
+$ redis-cli -p 7799 geoadd g NaN 37.5 m
+ERR value is not a valid float
+
+$ redis-cli -p 7799 geoadd g inf 37.5 m
+ERR invalid longitude,latitude pair inf,37.500000
+
+$ redis-cli -p 7799 geoadd sicily 13.361389 38.115556 Palermo 15.087269 37.502669 Catania
+2
+$ redis-cli -p 7799 geodist sicily Palermo Palermo
+0.0000
+$ redis-cli -p 7799 geodist sicily Palermo Catania km
+166.2742
+$ redis-cli -p 7799 geoadd far 0 85 a 0 -85 b
+2
+$ redis-cli -p 7799 geodist far a b m
+18908470.9226
+$ redis-cli -p 7799 geoadd small 0.0001 0.0001 m
+1
+$ redis-cli -p 7799 geopos small m
+0.00009924173355103
+0.00010012148579364
+$ redis-cli -p 7799 geosearch sicily frommember Palermo byradius 200 km withhash
+Palermo
+3479099956230698
+Catania
+3479447370796909
+$ redis-cli -p 7799 geosearch sicily frommember Palermo byradius 200 km withdist
+Palermo
+0.0000
+Catania
+166.2742
+$ redis-cli -p 7799 geosearchstore dst sicily frommember Palermo byradius 200 km
+2
+$ redis-cli -p 7799 type dst
+zset
+$ redis-cli -p 7799 zcard dst
+2
+$ redis-cli -p 7799 geosearchstore dst sicily fromlonlat 0 0 byradius 1 m   # empty result
+0
+$ redis-cli -p 7799 exists dst
+0
+$ redis-cli -p 7799 geosearchstore dst3 nosuchsrc frommember Palermo byradius 200 km
+0
+$ redis-cli -p 7799 exists dst3
+0
+$ redis-cli -p 7799 geosearch sicily frommember nosuch byradius 100 km
+ERR could not decode requested zset member
+
+$ redis-cli -p 7799 set s hello ; redis-cli -p 7799 getrange s 99999999999 -1
+OK
+$
+$ redis-cli -p 7799 set <257-byte key> v   # redis has no 256-byte key cap
+OK

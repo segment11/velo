@@ -1,0 +1,76 @@
+Velo MGroup re-review (agent 2, stage 5) — per-commit RED/GREEN + JaCoCo + live e2e
+date: 2026-11-10T18:45:00+08:00
+reviewed commits: aac6ba68 / c8a2f85c / 4abf7b43 / c95b94fa / b18ed06f / bdcb977b / 9fbf7b4b / 5c744507 (branch review/mgroup, HEAD bf9fc73f)
+method: isolated worktree /tmp/opencode/velo83rr; per bug: RED = parent production code + the commit's
+        regression test, GREEN = the full commit; every gradle run with a fresh build/test-results dir;
+        JaCoCo from scripts/jacoco_cover.py at HEAD-state; live server = velo-1.0.0.jar rebuilt at HEAD
+        (15:00, contains "Target instance replied with error: " in MGroup.class), slotNumber=8
+        slotWorkers=2, live redis-server 7.2.11 destinations.
+===================================================================================================
+== A) per-commit RED (parent prod + commit test) / GREEN (commit) — all derived independently by agent 2 ==
+
+83.1 aac6ba68  RED @ f89a0ed2+test: test migrate FAILED 'parsedSlots.size() == 2' / actual [] size 0
+               GREEN @ aac6ba68: MGroupTest 14/14, DGroupTest 23/23
+83.2 c8a2f85c  RED @ aac6ba68+test: test migrate FAILED 'inMemoryGetSet.getBuf(slot, c, 0, 0L) == null'
+               (source key still present after no-COPY migrate)
+               GREEN: MGroupTest 14/14
+83.3 4abf7b43  RED @ c8a2f85c+test: test migrate FAILED 'authReply == OKReply.INSTANCE' / actual
+               ErrorReply{syntax error}
+               GREEN: MGroupTest 14/14
+83.4 c95b94fa  RED @ 4abf7b43+test: test migrate FAILED 'singleKeyReply == OKReply.INSTANCE' / actual
+               ErrorReply{format}
+               GREEN: MGroupTest 14/14
+83.7 b18ed06f  RED @ c95b94fa+test: test migrate FAILED with redis.clients.jedis.exceptions.
+               JedisDataException: BUSYKEY Target key name already exists. escaping the command
+               GREEN: MGroupTest 14/14
+83.5 bdcb977b  RED @ b18ed06f+test: test mset FAILED 'tooLongKeyReply == ErrorReply.KEY_TOO_LONG' /
+               actual OKReply; test msetnx FAILED the same way / actual IntegerReply$1
+               GREEN: MGroupTest 14/14
+83.6 9fbf7b4b  RED @ bdcb977b+test: test msetnx FAILED 'raceFuture.get() == IntegerReply.REPLY_0' /
+               actual IntegerReply$1 (REPLY_1) — the concurrently written value was overwritten
+               GREEN: MGroupTest 14/14
+83.8 5c744507  RED @ 9fbf7b4b+test: test migrate FAILED java.lang.NumberFormatException:
+               For input string: "xyz" at MGroup.migrate
+               GREEN: MGroupTest 14/14
+
+regression at HEAD state (worktree): MGroupTest 14 + DGroupTest 23 + RESPReplyTest 4 +
+BaseCommandTest 22 + RequestHandlerTest 8 = 71/71 green (matches the fix log claim).
+
+== B) JaCoCo (scripts/jacoco_cover.py, HEAD layout, after the HEAD-state MGroupTest run) ==
+
+MGroup 129-145  parseSlots migrate branch        — all covered, all branches
+MGroup 168-222  parseMigrateArgs                 — all covered, all branches (auth/auth2/keys/copy/replace)
+MGroup 355-368  checkMSetLength                 — all covered, all branches
+MGroup 370-380 / 428-438  mset/msetnx call sites — all covered
+MGroup 495-530  msetnx write-phase re-check      — re-check and reply covered; line 517
+                                                (writeEx != null, pre-existing) partial
+MGroup 542-551  parseMigrateTimeout              — all covered, both branches (<=0 clamp included)
+MGroup 552-585  migrate() arg checks + try/catch — all covered
+MGroup 600-660  local path: dump checks, !isCopy, catch/finally — all changed lines+branches covered
+               (pre-existing uncovered: 621 null-dump true-branch local, 630-632 defensive
+               !OK branch — unchanged by the fixes, Jedis throws instead of returning non-OK)
+MGroup 662-740  cross path: dump checks, !isCopyFinal, catch/finally — changed lines covered
+               GAP: 676-678 (dumpBytes == null -> continue, ADDED by aac6ba68) — only the false
+               branch exercised; the null-skip branch is not covered by any test (an empty
+               collection dumps to null). Pre-existing partials: 671 (cv==null), 695 (e!=null),
+               710 (!OK defensive) — unchanged lines.
+DGroup 550-562  isTypeNotSupport                 — all covered, both branches
+
+== C) live e2e at HEAD (slotNumber=8 slotWorkers=2, port 7398 -> redis 7.2.11) ==
+
+pre-fix (agent 2 round 1, log 20261110_140600)          -> post-fix (HEAD jar, 18:38)
+MIGRATE KEYS mk:1..8: 5x ERR Thread id not match        -> 8x OK, 8/8 on target, source
+                                                          EXISTS=0/GET nil (no-COPY deletes)
+MIGRATE 8 keys spanning workers: ERR Thread id not match-> OK, 6/6 multi:* on target
+single-key form: ERR *wrong number of arguments         -> OK, transferred + source deleted
+notempty + KEYS: silently migrated                      -> ERR When using MIGRATE KEYS option, the
+                                                          key argument must be set to the empty string
+AUTH secret: ERR syntax error                           -> OK, value present on target
+COPY: source stayed (and COPY REPLACE deleted it)       -> COPY keeps source (EXISTS=1)
+BUSYKEY: ERR BUSYKEY ... (leak/hang)                    -> ERR Target instance replied with error:
+                                                          BUSYKEY Target key name already exists.
+timeout/db/port = xyz/abc/abc: ERR For input string     -> ERR value is not an integer or out of range
+
+note: source dbsize still reports 8 right after the no-COPY migrations although EXISTS/GET already
+answer deleted — the delayed-delete tombstone lives in the WAL and the dbsize estimate lags
+(pre-existing Velo behaviour of removeDelay, not introduced by these commits).

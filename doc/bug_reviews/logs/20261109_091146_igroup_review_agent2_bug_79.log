@@ -1,0 +1,189 @@
+# Bug 79 — IGroup round 1 — REVIEWER (AI agent 2) evidence log — SECOND PASS
+# date: 2026-11-09, reviewer branch: review/igroup, HEAD: 03821ace
+# method: Spock temp spec (src/test/groovy/io/velo/command/Bug79ReviewTempSpec.groovy
+#         + src/test/groovy/io/velo/command/Bug79ExtraTempSpec.groovy)
+#         + live Redis 7.2.11 differential (port 31999) + static inspection
+#         + upstream redis source (~/ws/redis, 7.2 branch)
+
+===============================================================================================
+§1  LIVE REDIS 7.2.11 DIFFERENTIAL (redis-server v=7.2.11 sha=d4c381df, port 31999)
+===============================================================================================
+### 79.2 INCRBY with Long.MIN_VALUE delta
+$ set k 0
+OK
+$ incrby k -9223372036854775808
+-9223372036854775808
+$ set k2 -5
+OK
+$ incrby k2 -9223372036854775808
+ERR increment or decrement would overflow
+$ get k2
+-5
+
+### 79.1 INCRBYFLOAT precision
+$ incrbyfloat g2 0.001   (x3, fresh key)
+0.001
+0.002
+0.003
+$ set h2 10.50
+OK
+$ incrbyfloat h2 0.1
+10.6
+$ incrbyfloat p 0.1   (x3)
+0.1
+0.2
+0.3
+$ incrbyfloat q 0.001   (x10, then GET)
+0.01
+
+### 79.8 literal parsing
+$ incrby jj +5    => ERR value is not an integer or out of range
+$ incrby jj 05    => ERR value is not an integer or out of range
+$ incrby jj -0    => ERR value is not an integer or out of range
+$ incrbyfloat ff 1.5d     => ERR value is not a valid float
+$ incrbyfloat ff " 1.5 "  => ERR value is not a valid float
+$ incrbyfloat ff .5       => 0.5      (ACCEPTED by redis — do not over-reject)
+$ incrbyfloat ff 1e3      => 1000.5   (ACCEPTED by redis — do not over-reject)
+$ incrbyfloat ff inf      => ERR increment would produce NaN or Infinity
+$ incrbyfloat ff nan      => ERR value is not a valid float
+
+### 79.9 / 79.10 INFO sections
+$ info SERVER | grep -c '^#'        => 1
+$ info server | grep -c '^#'        => 1
+$ info foo | wc -c                  => 0        (empty bulk, NOT the default sections)
+$ info all | grep -c '^#'           => 13
+$ info everything | grep -c '^#'    => 13
+$ info default | grep -c '^#'       => 11
+$ info | grep -c '^#'               => 11
+$ info server memory | grep '^#'    => # Server / # Memory
+$ info server foo | grep '^#'       => # Server            (unknown section silently ignored)
+$ info keyspace | grep -c '^#'      => 1
+
+### DECRBY Long.MIN_VALUE delta (scope check for 79.2)
+$ set k 0       ; decrby k -9223372036854775808 => ERR decrement would overflow ; get k => 0
+$ set k -5      ; decrby k -9223372036854775808 => ERR decrement would overflow ; get k => -5
+$ set k MIN     ; decrby k -9223372036854775808 => ERR decrement would overflow ; get k => MIN
+(upstream src/t_string.c decrbyCommand: `if (incr == LLONG_MIN) { addReplyError(c, "decrement would overflow"); return; }`)
+
+===============================================================================================
+§2  SPOCK TEMP SPEC OUTPUT (Velo side) — Bug79ReviewTempSpec, 8/8 green
+===============================================================================================
+--- 79.1 incrbyfloat quantizes to doubleScale STANDARD_OUT
+79.1 raw r1 = $4\r\n0.00\r\n
+79.1 raw r2 = $4\r\n0.00\r\n
+79.1 raw r3 = $4\r\n0.00\r\n
+79.1 stored = 0.0
+79.1 raw 10.50+0.1 = $5\r\n10.60\r\n
+79.1 stored f2 = 10.6
+--- 79.2 incrby with Long.MIN_VALUE delta STANDARD_OUT
+79.2 value 0 -> ErrorReply('increment or decrement would overflow')
+79.2 stored k1 = 0
+79.2 value -5 -> Int(9223372036854775803)
+79.2 stored k2 = 9223372036854775803
+79.2 control -5 -> ErrorReply('increment or decrement would overflow')
+79.2 stored k3 = -5
+--- 79.8 incrby and incrbyfloat accept java only literals STANDARD_OUT
+79.8 incrby +5 -> Int(5)
+79.8 incrby 05 -> Int(10)
+79.8 incrby -0 -> Int(10)
+79.8 incrbyfloat 1.5d -> Double(1.5)
+79.8 incrbyfloat ' 1.5 ' -> Double(1.5)
+79.8 incrbyfloat .5 -> Double(0.5)
+--- 79.9 and 79.10 info section matching STANDARD_OUT
+79.9 info server = '# Server
+79.9 info server headers = [# Server]
+79.9 info SERVER headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+79.9 info MEMORY headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+79.10 info foo headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+79.10 info foo length = 1048
+79.10 info all headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+--- 79.3 ingest json value_fields star STANDARD_OUT
+79.3 star stored value = {"*":null}
+79.3 count-equal stored value = {"name":"name0","age":20,"address":"address0"}
+--- 79.4 ingest file_pattern is a java regex STANDARD_OUT
+79.4 glob reply = ErrorReply('dir: /tmp/velo-data/test-persist/ingest79_4 file_pattern: test* not match any file')
+79.4 invalid regex = THROWN java.util.regex.PatternSyntaxException: Unclosed character class near index 8
+--- 79.5 ingest csv out of range indexes STANDARD_OUT
+79.5 value index over length exception = java.lang.ArrayIndexOutOfBoundsException: Index 5 out of bounds for length 4
+79.5 stored after partial write = true
+79.5 negative key index exception = java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 3
+--- 79.6 bulk load flag is cleared by the per file reset STANDARD_OUT
+79.6 bulkLoad after setBulkLoad = true
+79.6 bulkLoad after reset = false
+
+===============================================================================================
+§3  EXTRA TEMP SPEC (Bug79ExtraTempSpec) — scope + multi-section probes
+===============================================================================================
+EXTRA decrby d1 -9223372036854775808 -> ErrorReply('increment or decrement would overflow') stored=0
+EXTRA decrby d2 -9223372036854775808 -> Int(9223372036854775803) stored=9223372036854775803
+EXTRA decrby d3 9223372036854775808 -> ErrorReply('not integer') stored=0
+EXTRA info server foo headers = [# Server, # Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+EXTRA info SERVER foo headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster, # Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+EXTRA info server memory headers = [# Server, # Memory]
+EXTRA info keyspace headers = []
+EXTRA info KEYSPACE headers = [# Server, # Clients, # Memory, # Replication, # CPU, # Cluster]
+
+===============================================================================================
+§4  JDK REGEX REPRO (79.4 prose check)
+===============================================================================================
+pattern=test*     name=test1.json  matches=false
+pattern=test*     name=test.csv    matches=false
+pattern=*.csv     -> java.util.regex.PatternSyntaxException: Dangling meta character '*' near index 0
+pattern=test[.csv -> java.util.regex.PatternSyntaxException: Unclosed character class near index 8
+pattern=test.*    name=test1.json  matches=true
+
+===============================================================================================
+§5  STATIC INSPECTION
+===============================================================================================
+### 79.6 / 79.7 anchors
+- IGroup.java:301   oneSlot.setBulkLoad(true);                       (once, before the file loop)
+- IGroup.java:373   oneSlot.resetWritePositionAfterBulkLoad();       (per csv/json file, in finally)
+- IGroup.java:415   oneSlot.resetWritePositionAfterBulkLoad();       (per parquet file, in finally)
+- OneSlot.java:2284 resetWritePositionAfterBulkLoad() -> wal.resetWritePositionAfterBulkLoad()
+- Wal.java:849      bulkLoad = false;                                 (inside resetWritePositionAfterBulkLoad)
+- IGroup.java:454   db = RocksDB.open(new Options(), dirPath);        (Options never closed on any path)
+- IGroup.java:510   db.close();                                       (only inside the aggregate lambda)
+- LocalPersist.java:287-292  Promises.all(...).whenComplete: on error -> finalPromise.setException(e); return;
+                                    (the aggregate fn — and therefore db.close() — never runs)
+- javap org.rocksdb.AbstractNativeReference (rocksdbjni 9.7.3):
+      public abstract class org.rocksdb.AbstractNativeReference implements org.rocksdb.AutoCloseable {
+        protected abstract boolean isOwningHandle();
+        public abstract void close();
+      }
+  -> no finalize(), no Cleaner registration: the native Options memory is NOT reclaimed by GC.
+
+### 79.1 anchors
+- DGroup.java:404-405  BigDecimal.valueOf(doubleValue).setScale(ConfForGlobal.doubleScale, HALF_UP)
+                                .subtract(BigDecimal.valueOf(byFloat).setScale(ConfForGlobal.doubleScale, HALF_UP));
+- DGroup.java:407      setNumber(newValue.doubleValue(), slotWithKeyHash, expireAt);   (stores the ROUNDED value)
+- DoubleReply.java:36/43  value.setScale(ConfForGlobal.doubleScale, HALF_UP).toPlainString()
+- ConfForGlobal.java:229 doubleScale = 2 ; MultiWorkerServer.java:1487 number.doubleScale default 2
+- grep "new DoubleReply" in src/main -> exactly ONE hit: DGroup.java:408 (no other command family uses it)
+- hash-side precedent: HGroup.java:1612-1652 hincrbyFloatSplit() + formatFloatValue() use
+  BigDecimal.valueOf(double) with NO setScale and stripTrailingZeros() -> commit 259f9e37
+
+### 79.2 anchors
+- IGroup.java:153   return dGroup.decrBy(-by, 0, false);       (-Long.MIN_VALUE == Long.MIN_VALUE, wraps)
+- DGroup.java:409-421 the decr-side guard: by>0 -> longValue < MIN+by ; by<0 -> longValue > MAX+by
+                     with by == Long.MIN_VALUE : MAX+by == -1, so the guard misses
+- DGroup.java:185   decrby -> decrBy(by, 0, false)   (no negation — the DECR* twin is a DIFFERENT path)
+- upstream src/t_string.c:610-615 incrDecrCommand overflow check is ADDITION-shaped:
+      if ((incr < 0 && oldvalue < 0 && incr < (LLONG_MIN-oldvalue)) ||
+          (incr > 0 && oldvalue > 0 && incr > (LLONG_MAX-oldvalue)))  -> "increment or decrement would overflow"
+  -> upstream passes the true increment; it never negates it.
+
+### 79.9 / 79.10 anchors
+- InfoCommand.groovy:62-88  getOneSection(): 'server' == section ... 'keyspace' == section  (case-sensitive)
+- InfoCommand.groovy:77-87  unknown/empty section -> all `sections` joined  (sections = server,clients,memory,replication,cpu,cluster)
+- InfoCommand.groovy:119    if ('keyspace' == section)      (multi-arg branch, also case-sensitive)
+- upstream src/server.c:5427-5463 genInfoSectionDict():
+      if (!strcasecmp(argv[i]->ptr,"default")) ... else if (!strcasecmp(...,"all")) { *out_all = 1; }
+      else if (!strcasecmp(...,"everything")) { *out_everything = 1; *out_all = 1; }
+      else { dictAdd(section_dict, section, NULL); }     (an unknown name is just an unmatched dict key)
+    stringSetDictType (server.c:559) uses dictCStrCaseHash / dictCStrKeyCaseCompare -> CASE-INSENSITIVE lookup
+  -> upstream: section names are matched case-insensitively; an unknown name matches nothing and the
+     reply is empty (no section is emitted), and `all`/`everything`/`default` are first-class keywords.
+
+### 79.4 anchors
+- IGroup.java:269   if (file.getName().matches(filePattern))   (Java regex, fully anchored, PatternSyntaxException leaks)
+- RequestHandler.java:579  catch (Exception e) { ...; return new ErrorReply(e.getMessage()); }  (raw message to client)
