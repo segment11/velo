@@ -527,6 +527,10 @@ public class RGroup extends BaseCommand {
             if (exists(slotWithKeyHash)) {
                 return ErrorReply.BUSYKEY;
             }
+            // in the split hash mode the hash is stored under the derived keys key, the main key does not exist
+            if (exists(slot(RedisHashKeys.keysKey(key)))) {
+                return ErrorReply.BUSYKEY;
+            }
         }
 
         long expireAt;

@@ -651,6 +651,17 @@ class RGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        when: 'bug 85.13: the busy key check finds a hash of the split mode'
+        inMemoryGetSet.remove(slot, 'split_hash')
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('split_hash'), 0, Mock.prepareCompressedValueList(1)[0])
+        def splitHashReply = rGroup.execute('restore split_hash 0 bbb') { data ->
+            def rhhSplit = new RedisHH()
+            rhhSplit.put('a', 'a'.bytes)
+            data[3] = RDBParser.dumpHash(rhhSplit)
+        }
+        then: 'the existing hash is not overwritten'
+        splitHashReply == ErrorReply.BUSYKEY
+
         when: 'bug 85.11: the busy key error is the redis one'
         inMemoryGetSet.remove(slot, 'busy_key')
         inMemoryGetSet.put(slot, 'busy_key', 0, Mock.prepareCompressedValueList(1)[0])
