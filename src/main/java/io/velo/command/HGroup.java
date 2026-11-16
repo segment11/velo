@@ -497,6 +497,13 @@ public class HGroup extends BaseCommand {
     }
 
     void saveRedisHashKeys(RedisHashKeys rhk, String key) {
+        saveRedisHashKeys(rhk, key, CompressedValue.NO_EXPIRE);
+    }
+
+    /**
+     * @param expireAt the absolute expire time in milliseconds, {@link CompressedValue#NO_EXPIRE} for no expire
+     */
+    void saveRedisHashKeys(RedisHashKeys rhk, String key, long expireAt) {
         var keysKey = RedisHashKeys.keysKey(key);
         var slotWithKeyHash = slot(keysKey);
 
@@ -510,7 +517,7 @@ public class HGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        set(rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HASH);
+        set(rhk.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HASH, expireAt);
     }
 
     private RedisHH getRedisHH(SlotWithKeyHash slotWithKeyHash) {
@@ -523,6 +530,13 @@ public class HGroup extends BaseCommand {
     }
 
     void saveRedisHH(RedisHH rhh, SlotWithKeyHash slotWithKeyHash) {
+        saveRedisHH(rhh, slotWithKeyHash, CompressedValue.NO_EXPIRE);
+    }
+
+    /**
+     * @param expireAt the absolute expire time in milliseconds, {@link CompressedValue#NO_EXPIRE} for no expire
+     */
+    void saveRedisHH(RedisHH rhh, SlotWithKeyHash slotWithKeyHash, long expireAt) {
         if (rhh.size() == 0) {
             removeDelay(slotWithKeyHash);
             return;
@@ -533,7 +547,7 @@ public class HGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        set(rhh.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HH);
+        set(rhh.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_HH, expireAt);
     }
 
     boolean isUseHH(byte[] keyBytes) {

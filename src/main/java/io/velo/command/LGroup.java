@@ -416,6 +416,14 @@ public class LGroup extends BaseCommand {
     }
 
     static void saveRedisList(RedisList rl, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
+        saveRedisList(rl, slotWithKeyHash, baseCommand, dictMap, CompressedValue.NO_EXPIRE);
+    }
+
+    /**
+     * @param expireAt the absolute expire time in milliseconds, {@link CompressedValue#NO_EXPIRE} for no expire
+     */
+    static void saveRedisList(RedisList rl, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap,
+                              long expireAt) {
         if (rl.size() == 0) {
             baseCommand.removeDelay(slotWithKeyHash);
             return;
@@ -426,7 +434,7 @@ public class LGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        baseCommand.set(rl.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        baseCommand.set(rl.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_LIST, expireAt);
     }
 
     private RedisList getRedisList(SlotWithKeyHash slotWithKeyHash) {

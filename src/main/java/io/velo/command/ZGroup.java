@@ -711,6 +711,14 @@ public class ZGroup extends BaseCommand {
     }
 
     static void saveRedisZSet(RedisZSet rz, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
+        saveRedisZSet(rz, slotWithKeyHash, baseCommand, dictMap, CompressedValue.NO_EXPIRE);
+    }
+
+    /**
+     * @param expireAt the absolute expire time in milliseconds, {@link CompressedValue#NO_EXPIRE} for no expire
+     */
+    static void saveRedisZSet(RedisZSet rz, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap,
+                              long expireAt) {
         if (rz.isEmpty()) {
             baseCommand.removeDelay(slotWithKeyHash);
             return;
@@ -721,7 +729,7 @@ public class ZGroup extends BaseCommand {
         if (preferDict == null) {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
-        baseCommand.set(rz.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_ZSET);
+        baseCommand.set(rz.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_ZSET, expireAt);
     }
 
     private void saveRedisZSet(RedisZSet rz, SlotWithKeyHash slotWithKeyHash) {

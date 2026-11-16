@@ -534,6 +534,59 @@ class RGroupTest extends Specification {
         reply = rGroup.execute('restore a 0 bbb replace absttl freq')
         then:
         reply == ErrorReply.SYNTAX
+
+        when: 'bug 85.4: a restored list keeps the ttl'
+        reply = rGroup.execute('restore list_ttl 100000 bbb') { data ->
+            def rlTtl = new RedisList()
+            rlTtl.addLast('a'.bytes)
+            data[3] = RDBParser.dumpList(rlTtl)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        def listExpireAt = rGroup.getExpireAt(rGroup.slotWithKeyHashListParsed.getFirst())
+        listExpireAt != null
+        listExpireAt > System.currentTimeMillis() + 50000
+        listExpireAt <= System.currentTimeMillis() + 100000
+
+        when: 'bug 85.4: a restored set keeps the ttl'
+        reply = rGroup.execute('restore set_ttl 100000 bbb') { data ->
+            def rhkTtl = new RedisHashKeys()
+            rhkTtl.add('a')
+            data[3] = RDBParser.dumpSet(rhkTtl)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        def setExpireAt = rGroup.getExpireAt(rGroup.slotWithKeyHashListParsed.getFirst())
+        setExpireAt != null
+        setExpireAt > System.currentTimeMillis() + 50000
+
+        when: 'bug 85.4: a restored zset keeps the ttl'
+        reply = rGroup.execute('restore zset_ttl 100000 bbb') { data ->
+            def rzTtl = new RedisZSet()
+            rzTtl.add(1.0d, 'a')
+            data[3] = RDBParser.dumpZSet(rzTtl)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        def zsetExpireAt = rGroup.getExpireAt(rGroup.slotWithKeyHashListParsed.getFirst())
+        zsetExpireAt != null
+        zsetExpireAt > System.currentTimeMillis() + 50000
+
+        when: 'bug 85.4: a restored hash keeps the ttl'
+        LocalPersist.instance.hashSaveMemberTogether = true
+        reply = rGroup.execute('restore hash_ttl 100000 bbb') { data ->
+            def rhhTtl = new RedisHH()
+            rhhTtl.put('a', 'a'.bytes)
+            data[3] = RDBParser.dumpHash(rhhTtl)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        def hashExpireAt = rGroup.getExpireAt(rGroup.slotWithKeyHashListParsed.getFirst())
+        hashExpireAt != null
+        hashExpireAt > System.currentTimeMillis() + 50000
+
+        cleanup:
+        LocalPersist.instance.hashSaveMemberTogether = false
     }
 
     def 'test role'() {

@@ -467,17 +467,17 @@ public class RGroup extends BaseCommand {
 
                 @Override
                 public void onList(RedisList rl) {
-                    LGroup.saveRedisList(rl, slotWithKeyHash, _rGroup, dictMap);
+                    LGroup.saveRedisList(rl, slotWithKeyHash, _rGroup, dictMap, finalExpireAt);
                 }
 
                 @Override
                 public void onSet(RedisHashKeys rhk) {
-                    SGroup.saveRedisSet(rhk, slotWithKeyHash, _rGroup, dictMap);
+                    SGroup.saveRedisSet(rhk, slotWithKeyHash, _rGroup, dictMap, false, finalExpireAt);
                 }
 
                 @Override
                 public void onZSet(RedisZSet rz) {
-                    ZGroup.saveRedisZSet(rz, slotWithKeyHash, _rGroup, dictMap);
+                    ZGroup.saveRedisZSet(rz, slotWithKeyHash, _rGroup, dictMap, finalExpireAt);
                 }
 
                 @Override
@@ -487,7 +487,7 @@ public class RGroup extends BaseCommand {
                     hGroup.setSlotWithKeyHashListParsed(_rGroup.slotWithKeyHashListParsed);
 
                     if (hGroup.isUseHH(keyBytes)) {
-                        hGroup.saveRedisHH(rhh, slotWithKeyHash);
+                        hGroup.saveRedisHH(rhh, slotWithKeyHash, finalExpireAt);
                     } else {
                         var map = rhh.getMap();
                         var rhk = new RedisHashKeys();
@@ -497,12 +497,12 @@ public class RGroup extends BaseCommand {
                             var fieldKey = RedisHashKeys.fieldKey(key, field);
                             var fieldValueBytes = entry.getValue();
                             var slotWithKeyHashThisField = slot(fieldKey);
-                            set(fieldValueBytes, slotWithKeyHashThisField);
+                            set(fieldValueBytes, slotWithKeyHashThisField, CompressedValue.NULL_DICT_SEQ, finalExpireAt);
 
                             rhk.add(field);
                         }
 
-                        hGroup.saveRedisHashKeys(rhk, Wal.keyString(keyBytes));
+                        hGroup.saveRedisHashKeys(rhk, Wal.keyString(keyBytes), finalExpireAt);
                     }
                 }
             });
