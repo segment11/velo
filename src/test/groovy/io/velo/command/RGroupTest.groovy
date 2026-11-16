@@ -622,9 +622,11 @@ class RGroupTest extends Specification {
         reply == ErrorReply.BUSYKEY
 
         when:
-        reply = rGroup.execute('restore a 0 bbb replace absttl idletime 0 freq -1')
+        // the freq range branch, the idletime and freq together case is covered below
+        reply = rGroup.execute('restore a 0 bbb replace freq 300')
         then:
         reply instanceof ErrorReply
+        (reply as ErrorReply).getMessage() == 'freq must be in range 0..255'
 
         when:
         reply = rGroup.execute('restore a 0 bbb replace absttl idletime -1 freq 0')
