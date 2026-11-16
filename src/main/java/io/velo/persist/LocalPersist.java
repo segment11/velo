@@ -9,6 +9,7 @@ import io.activej.promise.SettablePromise;
 import io.velo.*;
 import io.velo.persist.index.IndexHandlerPool;
 import io.velo.repl.RoleTransitionState;
+import io.velo.Utils;
 import io.velo.repl.cluster.MultiShard;
 import io.velo.repl.cluster.SlotRange;
 import io.velo.reply.AsyncReply;
@@ -287,7 +288,7 @@ public class LocalPersist implements NeedCleanUp {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("async all error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("do sth in slots", e));
                 return;
             }
 

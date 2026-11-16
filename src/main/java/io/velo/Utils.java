@@ -113,6 +113,22 @@ public class Utils {
     }
 
     /**
+     * Makes sure an exception carries a readable message. The error reply of a command is built from
+     * the exception message and some exceptions carry a null message, which would answer "ERR null"
+     * to the client. An exception with a message is returned as it is, so its type is kept.
+     *
+     * @param context what the command was doing, e.g. "copy"
+     * @param e       the exception
+     * @return the exception, wrapped when it has no message
+     */
+    public static Exception wrapException(String context, Exception e) {
+        if (e.getMessage() != null) {
+            return e;
+        }
+        return new RuntimeException(context + " failed: " + e.getClass().getSimpleName(), e);
+    }
+
+    /**
      * Returns the nearest power of two for the given number.
      *
      * @param n the number

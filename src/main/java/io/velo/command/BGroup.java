@@ -8,6 +8,7 @@ import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.Utils;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
 import io.velo.DictMap;
@@ -1016,7 +1017,7 @@ public class BGroup extends BaseCommand {
                 popOtherKeyAsync(1, keys, isLeft).whenComplete((r, e) -> {
                     if (e != null) {
                         log.error("{} error={}", isLeft ? "blpop" : "brpop", e.getMessage());
-                        finalPromise.setException(e);
+                        finalPromise.setException(Utils.wrapException(isLeft ? "blpop" : "brpop", e));
                         return;
                     }
 
@@ -1291,7 +1292,7 @@ public class BGroup extends BaseCommand {
         // the remaining keys are checked on the worker owning them, without blocking this one
         popOtherKeyMpopAsync(1, keys, isLeft, popCount).whenComplete((r, e) -> {
             if (e != null) {
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("blmpop", e));
                 return;
             }
 

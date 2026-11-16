@@ -5,6 +5,7 @@ import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.TypeMismatchException;
+import io.velo.Utils;
 import io.velo.reply.*;
 import io.velo.type.RedisBitSet;
 import io.velo.type.RedisGeo;
@@ -743,7 +744,7 @@ public class GGroup extends BaseCommand {
         var p = dstOneSlot.asyncRun(() -> removeDelay(dstS));
         p.whenComplete((v, t) -> {
             if (t != null) {
-                finalPromise.setException(t);
+                finalPromise.setException(Utils.wrapException("geosearchstore", t));
             } else {
                 finalPromise.set(IntegerReply.REPLY_0);
             }
@@ -1022,7 +1023,7 @@ public class GGroup extends BaseCommand {
                         ZGroup.saveRedisZSet(dstRz, dstS, this, dictMap);
                     }).whenComplete((v, t) -> {
                         if (t != null) {
-                            finalPromise.setException(t);
+                            finalPromise.setException(Utils.wrapException("geosearchstore", t));
                         } else {
                             finalPromise.set(new IntegerReply(dstRz.size()));
                         }
@@ -1053,7 +1054,7 @@ public class GGroup extends BaseCommand {
                     saveRedisGeo(dstRg, dstS);
                 }).whenComplete((v, t) -> {
                     if (t != null) {
-                        finalPromise.setException(t);
+                        finalPromise.setException(Utils.wrapException("geosearchstore", t));
                     } else {
                         finalPromise.set(new IntegerReply(dstRg.size()));
                     }

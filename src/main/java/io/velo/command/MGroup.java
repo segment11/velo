@@ -6,6 +6,7 @@ import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.Utils;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.persist.Wal;
@@ -322,7 +323,7 @@ public class MGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("mget error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("mget", e));
                 return;
             }
 
@@ -413,7 +414,7 @@ public class MGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("mset error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("mset", e));
                 return;
             }
 
@@ -481,7 +482,7 @@ public class MGroup extends BaseCommand {
         Promises.all(anyKeyExistsPromises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("msetnx error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("msetnx", e));
                 return;
             }
 
@@ -517,7 +518,7 @@ public class MGroup extends BaseCommand {
             Promises.all(writePromises).whenComplete((writeResult, writeEx) -> {
                 if (writeEx != null) {
                     log.error("msetnx write error={}", writeEx.getMessage());
-                    finalPromise.setException(writeEx);
+                    finalPromise.setException(Utils.wrapException("msetnx", writeEx));
                     return;
                 }
                 var allWritten = writePromises.stream().allMatch(Promise::getResult);
@@ -695,7 +696,7 @@ public class MGroup extends BaseCommand {
             Promises.all(promises).whenComplete((r, e) -> {
                 if (e != null) {
                     log.error("migrate error={}", e.getMessage());
-                    finalPromise.setException(e);
+                    finalPromise.setException(Utils.wrapException("migrate", e));
                     jedisTo.close();
                     log.info("Close jedis {}:{}", host, port);
                     return;

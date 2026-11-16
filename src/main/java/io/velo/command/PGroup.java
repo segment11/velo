@@ -11,6 +11,7 @@ import io.velo.BaseCommand;
 import io.velo.CompressedValue;
 import io.velo.Dict;
 import io.velo.TypeMismatchException;
+import io.velo.Utils;
 import io.velo.persist.LocalPersist;
 import io.velo.reply.*;
 
@@ -506,7 +507,7 @@ public class PGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("pfcount error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("pfcount", e));
                 return;
             }
 
@@ -576,7 +577,7 @@ public class PGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("pfmerge error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("pfmerge", e));
                 return;
             }
 
@@ -618,7 +619,7 @@ public class PGroup extends BaseCommand {
                     return Boolean.TRUE;
                 }).whenComplete((r1, e1) -> {
                     if (e1 != null) {
-                        finalPromise.setException(e1);
+                        finalPromise.setException(Utils.wrapException("pfmerge", e1));
                         return;
                     }
                     if (Boolean.FALSE.equals(r1)) {
@@ -629,7 +630,7 @@ public class PGroup extends BaseCommand {
                 });
             } catch (Exception e1) {
                 log.error("pfmerge error={}", e1.getMessage());
-                finalPromise.setException(e1);
+                finalPromise.setException(Utils.wrapException("pfmerge", e1));
             }
         });
 

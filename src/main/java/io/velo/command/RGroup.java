@@ -431,10 +431,9 @@ public class RGroup extends BaseCommand {
             } catch (Exception e) {
                 log.error("Rename to destination slot={} failed", dstSlot, e);
                 // the promise must always complete or the client connection hangs;
-                // transferAsyncReply builds the error reply from getMessage(), and
-                // e.g. CannotReadException carries a null message, so wrap with one
-                finalPromise.setException(new RuntimeException(
-                        e.getMessage() != null ? e.getMessage() : "rename failed: " + e.getClass().getSimpleName(), e));
+                // transferAsyncReply builds the error reply from getMessage(), so the
+                // exception must carry a readable message
+                finalPromise.setException(Utils.wrapException("rename", e));
                 return false;
             }
         }).whenComplete((r, e) -> {
@@ -1019,10 +1018,9 @@ public class RGroup extends BaseCommand {
         } catch (Exception e) {
             log.error("Move to destination slot={} failed", dstSlotWithKeyHash.slot(), e);
             // the promise must always complete or the client connection hangs;
-            // transferAsyncReply builds the error reply from getMessage(), and
-            // e.g. CannotReadException carries a null message, so wrap with one
-            finalPromise.setException(new RuntimeException(
-                    e.getMessage() != null ? e.getMessage() : "move failed: " + e.getClass().getSimpleName(), e));
+            // transferAsyncReply builds the error reply from getMessage(), so the
+            // exception must carry a readable message
+            finalPromise.setException(Utils.wrapException("move", e));
         }
     }
 

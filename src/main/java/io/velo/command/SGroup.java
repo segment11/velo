@@ -1325,7 +1325,7 @@ public class SGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("sdiff error={}, isInter={}, isUnion={}", e.getMessage(), isInter, isUnion);
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("sdiff", e));
                 return;
             }
 
@@ -1430,7 +1430,7 @@ public class SGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("sdiffstore error={}, isInter={}, isUnion={}", e.getMessage(), isInter, isUnion);
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("sdiffstore", e));
                 return;
             }
 
@@ -1577,7 +1577,7 @@ public class SGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("sintercard error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("sintercard", e));
                 return;
             }
 
@@ -1832,7 +1832,7 @@ public class SGroup extends BaseCommand {
 
                 p.whenComplete((v, t) -> {
                     if (t != null) {
-                        finalPromise.setException(t);
+                        finalPromise.setException(Utils.wrapException("sort", t));
                     } else {
                         finalPromise.set(new IntegerReply(subListSize));
                     }
@@ -1912,7 +1912,7 @@ public class SGroup extends BaseCommand {
 
                 p.whenComplete((v, t) -> {
                     if (t != null) {
-                        finalPromise.setException(t);
+                        finalPromise.setException(Utils.wrapException("sort", t));
                     } else {
                         finalPromise.set(new IntegerReply(subListSize));
                     }
@@ -1987,7 +1987,7 @@ public class SGroup extends BaseCommand {
 
                 p.whenComplete((v, t) -> {
                     if (t != null) {
-                        finalPromise.setException(t);
+                        finalPromise.setException(Utils.wrapException("sort", t));
                     } else {
                         finalPromise.set(new IntegerReply(subListSize));
                     }

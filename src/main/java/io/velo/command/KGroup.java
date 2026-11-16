@@ -6,6 +6,7 @@ import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.ConfForGlobal;
+import io.velo.Utils;
 import io.velo.persist.KeyLoader;
 import io.velo.persist.OneSlot;
 import io.velo.persist.ScanCursor;
@@ -108,7 +109,7 @@ public class KGroup extends BaseCommand {
         Promises.toList(promises).whenComplete((lists, e) -> {
             if (e != null) {
                 log.error("keys error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("keys", e));
                 return;
             }
 

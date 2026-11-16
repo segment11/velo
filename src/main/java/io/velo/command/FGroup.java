@@ -5,6 +5,7 @@ import io.activej.promise.Promise;
 import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
+import io.velo.Utils;
 import io.velo.repl.LeaderSelector;
 import io.velo.reply.AsyncReply;
 import io.velo.reply.ErrorReply;
@@ -155,7 +156,7 @@ public class FGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("async all error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("flushdb", e));
                 return;
             }
 

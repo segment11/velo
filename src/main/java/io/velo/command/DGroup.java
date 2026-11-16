@@ -6,6 +6,7 @@ import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.CompressedValue;
+import io.velo.Utils;
 import io.velo.persist.OneSlot;
 import io.velo.persist.Wal;
 import io.velo.rdb.RDBParser;
@@ -319,7 +320,7 @@ public class DGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("del error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("del", e));
                 return;
             }
 

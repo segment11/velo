@@ -1355,7 +1355,7 @@ public class ZGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("zdiff error={}, isInter={}, isUnion={}", e.getMessage(), isInter, isUnion);
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("zdiff", e));
                 return;
             }
 
@@ -1555,7 +1555,7 @@ public class ZGroup extends BaseCommand {
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("zintercard error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("zintercard", e));
                 return;
             }
 
@@ -2689,7 +2689,7 @@ public class ZGroup extends BaseCommand {
         Promises.all(rzPromises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("zmpop error={}", e.getMessage());
-                finalPromise.setException(e);
+                finalPromise.setException(Utils.wrapException("zmpop", e));
                 return;
             }
 
