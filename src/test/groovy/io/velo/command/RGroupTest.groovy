@@ -187,6 +187,7 @@ class RGroupTest extends Specification {
         def socket = SocketInspectorTest.mockTcpSocket()
         def rGroup = new RGroup('readonly', new byte[1][], socket)
         rGroup.from(BaseCommand.mockAGroup())
+        ConfForGlobal.clusterEnabled = true
 
         expect:
         rGroup.handle() == OKReply.INSTANCE
@@ -200,6 +201,24 @@ class RGroupTest extends Specification {
         rGroup.cmd = 'role'
         then:
         rGroup.handle() instanceof MultiBulkReply
+
+        when: 'bug 85.10: the cluster support is disabled'
+        ConfForGlobal.clusterEnabled = false
+        rGroup.cmd = 'readonly'
+        def readonlyReply = rGroup.handle()
+        then: 'redis answers an error'
+        readonlyReply instanceof ErrorReply
+        (readonlyReply as ErrorReply).getMessage() == 'This instance has cluster support disabled'
+
+        when:
+        rGroup.cmd = 'readwrite'
+        def readwriteReply = rGroup.handle()
+        then:
+        readwriteReply instanceof ErrorReply
+        (readwriteReply as ErrorReply).getMessage() == 'This instance has cluster support disabled'
+
+        cleanup:
+        ConfForGlobal.clusterEnabled = false
     }
 
     def 'test randomkey'() {

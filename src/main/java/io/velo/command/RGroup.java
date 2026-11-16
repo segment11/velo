@@ -194,11 +194,19 @@ public class RGroup extends BaseCommand {
         }
 
         if ("readonly".equals(cmd)) {
+            if (!ConfForGlobal.clusterEnabled) {
+                // redis answers an error when the cluster support is disabled
+                return CLUSTER_SUPPORT_DISABLED;
+            }
             SocketInspector.setConnectionReadonly(socket, true);
             return OKReply.INSTANCE;
         }
 
         if ("readwrite".equals(cmd)) {
+            if (!ConfForGlobal.clusterEnabled) {
+                // redis answers an error when the cluster support is disabled
+                return CLUSTER_SUPPORT_DISABLED;
+            }
             SocketInspector.setConnectionReadonly(socket, false);
             return OKReply.INSTANCE;
         }
@@ -434,6 +442,9 @@ public class RGroup extends BaseCommand {
 
         return asyncReply;
     }
+
+    /** The redis error reply for the readonly and readwrite commands when the cluster support is disabled. */
+    private final static ErrorReply CLUSTER_SUPPORT_DISABLED = new ErrorReply("This instance has cluster support disabled");
 
     private final static String REPLACE = "replace";
     private final static String ABSTTL = "absttl";
