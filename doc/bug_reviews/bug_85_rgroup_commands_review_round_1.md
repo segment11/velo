@@ -6,7 +6,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** round 1 closed — re-review (agent 2) **accepted all 13 fix commits**; 85.15 (the other command groups answer a nil for an unimplemented command) was filed during the fix phase and fixed in `16b96e12`, the two re-review follow ups are fixed in `4943c4c0` and `618f7acc`; 85.2 won't fix (latent, production safe); 85.13 partly fixed (the `RESTORE` data loss half; the `RENAME` half needs a product decision); see Residual Risk for the open follow-ups
+**Status:** round 1 closed — re-review (agent 2) **accepted all 13 fix commits**; 85.15 (the other command groups answer a nil for an unimplemented command) was filed during the fix phase and fixed in `16b96e12`, the re-review follow ups are fixed in `4943c4c0`, `618f7acc`, `c37b1bde` and `71145b1a`; 85.2 won't fix (latent, production safe); 85.13 partly fixed (the `RESTORE` data loss half; the `RENAME` half needs a product decision); see Residual Risk for the open follow-ups
 **Review branch:** `review/rgroup`
 **Reviewed commit:** `bb7fb2fa8a3991162bf75830eb86ba99fffd4ff9` (main, merge of `review/pgroup`)
 
@@ -1198,6 +1198,7 @@ Every fix follows RED → GREEN → JaCoCo, one commit per bug. The focused test
 | 85.15 | the group tests RED: `Condition not satisfied: reply == NilReply.INSTANCE ... ErrorReply{message='unknown command 'zzz''}` — every group answered a nil for an unimplemented command | `16b96e12` `fix: an unimplemented command answers an unknown command error` | green (every group test class run one by one: A, C, D, E, F, G, H, I, K, L, M, P, R, S, T, U, W, X, Z + `RequestHandlerTest`, `BGroupTest` and `RESPReplyTest`) | the new fall through branch of every group is covered by its own group test (`ErrorReply.UNKNOWN_COMMAND('zzz')`), `ErrorReply.equals()` / `hashCode()` added |
 | 85.15 follow up | `RGroupTest.test rename` RED: `Condition not satisfied: unreadablePromise.getException().getMessage() != null ... null` — a destination failure without a message answered `ERR null` | `618f7acc` `fix: the destination failure without a message answers a readable error` | green | the wrapped exception path of the rename and of the move is covered |
 | 85.7 follow up | the re-review found that the legacy `idletime 0 freq -1` case was shadowed by the new `idletime`+`freq` guard, so the freq range branch was not executed any more | `4943c4c0` `test: cover the restore freq range branch that the idletime guard shadowed` | green | `RGroup` 515-530: the freq range branch is covered again |
+| 85.15 follow up 2 | the other command groups answer `ERR null` when the failure exception has no message (e.g. `ReadonlyException`, `CannotReadException`) | `c37b1bde` `fix: the readonly and cannot read exceptions carry a message` + `71145b1a` `fix: the command error replies carry a readable message` | green (every affected group test class run one by one: B, D, E, F, G, K, M, P, R, S, Z + `ExceptionTest`, `BaseCommandTest`, `LocalPersistTest`) | `Utils.wrapException()` keeps the exception type when the exception has a message (the `BGroupTest` wrong type assertion still sees the `TypeMismatchException`) and wraps it with the command context otherwise |
 
 ### Why 85.2 is not fixed
 
