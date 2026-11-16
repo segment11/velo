@@ -6,7 +6,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** round 1 closed — re-review (agent 2) **accepted all 13 fix commits**; 85.2 won't fix (latent, production safe); 85.13 partly fixed (the `RESTORE` data loss half; the `RENAME` half needs a product decision); see Residual Risk for the open follow-ups
+**Status:** round 1 closed — re-review (agent 2) **accepted all 13 fix commits**; 85.15 (the other command groups answer a nil for an unimplemented command) was filed during the fix phase and fixed in `16b96e12`, the two re-review follow ups are fixed in `4943c4c0` and `618f7acc`; 85.2 won't fix (latent, production safe); 85.13 partly fixed (the `RESTORE` data loss half; the `RENAME` half needs a product decision); see Residual Risk for the open follow-ups
 **Review branch:** `review/rgroup`
 **Reviewed commit:** `bb7fb2fa8a3991162bf75830eb86ba99fffd4ff9` (main, merge of `review/pgroup`)
 
@@ -883,6 +883,49 @@ planned to be dropped, this finding can be closed as "not applicable" — a prod
 
 ---
 
+## Finding 15 (Bug 85.15): the other command groups answer a nil for an unimplemented command
+
+**Severity:** Low
+**Class:** Redis protocol compatibility
+**Status:** `OPEN — not verified` — **fixed** (`16b96e12`)
+
+### Cited files / lines
+
+```java
+// src/main/java/io/velo/command/AGroup.java:126-129 (the same fall through in CGroup, DGroup, EGroup,
+// FGroup, GGroup, HGroup, IGroup, KGroup, LGroup, MGroup, PGroup, SGroup, TGroup, UGroup, WGroup, ZGroup)
+        if ("asking".equals(cmd)) {
+            // velo slot migration node A to node B, not by keys like redis, end when B all received.
+            return OKReply.INSTANCE;
+        }
+
+        return NilReply.INSTANCE;
+    }
+```
+
+### Root cause
+
+Only `BGroup`, `JGroup`, `NGroup`, `OGroup`, `QGroup`, `VGroup`, `YGroup` (and `RGroup` since 85.12) answered
+`ErrorReply.UNKNOWN_COMMAND(cmd)` for a command they do not implement, the other groups answered a nil reply.
+A client cannot tell "the command is not supported" from "the command ran and the answer is nil" — Redis answers
+`ERR unknown command 'foo'` for a command it does not know.
+
+The audit found no registered command without a dispatch branch in any group, so the fall through is only
+reachable for an unknown command. The `XGroup` is the internal `x_repl` dispatch: the stream commands (`XADD`,
+`XACK`, …) are not implemented at all, so the user commands now answer the unknown command error while the
+internal dispatch (`cmd == X_REPL_AS_GET_CMD_KEY_PREFIX_FOR_DISPATCH`) keeps its behaviour.
+
+### Trigger / impact
+
+Trigger: any command that is not implemented, e.g. `XADD key field value` or `FOO`.
+Impact: the client gets a nil reply instead of an error, and cannot detect the missing command.
+
+### Suggested fix direction
+
+Answer `ErrorReply.UNKNOWN_COMMAND(cmd)` in the fall through of every command group (done), and add a value based
+`equals()` / `hashCode()` to `ErrorReply` so that the tests can compare an error reply by its message
+(`BulkReply` and `IntegerReply` already compare by value).
+
 ## Notes / non-findings
 
 Checked and **correct** (kept so later rounds do not re-investigate):
@@ -1133,7 +1176,7 @@ becomes a live client hang. The two fixes belong in the same commit or in two co
 ## Fix Log (AI agent 1, round 1 fix phase)
 
 Every fix follows RED → GREEN → JaCoCo, one commit per bug. The focused test command for all of them is
-`./gradlew :test --tests "io.velo.command.RGroupTest"` (28 features, green); the whole command module
+`./gradlew :test --tests "io.velo.command.RGroupTest"` (27 features, green); the whole command module
 (`./gradlew :test --tests "io.velo.command.*Test"`) is green after the last commit.
 
 | Bug | Failing test evidence | Fix commit | Focused test | JaCoCo |
@@ -1152,6 +1195,9 @@ Every fix follows RED → GREEN → JaCoCo, one commit per bug. The focused test
 | 85.12 | `RGroupTest.test handle - format errors` RED: `Condition not satisfied: rGroup.execute(input) == expected ... NilReply` — an unknown `r*` command answered a nil | `f645ca48` `fix: an unknown r command answers an unknown command error` | green (`ERR unknown command 'rfoo'`) | `RGroup` 240-255: the new fall through covered |
 | 85.13 | `RGroupTest.test restore` RED: `Condition not satisfied: splitHashReply == ErrorReply.BUSYKEY ... OKReply` — the existing hash of the split mode was overwritten | `059c0674` `fix: restore detects an existing hash of the split mode` | green | `RGroup` 520-545: the new split mode check covered |
 | 85.14 | `RGroupTest.test rpoplpush` RED: `Condition not satisfied: failMovePromise.isComplete() ... SettablePromise false` — the cross worker move hung the client | `dee8ffd0` `fix: report a failing cross worker move to the client instead of hanging` | green (a readonly destination answers `ERR READONLY`) | `RGroup` 640-720 and `pushToDestination` 890-907: the failure path covered |
+| 85.15 | the group tests RED: `Condition not satisfied: reply == NilReply.INSTANCE ... ErrorReply{message='unknown command 'zzz''}` — every group answered a nil for an unimplemented command | `16b96e12` `fix: an unimplemented command answers an unknown command error` | green (every group test class run one by one: A, C, D, E, F, G, H, I, K, L, M, P, R, S, T, U, W, X, Z + `RequestHandlerTest`, `BGroupTest` and `RESPReplyTest`) | the new fall through branch of every group is covered by its own group test (`ErrorReply.UNKNOWN_COMMAND('zzz')`), `ErrorReply.equals()` / `hashCode()` added |
+| 85.15 follow up | `RGroupTest.test rename` RED: `Condition not satisfied: unreadablePromise.getException().getMessage() != null ... null` — a destination failure without a message answered `ERR null` | `618f7acc` `fix: the destination failure without a message answers a readable error` | green | the wrapped exception path of the rename and of the move is covered |
+| 85.7 follow up | the re-review found that the legacy `idletime 0 freq -1` case was shadowed by the new `idletime`+`freq` guard, so the freq range branch was not executed any more | `4943c4c0` `test: cover the restore freq range branch that the idletime guard shadowed` | green | `RGroup` 515-530: the freq range branch is covered again |
 
 ### Why 85.2 is not fixed
 
@@ -1267,3 +1313,4 @@ evidence); 85.2 won't-fix accepted; 85.13 half fixed as declared. The fix round 
 | 85.12 | an unknown `r*` command answers a nil instead of `ERR unknown command` | Low | Redis protocol compatibility | `CONFIRMED (reproduced)` | **fixed** (`f645ca48`) |
 | 85.13 | split hash storage mode: `RENAME` of a hash fails, `RESTORE` misses the busy key | Low | Correctness | `CONFIRMED (reproduced)` | **partly fixed** (`059c0674`, the `RESTORE` data loss half); the `RENAME` half needs a product decision on the split hash mode |
 | 85.14 | cross-worker `RPOPLPUSH`/`LMOVE`/`BLMOVE` hang the client when the destination write fails (masked by 85.1) | Medium | Correctness / Availability | `OPEN` — filed by agent 1 in the round 1 response | **fixed** (`dee8ffd0`) |
+| 85.15 | the other command groups answer a nil for an unimplemented command | Low | Redis protocol compatibility | `OPEN` — filed by agent 1 during the fix phase | **fixed** (`16b96e12`, follow ups `618f7acc` and `4943c4c0`) |
