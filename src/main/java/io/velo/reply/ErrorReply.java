@@ -84,9 +84,6 @@ public class ErrorReply implements Reply {
     /** Error reply for a NaN or Infinity value. */
     public static final ErrorReply NAN_OR_INFINITY = new ErrorReply("value is NaN or Infinity");
 
-    /** Error reply for not a string. */
-    public static final ErrorReply NOT_STRING = new ErrorReply("not string");
-
     /** Error reply for invalid integer, the text is aligned with redis. */
     public static final ErrorReply INVALID_INTEGER = new ErrorReply("value is not an integer or out of range");
 
@@ -166,11 +163,11 @@ public class ErrorReply implements Reply {
     /** Error reply for file does not exist. */
     public static final ErrorReply NO_SUCH_FILE = new ErrorReply("no such file");
 
-    /** Error reply for target key busy. */
-    public static final ErrorReply TARGET_KEY_BUSY = new ErrorReply("target key name is busy");
-
     /** Error reply for the redis BUSYKEY error, the reply is BUSYKEY prefixed. */
     public static final ErrorReply BUSYKEY = new ErrorReply("BUSYKEY Target key name already exists.", true);
+
+    /** Error reply for an unsupported RESP protocol version, the reply is NOPROTO prefixed, the text is aligned with redis. */
+    public static final ErrorReply NOPROTO = new ErrorReply("NOPROTO unsupported protocol version", true);
 
     /**
      * @param toClientSlot the target slot index

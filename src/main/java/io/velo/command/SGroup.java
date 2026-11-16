@@ -576,7 +576,7 @@ public class SGroup extends BaseCommand {
     }
 
     private static final ErrorReply CURSOR_NOT_MATCH = new ErrorReply("cursor is not match");
-    private static final ErrorReply INVALID_SCAN_CURSOR = new ErrorReply("invalid scan cursor");
+    private static final ErrorReply INVALID_SCAN_CURSOR = new ErrorReply("invalid cursor");
 
     private Reply scan() {
         if (data.length < 2) {
@@ -942,7 +942,7 @@ public class SGroup extends BaseCommand {
                 if (isReturnExist) {
                     if (!cv.isTypeString()) {
                         log.debug("Key {} is not string type", Wal.keyString(keyBytes));
-                        return ErrorReply.NOT_STRING;
+                        return ErrorReply.WRONG_TYPE;
                     }
                     return new BulkReply(getValueBytesByCv(cv, slotWithKeyHash));
                 }
@@ -956,7 +956,7 @@ public class SGroup extends BaseCommand {
             if (isOldExist && isReturnExist) {
                 if (!cv.isTypeString()) {
                     log.debug("Key {} is not string type", Wal.keyString(keyBytes));
-                    return ErrorReply.NOT_STRING;
+                    return ErrorReply.WRONG_TYPE;
                 }
             }
 

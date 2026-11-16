@@ -643,7 +643,7 @@ public class HGroup extends BaseCommand {
                 SocketInspector.setResp3(socket, false);
                 isResp3 = false;
             } else {
-                return new ErrorReply("Server protover not support: " + ver);
+                return ErrorReply.NOPROTO;
             }
         }
 

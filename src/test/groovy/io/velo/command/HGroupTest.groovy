@@ -270,7 +270,9 @@ httl
         when:
         reply = hGroup.execute('hello 4')
         then:
-        reply instanceof ErrorReply
+        reply == ErrorReply.NOPROTO
+        (reply as ErrorReply).message == 'NOPROTO unsupported protocol version'
+        reply.buffer().asArray() == '-NOPROTO unsupported protocol version\r\n'.bytes
 
         when:
         reply = hGroup.execute('hello 2 setname test')

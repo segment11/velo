@@ -414,6 +414,7 @@ sunionstore
         }
         then:
         reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'invalid cursor'
 
         when:
         // negative slot from a crafted negative cursor
@@ -641,7 +642,7 @@ sunionstore
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.execute('set a value get')
         then:
-        reply == ErrorReply.NOT_STRING
+        reply == ErrorReply.WRONG_TYPE
 
         when:
         reply = sGroup.execute('set a value ex 10')
@@ -787,7 +788,7 @@ sunionstore
         inMemoryGetSet.put(slot, 'a', 0, cvNotString)
         reply = sGroup.execute('set a newvalue nx get')
         then:
-        reply == ErrorReply.NOT_STRING
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test setbit'() {
