@@ -17,6 +17,7 @@ import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class RGroupTest extends Specification {
     final short slot = 0
@@ -24,12 +25,38 @@ class RGroupTest extends Specification {
 
     /**
      * A slot worker eventloop running on its own thread.
-     *
-     * @param eventloop the worker eventloop
-     * @param threadId  the id of the worker thread
-     * @param thread    the worker thread
      */
-    static record SlotWorker(Eventloop eventloop, long threadId, Thread thread) {
+    static class SlotWorker {
+        private final Eventloop eventloop
+        private final long threadId
+        private final Thread thread
+
+        SlotWorker(Eventloop eventloop, long threadId, Thread thread) {
+            this.eventloop = eventloop
+            this.threadId = threadId
+            this.thread = thread
+        }
+
+        /**
+         * @return the worker eventloop
+         */
+        Eventloop getEventloop() {
+            return eventloop
+        }
+
+        /**
+         * @return the id of the worker thread
+         */
+        long getThreadId() {
+            return threadId
+        }
+
+        /**
+         * @return the worker thread
+         */
+        Thread getThread() {
+            return thread
+        }
     }
 
     /**
@@ -46,6 +73,21 @@ class RGroupTest extends Specification {
             }
             super.put(slot, key, bucketIndex, cv)
         }
+    }
+
+    /**
+     * Waits until the asynchronous reply is settled and returns its result.
+     *
+     * @param asyncReply   the asynchronous reply
+     * @param timeoutMillis the maximum wait time in milliseconds
+     * @return the settled reply result
+     */
+    private static Reply awaitReply(AsyncReply asyncReply, long timeoutMillis = 5000) {
+        long deadline = System.currentTimeMillis() + timeoutMillis
+        while (!asyncReply.settablePromise.isComplete() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+        }
+        return asyncReply.settablePromise.getResult()
     }
 
     /**
@@ -259,9 +301,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == OKReply.INSTANCE
-        }.result
+        awaitReply(reply as AsyncReply) == OKReply.INSTANCE
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -270,9 +310,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == IntegerReply.REPLY_0
-        }.result
+        awaitReply(reply as AsyncReply) == IntegerReply.REPLY_0
 
         when:
         reply = rGroup.execute('rename >key b')
@@ -287,11 +325,11 @@ class RGroupTest extends Specification {
         when: 'bug 85.3: a cross worker rename whose destination write fails must answer the client'
         List<SlotWorker> workers = [startWorkerThread('velo-rgroup-rename-w1'),
                                     startWorkerThread('velo-rgroup-rename-w2')]
-        Eventloop loop1 = workers[0].eventloop()
-        Eventloop loop2 = workers[1].eventloop()
+        Eventloop loop1 = workers[0].eventloop
+        Eventloop loop2 = workers[1].eventloop
         LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
-        LocalPersist.instance.initSlotRuntimeBindings([loop1, loop2] as Eventloop[], new io.velo.RequestHandler[2],
-                [workers[0].threadId(), workers[1].threadId()] as long[])
+        LocalPersist.instance.initSlotRuntimeBindings([loop1, loop2] as Eventloop[], new RequestHandler[2],
+                [workers[0].threadId, workers[1].threadId] as long[])
 
         and: 'a source key on worker 1 and a destination key on worker 2'
         def renameGroup = new RGroup(null, null, null)
@@ -354,7 +392,7 @@ class RGroupTest extends Specification {
 
         cleanup:
         eventloop.breakEventloop()
-        workers?.each { SlotWorker w -> w.thread().interrupt() }
+        workers?.each { SlotWorker w -> w.thread.interrupt() }
     }
 
     def 'test restore'() {
@@ -620,9 +658,8 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof BulkReply && (result as BulkReply).raw == '8'.bytes
-        }.result
+        awaitReply(reply as AsyncReply) instanceof BulkReply &&
+                (awaitReply(reply as AsyncReply) as BulkReply).raw == '8'.bytes
 
         when:
         reply = rGroup.execute('rpoplpush >key b')
@@ -673,8 +710,192 @@ class RGroupTest extends Specification {
         // source key should be removed (empty list deleted)
         rGroup.getCv(rGroup.slotWithKeyHashListParsed.getFirst()) == null
 
+        when: 'the source list is empty'
+        def emptyGroup = new RGroup(null, null, null)
+        emptyGroup.byPassGetSet = inMemoryGetSet
+        emptyGroup.from(BaseCommand.mockAGroup())
+        inMemoryGetSet.remove(slot, 'empty-src')
+        inMemoryGetSet.remove(slot, 'empty-dst')
+        def cvEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvEmpty.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvEmpty.compressedData = new RedisList().encode()
+        inMemoryGetSet.put(slot, 'empty-src', 0, cvEmpty)
+        def emptyReply = emptyGroup.execute('rpoplpush empty-src empty-dst')
+        then:
+        emptyReply == NilReply.INSTANCE
+
+        when: 'the source key holds a value of another type'
+        inMemoryGetSet.remove(slot, 'not-a-list-src')
+        inMemoryGetSet.remove(slot, 'not-a-list-dst')
+        inMemoryGetSet.put(slot, 'not-a-list-src', 0, Mock.prepareCompressedValueList(1)[0])
+        def wrongSrcReply = emptyGroup.execute('rpoplpush not-a-list-src not-a-list-dst')
+        then:
+        wrongSrcReply == ErrorReply.WRONG_TYPE
+
+        when: 'a move onto the same key moves the element to the head of the same list'
+        def sameGroup = new RGroup(null, null, null)
+        sameGroup.byPassGetSet = inMemoryGetSet
+        sameGroup.from(BaseCommand.mockAGroup())
+        inMemoryGetSet.remove(slot, 'same')
+        def rlSame = new RedisList()
+        rlSame.addLast('1'.bytes)
+        rlSame.addLast('2'.bytes)
+        def cvSame = Mock.prepareCompressedValueList(1)[0]
+        cvSame.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvSame.compressedData = rlSame.encode()
+        inMemoryGetSet.put(slot, 'same', 0, cvSame)
+        def sameReply = sameGroup.execute('rpoplpush same same')
+        then:
+        sameReply instanceof BulkReply
+        (sameReply as BulkReply).raw == '2'.bytes
+        def rlSameAfter = LGroup.getRedisList(sameGroup.slotWithKeyHashListParsed.getFirst(), sameGroup)
+        rlSameAfter.size() == 2
+        rlSameAfter.get(0) == '2'.bytes
+
+        when: 'bug 85.1: a cross worker rpoplpush moves the element to the destination slot'
+        List<SlotWorker> moveWorkers = [startWorkerThread('velo-rgroup-move-w1'),
+                                        startWorkerThread('velo-rgroup-move-w2')]
+        Eventloop moveLoop1 = moveWorkers[0].eventloop
+        Eventloop moveLoop2 = moveWorkers[1].eventloop
+        LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
+        LocalPersist.instance.initSlotRuntimeBindings([moveLoop1, moveLoop2] as Eventloop[], new io.velo.RequestHandler[2],
+                [moveWorkers[0].threadId, moveWorkers[1].threadId] as long[])
+
+        and: 'a source list on worker 1 and a destination key on worker 2'
+        def moveGroup = new RGroup(null, null, null)
+        moveGroup.from(BaseCommand.mockAGroup(0 as byte, 2 as byte, 2 as short))
+        moveGroup.crossRequestWorker = true
+        def srcKeyMove = (1..500).collect { 'srcmove_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def dstKeyMove = (1..500).collect { 'dstmove_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+        def srcSwkhMove = BaseCommand.slot(srcKeyMove, 2)
+        def dstSwkhMove = BaseCommand.slot(dstKeyMove, 2)
+        def rlMove = new RedisList()
+        rlMove.addLast('a'.bytes)
+        rlMove.addLast('b'.bytes)
+        def seededMove = new CountDownLatch(1)
+        moveLoop1.execute({
+            moveGroup.set(rlMove.encode(), srcSwkhMove, CompressedValue.SP_TYPE_LIST)
+            seededMove.countDown()
+        })
+        seededMove.await(5, TimeUnit.SECONDS)
+
+        and: 'the move runs on the source worker'
+        def asyncMove = []
+        def doneMove = new CountDownLatch(1)
+        moveLoop1.execute({
+            asyncMove << moveGroup.execute("rpoplpush ${srcKeyMove} ${dstKeyMove}")
+            doneMove.countDown()
+        })
+        doneMove.await(5, TimeUnit.SECONDS)
+        def movePromise = asyncMove[0] instanceof AsyncReply ? (asyncMove[0] as AsyncReply).settablePromise : null
+        if (movePromise != null) {
+            for (int i = 0; i < 100 && !movePromise.isComplete(); i++) {
+                Thread.sleep(20)
+            }
+        }
+
+        then: 'the cross worker move does not throw'
+        asyncMove[0] != null
+        movePromise != null
+
+        and: 'the element is moved and answered to the client'
+        movePromise.isComplete()
+        movePromise.getResult() instanceof BulkReply
+        (movePromise.getResult() as BulkReply).raw == 'b'.bytes
+
+        and: 'the destination list on worker 2 holds the moved element'
+        def dstList = new AtomicReference<Object>()
+        def readDst = new CountDownLatch(1)
+        moveLoop2.execute({
+            dstList.set(LGroup.getRedisList(dstSwkhMove, moveGroup))
+            readDst.countDown()
+        })
+        readDst.await(5, TimeUnit.SECONDS)
+        dstList.get() != null
+        (dstList.get() as RedisList).size() == 1
+        (dstList.get() as RedisList).get(0) == 'b'.bytes
+
+        and: 'the source list on worker 1 keeps the element that was not moved'
+        def srcList = new AtomicReference<Object>()
+        def readSrc = new CountDownLatch(1)
+        moveLoop1.execute({
+            srcList.set(LGroup.getRedisList(srcSwkhMove, moveGroup))
+            readSrc.countDown()
+        })
+        readSrc.await(5, TimeUnit.SECONDS)
+        srcList.get() != null
+        (srcList.get() as RedisList).size() == 1
+        (srcList.get() as RedisList).get(0) == 'a'.bytes
+
+        when: 'bug 85.1: a cross worker rpoplpush with a wrong type destination answers WRONGTYPE and keeps the source'
+        def wrongTypeKey = (1..500).collect { 'wrongtype_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+        def wrongTypeSwkh = BaseCommand.slot(wrongTypeKey, 2)
+        def seededWrongType = new CountDownLatch(1)
+        moveLoop2.execute({
+            moveGroup.set('not-a-list'.bytes, wrongTypeSwkh)
+            seededWrongType.countDown()
+        })
+        seededWrongType.await(5, TimeUnit.SECONDS)
+        def asyncWrongType = []
+        def doneWrongType = new CountDownLatch(1)
+        moveLoop1.execute({
+            asyncWrongType << moveGroup.execute("rpoplpush ${srcKeyMove} ${wrongTypeKey}")
+            doneWrongType.countDown()
+        })
+        doneWrongType.await(5, TimeUnit.SECONDS)
+        def wrongTypePromise = (asyncWrongType[0] as AsyncReply).settablePromise
+        for (int i = 0; i < 100 && !wrongTypePromise.isComplete(); i++) {
+            Thread.sleep(20)
+        }
+
+        then: 'the destination type is checked on the destination worker'
+        wrongTypePromise.isComplete()
+        wrongTypePromise.getResult() == ErrorReply.WRONG_TYPE
+
+        and: 'the source list is not modified by the wrong type destination'
+        def srcListAfterWrongType = new AtomicReference<Object>()
+        def readSrcAfterWrongType = new CountDownLatch(1)
+        moveLoop1.execute({
+            srcListAfterWrongType.set(LGroup.getRedisList(srcSwkhMove, moveGroup))
+            readSrcAfterWrongType.countDown()
+        })
+        readSrcAfterWrongType.await(5, TimeUnit.SECONDS)
+        (srcListAfterWrongType.get() as RedisList).size() == 1
+        (srcListAfterWrongType.get() as RedisList).get(0) == 'a'.bytes
+
+        when: 'bug 85.1: a cross worker blmove moves the element too'
+        def blmoveSrcKey = (1..500).collect { 'blmovesrc_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def blmoveDstKey = (1..500).collect { 'blmovedst_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+        def blmoveSrcSwkh = BaseCommand.slot(blmoveSrcKey, 2)
+        def blmoveDstSwkh = BaseCommand.slot(blmoveDstKey, 2)
+        def rlBlmove = new RedisList()
+        rlBlmove.addLast('x'.bytes)
+        def seededBlmove = new CountDownLatch(1)
+        moveLoop1.execute({
+            moveGroup.set(rlBlmove.encode(), blmoveSrcSwkh, CompressedValue.SP_TYPE_LIST)
+            seededBlmove.countDown()
+        })
+        seededBlmove.await(5, TimeUnit.SECONDS)
+        def asyncBlmove = []
+        def doneBlmove = new CountDownLatch(1)
+        moveLoop1.execute({
+            asyncBlmove << moveGroup.moveBlock(blmoveSrcSwkh, blmoveDstSwkh, false, true, 0)
+            doneBlmove.countDown()
+        })
+        doneBlmove.await(5, TimeUnit.SECONDS)
+        def blmovePromise = (asyncBlmove[0] as AsyncReply).settablePromise
+        for (int i = 0; i < 100 && !blmovePromise.isComplete(); i++) {
+            Thread.sleep(20)
+        }
+
+        then: 'the element is moved and answered to the client'
+        blmovePromise.isComplete()
+        blmovePromise.getResult() instanceof BulkReply
+        (blmovePromise.getResult() as BulkReply).raw == 'x'.bytes
+
         cleanup:
         eventloop.breakEventloop()
+        moveWorkers?.each { SlotWorker w -> w.thread.interrupt() }
     }
 
     def 'test rpush and rpushx'() {
@@ -749,9 +970,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        awaitReply(reply as AsyncReply) == NilReply.INSTANCE
 
         when:
         def rl = new RedisList()
@@ -777,9 +996,7 @@ class RGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        awaitReply(reply as AsyncReply) == NilReply.INSTANCE
 
         when:
         rl.addFirst('1'.bytes)
@@ -867,9 +1084,8 @@ class RGroupTest extends Specification {
                 true, true, 0)
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof BulkReply && (result as BulkReply).raw == '1'.bytes
-        }.result
+        awaitReply(reply as AsyncReply) instanceof BulkReply &&
+                (awaitReply(reply as AsyncReply) as BulkReply).raw == '1'.bytes
 
         cleanup:
         eventloop.breakEventloop()

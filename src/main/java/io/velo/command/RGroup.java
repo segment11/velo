@@ -616,14 +616,115 @@ public class RGroup extends BaseCommand {
             return NilReply.INSTANCE;
         }
 
-        // validate destination type before mutating source
-        if (!srcSlotWithKeyHash.rawKey().equals(dstSlotWithKeyHash.rawKey())) {
-            var cvDst = getCv(dstSlotWithKeyHash);
-            if (cvDst != null && !cvDst.isList()) {
-                return ErrorReply.WRONG_TYPE;
+        if (!isCrossRequestWorker) {
+            // the destination slot is owned by this worker, validate the destination type here
+            var dstTypeReply = checkDstTypeOnCurrentWorker(srcSlotWithKeyHash, dstSlotWithKeyHash);
+            if (dstTypeReply != null) {
+                return dstTypeReply;
             }
+
+            var memberValueBytes = popFromList(srcSlotWithKeyHash, rlSrc, srcLeft);
+
+            final Reply[] finalReplyArray = {null};
+            moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
+            return finalReplyArray[0];
         }
 
+        // the destination slot is owned by another slot worker
+        return moveCrossWorker(srcSlotWithKeyHash, dstSlotWithKeyHash, srcLeft, dstLeft);
+    }
+
+    /**
+     * Moves one element between two slots that are owned by different slot workers.
+     *
+     * <p>The destination type is validated on the destination worker first, redis does not touch the
+     * source when the destination holds a value of another type. The element is then popped on the
+     * source worker and pushed on the destination worker.
+     *
+     * @param srcSlotWithKeyHash the source key
+     * @param dstSlotWithKeyHash the destination key
+     * @param srcLeft            true to pop the first element, false to pop the last one
+     * @param dstLeft            true to push the element to the head of the destination list
+     * @return the asynchronous reply
+     */
+    private Reply moveCrossWorker(SlotWithKeyHash srcSlotWithKeyHash, SlotWithKeyHash dstSlotWithKeyHash,
+                                  boolean srcLeft, boolean dstLeft) {
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+        var srcOneSlot = localPersist.oneSlot(srcSlotWithKeyHash.slot());
+        var dstOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
+
+        // step 1: the destination worker validates the destination type
+        dstOneSlot.asyncExecute(() -> {
+            boolean dstTypeOk;
+            try {
+                dstTypeOk = checkDstTypeOnDstWorker(dstSlotWithKeyHash);
+            } catch (Exception e) {
+                finalPromise.setException(e);
+                return;
+            }
+            if (!dstTypeOk) {
+                finalPromise.set(ErrorReply.WRONG_TYPE);
+                return;
+            }
+
+            // step 2: the source worker pops the element
+            srcOneSlot.asyncExecute(() -> {
+                var memberValueBytes = popFromSource(srcSlotWithKeyHash, srcLeft);
+                if (memberValueBytes == null) {
+                    finalPromise.set(NilReply.INSTANCE);
+                    return;
+                }
+                // step 3: the destination worker pushes the element
+                dstOneSlot.asyncExecute(() ->
+                        moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+            });
+        });
+
+        return asyncReply;
+    }
+
+    /**
+     * Validates the destination list type on the current worker.
+     *
+     * @param srcSlotWithKeyHash the source key
+     * @param dstSlotWithKeyHash the destination key
+     * @return an error reply when the destination cannot accept a list element, null otherwise
+     */
+    private Reply checkDstTypeOnCurrentWorker(SlotWithKeyHash srcSlotWithKeyHash, SlotWithKeyHash dstSlotWithKeyHash) {
+        if (srcSlotWithKeyHash.rawKey().equals(dstSlotWithKeyHash.rawKey())) {
+            return null;
+        }
+
+        var cvDst = getCv(dstSlotWithKeyHash);
+        if (cvDst != null && !cvDst.isList()) {
+            return ErrorReply.WRONG_TYPE;
+        }
+        return null;
+    }
+
+    /**
+     * Validates the destination list type, must run on the destination slot worker.
+     * The cross worker path always moves between two different slots, so the source and the
+     * destination are never the same key here.
+     *
+     * @param dstSlotWithKeyHash the destination key
+     * @return true when the destination is a list or does not exist
+     */
+    private boolean checkDstTypeOnDstWorker(SlotWithKeyHash dstSlotWithKeyHash) {
+        var cvDst = getCv(dstSlotWithKeyHash);
+        return cvDst == null || cvDst.isList();
+    }
+
+    /**
+     * Pops one element from the source list and saves the source list.
+     *
+     * @param srcSlotWithKeyHash the source key
+     * @param rlSrc             the decoded source list
+     * @param srcLeft           true to pop the first element, false to pop the last one
+     * @return the popped element bytes
+     */
+    private byte[] popFromList(SlotWithKeyHash srcSlotWithKeyHash, RedisList rlSrc, boolean srcLeft) {
         var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
         // save after remove, auto-delete empty list
         if (rlSrc.size() == 0) {
@@ -631,23 +732,26 @@ public class RGroup extends BaseCommand {
         } else {
             set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
         }
+        return memberValueBytes;
+    }
 
-        if (!isCrossRequestWorker) {
-            final Reply[] finalReplyArray = {null};
-            moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
-            return finalReplyArray[0];
+    /**
+     * Reads the source list on the source slot worker and pops one element from it.
+     *
+     * @param srcSlotWithKeyHash the source key
+     * @param srcLeft           true to pop the first element, false to pop the last one
+     * @return the popped element bytes, or null when the source list is gone, empty or not a list
+     */
+    private byte[] popFromSource(SlotWithKeyHash srcSlotWithKeyHash, boolean srcLeft) {
+        var cvSrc = getCv(srcSlotWithKeyHash);
+        if (cvSrc == null || !cvSrc.isList()) {
+            return null;
         }
-
-        SettablePromise<Reply> finalPromise = new SettablePromise<>();
-        var asyncReply = new AsyncReply(finalPromise);
-
-        var dstSlot = dstSlotWithKeyHash.slot();
-        var dstOneSlot = localPersist.oneSlot(dstSlot);
-        // handle() runs on the src slot worker (src is the first key), dispatch the dst list
-        // push to the dst slot eventloop so the write stays on the owning slot thread
-        dstOneSlot.asyncExecute(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
-
-        return asyncReply;
+        var rlSrc = RedisList.decode(getValueBytesByCv(cvSrc, srcSlotWithKeyHash));
+        if (rlSrc.size() == 0) {
+            return null;
+        }
+        return popFromList(srcSlotWithKeyHash, rlSrc, srcLeft);
     }
 
     private AsyncReply doBlockWhenMove(String srcKey, boolean srcLeft, double timeoutSeconds,
@@ -693,36 +797,77 @@ public class RGroup extends BaseCommand {
             return doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds, dstSlotWithKeyHash, dstLeft);
         }
 
-        // validate destination type before mutating source
-        if (!srcSlotWithKeyHash.rawKey().equals(dstSlotWithKeyHash.rawKey())) {
-            var cvDst = getCv(dstSlotWithKeyHash);
-            if (cvDst != null && !cvDst.isList()) {
-                return ErrorReply.WRONG_TYPE;
-            }
-        }
-
-        var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
-        // save after remove, auto-delete empty list
-        if (rlSrc.size() == 0) {
-            removeDelay(srcSlotWithKeyHash);
-        } else {
-            set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
-        }
-
         if (!isCrossRequestWorker) {
+            // the destination slot is owned by this worker, validate the destination type here
+            var dstTypeReply = checkDstTypeOnCurrentWorker(srcSlotWithKeyHash, dstSlotWithKeyHash);
+            if (dstTypeReply != null) {
+                return dstTypeReply;
+            }
+
+            var memberValueBytes = popFromList(srcSlotWithKeyHash, rlSrc, srcLeft);
+
             final Reply[] finalReplyArray = {null};
             moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
             return finalReplyArray[0];
         }
 
+        // the destination slot is owned by another slot worker
+        return moveBlockCrossWorker(srcSlotWithKeyHash, dstSlotWithKeyHash, srcLeft, dstLeft, timeoutSeconds);
+    }
+
+    /**
+     * Moves one element between two slots that are owned by different slot workers, blocking until an
+     * element is available when the source list is empty.
+     *
+     * @param srcSlotWithKeyHash the source key
+     * @param dstSlotWithKeyHash the destination key
+     * @param srcLeft            true to pop the first element, false to pop the last one
+     * @param dstLeft            true to push the element to the head of the destination list
+     * @param timeoutSeconds     the blocking timeout in seconds, 0 to block forever
+     * @return the asynchronous reply
+     */
+    private Reply moveBlockCrossWorker(SlotWithKeyHash srcSlotWithKeyHash, SlotWithKeyHash dstSlotWithKeyHash,
+                                       boolean srcLeft, boolean dstLeft, double timeoutSeconds) {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
+        var srcOneSlot = localPersist.oneSlot(srcSlotWithKeyHash.slot());
+        var dstOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
 
-        var dstSlot = dstSlotWithKeyHash.slot();
-        var dstOneSlot = localPersist.oneSlot(dstSlot);
-        // handle() runs on the src slot worker (src is the first key), dispatch the dst list
-        // push to the dst slot eventloop so the write stays on the owning slot thread
-        dstOneSlot.asyncExecute(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+        // step 1: the destination worker validates the destination type
+        dstOneSlot.asyncExecute(() -> {
+            boolean dstTypeOk;
+            try {
+                dstTypeOk = checkDstTypeOnDstWorker(dstSlotWithKeyHash);
+            } catch (Exception e) {
+                finalPromise.setException(e);
+                return;
+            }
+            if (!dstTypeOk) {
+                finalPromise.set(ErrorReply.WRONG_TYPE);
+                return;
+            }
+
+            // step 2: the source side runs on the source slot worker
+            srcOneSlot.asyncExecute(() -> {
+                var memberValueBytes = popFromSource(srcSlotWithKeyHash, srcLeft);
+                if (memberValueBytes == null) {
+                    // the source list is empty, wait for an element to arrive
+                    var blockingReply = doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds,
+                            dstSlotWithKeyHash, dstLeft);
+                    blockingReply.getSettablePromise().whenComplete((r, e2) -> {
+                        if (e2 != null) {
+                            finalPromise.setException(e2);
+                            return;
+                        }
+                        finalPromise.set(r);
+                    });
+                    return;
+                }
+                // step 3: the destination worker pushes the element
+                dstOneSlot.asyncExecute(() ->
+                        moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+            });
+        });
 
         return asyncReply;
     }
