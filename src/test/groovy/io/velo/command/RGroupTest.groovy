@@ -535,6 +535,35 @@ class RGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        when: 'bug 85.7: an unknown option is a syntax error'
+        reply = rGroup.execute('restore unknown_opt 0 bbb badoption') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'bug 85.7: a negative ttl is rejected'
+        reply = rGroup.execute('restore negative_ttl -1 bbb') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply instanceof ErrorReply
+        reply != OKReply.INSTANCE
+
+        when: 'bug 85.7: idletime and freq together are a syntax error'
+        reply = rGroup.execute('restore both_opt 0 bbb replace idletime 5 freq 3') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'bug 85.7: freq and idletime together are a syntax error'
+        reply = rGroup.execute('restore both_opt2 0 bbb replace freq 3 idletime 5') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == ErrorReply.SYNTAX
+
         when: 'bug 85.6: a non numeric ttl is rejected'
         reply = rGroup.execute('restore ttl_not_int abc bbb') { data ->
             data[3] = RDBParser.dumpString('values'.bytes)

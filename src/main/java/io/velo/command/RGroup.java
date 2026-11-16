@@ -407,6 +407,8 @@ public class RGroup extends BaseCommand {
         boolean absttl = false;
         int idleTime = 0;
         int freq = 0;
+        boolean hasIdleTime = false;
+        boolean hasFreq = false;
         if (data.length > 4) {
             for (int i = 4; i < data.length; i++) {
                 var arg = new String(data[i]);
@@ -418,6 +420,10 @@ public class RGroup extends BaseCommand {
                     if (data.length <= i + 1) {
                         return ErrorReply.SYNTAX;
                     }
+                    if (hasFreq) {
+                        // redis does not accept idletime and freq together
+                        return ErrorReply.SYNTAX;
+                    }
                     try {
                         idleTime = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
@@ -426,8 +432,14 @@ public class RGroup extends BaseCommand {
                     if (idleTime < 0) {
                         return new ErrorReply("idletime can't be negative");
                     }
+                    hasIdleTime = true;
+                    i++; // consume the idletime argument
                 } else if (FREQ.equalsIgnoreCase(arg)) {
                     if (data.length <= i + 1) {
+                        return ErrorReply.SYNTAX;
+                    }
+                    if (hasIdleTime) {
+                        // redis does not accept idletime and freq together
                         return ErrorReply.SYNTAX;
                     }
                     try {
@@ -438,6 +450,11 @@ public class RGroup extends BaseCommand {
                     if (freq < 0 || freq > 255) {
                         return new ErrorReply("freq must be in range 0..255");
                     }
+                    hasFreq = true;
+                    i++; // consume the freq argument
+                } else {
+                    // redis answers a syntax error for an unknown option
+                    return ErrorReply.SYNTAX;
                 }
             }
         }
@@ -446,8 +463,8 @@ public class RGroup extends BaseCommand {
         // check if key exists, redis checks the busy key before the ttl
 //        replace = true;
         if (!replace) {
-            var cv = getCv(slotWithKeyHash);
-            if (cv != null) {
+            // only the existence of the key matters here, do not read the value
+            if (exists(slotWithKeyHash)) {
                 return ErrorReply.TARGET_KEY_BUSY;
             }
         }
@@ -462,6 +479,9 @@ public class RGroup extends BaseCommand {
                 ttlValue = Long.parseLong(ttl);
             } catch (NumberFormatException e) {
                 return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+            }
+            if (ttlValue < 0) {
+                return new ErrorReply("Invalid TTL value, must be >= 0");
             }
             if (absttl) {
                 expireAt = ttlValue;
@@ -743,8 +763,8 @@ public class RGroup extends BaseCommand {
      * Pops one element from the source list and saves the source list.
      *
      * @param srcSlotWithKeyHash the source key
-     * @param rlSrc             the decoded source list
-     * @param srcLeft           true to pop the first element, false to pop the last one
+     * @param rlSrc              the decoded source list
+     * @param srcLeft            true to pop the first element, false to pop the last one
      * @return the popped element bytes
      */
     private byte[] popFromList(SlotWithKeyHash srcSlotWithKeyHash, RedisList rlSrc, boolean srcLeft) {
@@ -762,7 +782,7 @@ public class RGroup extends BaseCommand {
      * Reads the source list on the source slot worker and pops one element from it.
      *
      * @param srcSlotWithKeyHash the source key
-     * @param srcLeft           true to pop the first element, false to pop the last one
+     * @param srcLeft            true to pop the first element, false to pop the last one
      * @return the popped element bytes, or null when the source list is gone, empty or not a list
      */
     private byte[] popFromSource(SlotWithKeyHash srcSlotWithKeyHash, boolean srcLeft) {
