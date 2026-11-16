@@ -147,8 +147,8 @@ class MultiWorkerServerTest extends Specification {
 
         then:
         pingResponseText == '+PONG\r\n'
-        badResponseText == '-ERR format\r\n'
-        duplicateSaveResponseText == '-ERR format\r\n'
+        badResponseText == '-ERR syntax error\r\n'
+        duplicateSaveResponseText == '-ERR syntax error\r\n'
         !shutdownNotRequestedForBadOption
         responseText == '+OK\r\n'
         secondResponseText == '+OK\r\n'

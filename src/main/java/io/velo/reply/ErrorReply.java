@@ -10,15 +10,15 @@ import java.util.Objects;
  */
 public class ErrorReply implements Reply {
 
-    /** Error reply for format error. */
-    public static final ErrorReply FORMAT = new ErrorReply("format");
+    /** Error reply for bad arguments structure, the text is aligned with redis. */
+    public static final ErrorReply FORMAT = new ErrorReply("syntax error");
 
     /**
      * @param cmd the command name
      * @return error reply for wrong number of arguments
      */
     public static ErrorReply WRONG_NUMBER(String cmd) {
-        return new ErrorReply("*wrong number of arguments for '" + cmd + "' command");
+        return new ErrorReply("wrong number of arguments for '" + cmd + "' command");
     }
 
     /**
@@ -72,11 +72,11 @@ public class ErrorReply implements Reply {
     /** Error reply for syntax error. */
     public static final ErrorReply SYNTAX = new ErrorReply("syntax error");
 
-    /** Error reply for not an integer. */
-    public static final ErrorReply NOT_INTEGER = new ErrorReply("not integer");
+    /** Error reply for not an integer, the text is aligned with redis. */
+    public static final ErrorReply NOT_INTEGER = new ErrorReply("value is not an integer or out of range");
 
-    /** Error reply for not a float. */
-    public static final ErrorReply NOT_FLOAT = new ErrorReply("not float");
+    /** Error reply for not a float, the text is aligned with redis. */
+    public static final ErrorReply NOT_FLOAT = new ErrorReply("value is not a valid float");
 
     /** Error reply for a value that is not an integer or out of range. */
     public static final ErrorReply NOT_INTEGER_OR_OUT_OF_RANGE = new ErrorReply("value is not an integer or out of range");
@@ -87,14 +87,14 @@ public class ErrorReply implements Reply {
     /** Error reply for not a string. */
     public static final ErrorReply NOT_STRING = new ErrorReply("not string");
 
-    /** Error reply for invalid integer. */
-    public static final ErrorReply INVALID_INTEGER = new ErrorReply("invalid integer");
+    /** Error reply for invalid integer, the text is aligned with redis. */
+    public static final ErrorReply INVALID_INTEGER = new ErrorReply("value is not an integer or out of range");
 
     /** Error reply for invalid file. */
     public static final ErrorReply INVALID_FILE = new ErrorReply("invalid file");
 
-    /** Error reply for range out of index. */
-    public static final ErrorReply RANGE_OUT_OF_INDEX = new ErrorReply("range out of index");
+    /** Error reply for range out of index, the text is aligned with redis. */
+    public static final ErrorReply RANGE_OUT_OF_INDEX = new ErrorReply("value is out of range");
 
     /** Error reply for key does not exist. */
     public static final ErrorReply NO_SUCH_KEY = new ErrorReply("no such key");
@@ -138,7 +138,7 @@ public class ErrorReply implements Reply {
     public static final ErrorReply CANNOT_READ = new ErrorReply("cannot read");
 
     /** Error reply for unsupported operation. */
-    public static final ErrorReply NOT_SUPPORT = new ErrorReply("not support");
+    public static final ErrorReply NOT_SUPPORT = new ErrorReply("operation not supported");
 
     /** Error reply for malformed binary payload, e.g. a BF.LOADCHUNK data chunk. */
     public static final ErrorReply BAD_DATA_FORMAT = new ErrorReply("bad data format");

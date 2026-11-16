@@ -55,7 +55,19 @@ class RESPReplyTest extends Specification {
         BoolReply.F.buffer().asArray() == "\$5\r\nfalse\r\n".bytes
         BoolReply.T.bufferAsResp3().asArray() == "#t\r\n".bytes
         BoolReply.F.bufferAsResp3().asArray() == "#f\r\n".bytes
-        ErrorReply.WRONG_NUMBER('test').message == "*wrong number of arguments for 'test' command"
+        ErrorReply.WRONG_NUMBER('test').message == "wrong number of arguments for 'test' command"
+        ErrorReply.WRONG_NUMBER('test').buffer().asArray() == "-ERR wrong number of arguments for 'test' command\r\n".bytes
+        ErrorReply.NOT_INTEGER.message == 'value is not an integer or out of range'
+        ErrorReply.NOT_INTEGER.buffer().asArray() == '-ERR value is not an integer or out of range\r\n'.bytes
+        ErrorReply.INVALID_INTEGER.message == 'value is not an integer or out of range'
+        ErrorReply.NOT_FLOAT.message == 'value is not a valid float'
+        ErrorReply.NOT_FLOAT.buffer().asArray() == '-ERR value is not a valid float\r\n'.bytes
+        ErrorReply.FORMAT.message == 'syntax error'
+        ErrorReply.FORMAT.buffer().asArray() == '-ERR syntax error\r\n'.bytes
+        ErrorReply.RANGE_OUT_OF_INDEX.message == 'value is out of range'
+        ErrorReply.RANGE_OUT_OF_INDEX.buffer().asArray() == '-ERR value is out of range\r\n'.bytes
+        ErrorReply.NOT_SUPPORT.message == 'operation not supported'
+        ErrorReply.NOT_SUPPORT.buffer().asArray() == '-ERR operation not supported\r\n'.bytes
         ErrorReply.UNKNOWN_COMMAND('test').message == "unknown command 'test'"
         ErrorReply.UNKNOWN_COMMAND('test').buffer().asArray() == "-ERR unknown command 'test'\r\n".bytes
         new ErrorReply('error').message == 'error'
