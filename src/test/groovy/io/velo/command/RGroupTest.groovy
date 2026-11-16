@@ -216,6 +216,20 @@ class RGroupTest extends Specification {
         then:
         reply == NilReply.INSTANCE
 
+        when: 'bug 85.8: a key of another slot is found'
+        LocalPersistTest.prepareLocalPersist(1 as byte, 2 as short)
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        localPersist.fixSlotThreadId((short) 1, Thread.currentThread().threadId())
+        def otherSlotCvList = Mock.prepareCompressedValueList(10)
+        for (walGroupIndex in 0..<Wal.calcWalGroupNumber()) {
+            for (cv in otherSlotCvList) {
+                localPersist.oneSlot((short) 1)
+                        .putKvInTargetWalGroupIndexLRU(walGroupIndex, 'key:' + cv.seq, cv.encode())
+            }
+        }
+        then: 'the key of the other slot is returned'
+        rGroup.execute('randomkey') instanceof BulkReply
+
         when: 'bug 85.9: an expired key is not returned'
         def expiredKey = 'expired:key'
         def expiredKeyHash = KeyHash.hash(expiredKey.bytes)
@@ -264,10 +278,46 @@ class RGroupTest extends Specification {
         then:
         reply instanceof BulkReply
 
+        when: 'bug 85.8: a key of another slot worker is found'
+        List<SlotWorker> randomKeyWorkers = [startWorkerThread('velo-rgroup-randomkey-w1'),
+                                              startWorkerThread('velo-rgroup-randomkey-w2')]
+        Eventloop randomKeyLoop1 = randomKeyWorkers[0].eventloop
+        Eventloop randomKeyLoop2 = randomKeyWorkers[1].eventloop
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
+        LocalPersist.instance.initSlotRuntimeBindings([randomKeyLoop1, randomKeyLoop2] as Eventloop[],
+                new io.velo.RequestHandler[2],
+                [randomKeyWorkers[0].threadId, randomKeyWorkers[1].threadId] as long[])
+
+        and: 'only the slot of the second worker holds keys'
+        def otherWorkerCvList = Mock.prepareCompressedValueList(10)
+        for (walGroupIndex in 0..<Wal.calcWalGroupNumber()) {
+            for (cv in otherWorkerCvList) {
+                localPersist.oneSlot((short) 1)
+                        .putKvInTargetWalGroupIndexLRU(walGroupIndex, 'key:' + cv.seq, cv.encode())
+            }
+        }
+
+        and: 'the command runs on the first worker'
+        def asyncRandomKey = []
+        def doneRandomKey = new CountDownLatch(1)
+        randomKeyLoop1.execute({
+            asyncRandomKey << rGroup.execute('randomkey')
+            doneRandomKey.countDown()
+        })
+        doneRandomKey.await(5, TimeUnit.SECONDS)
+        def randomKeyReply = asyncRandomKey[0]
+
+        then: 'the key of the other worker is returned'
+        randomKeyReply instanceof AsyncReply
+        awaitReply(randomKeyReply as AsyncReply) instanceof BulkReply
+
         cleanup:
         ConfForSlot.global = ConfForSlot.c1m
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+        randomKeyWorkers?.each { SlotWorker w -> w.thread.interrupt() }
     }
 
     def 'test rename'() {

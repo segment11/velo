@@ -646,6 +646,22 @@ public class LocalPersist implements NeedCleanUp {
     }
 
     /**
+     * Gets all the slots that are owned by the current thread, one slot worker thread owns all of its slots.
+     *
+     * @return the slots owned by the current thread
+     */
+    public ArrayList<OneSlot> currentThreadSlots() {
+        var list = new ArrayList<OneSlot>();
+        var threadId = Thread.currentThread().threadId();
+        for (var oneSlot : initializedOneSlots()) {
+            if (oneSlot.threadIdProtectedForSafe == threadId) {
+                list.add(oneSlot);
+            }
+        }
+        return list;
+    }
+
+    /**
      * @return the first OneSlot to handle client requests, or null if not found
      */
     public @Nullable OneSlot firstOneSlot() {

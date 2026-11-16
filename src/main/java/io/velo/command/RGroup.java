@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Handles Redis commands starting with letter 'R'.
@@ -254,26 +255,56 @@ public class RGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        var firstOneSlot = localPersist.currentThreadFirstOneSlot();
+        // the slots of the current worker are owned by this thread, they can be read here
+        var currentSlots = localPersist.currentThreadSlots();
+        for (var oneSlot : currentSlots) {
+            var key = randomKeyInOneSlot(oneSlot);
+            if (key != null) {
+                return new BulkReply(key);
+            }
+        }
 
+        // all the slots belong to this worker, the keyspace is empty
+        if (currentSlots.size() == localPersist.initializedOneSlots().size()) {
+            return NilReply.INSTANCE;
+        }
+
+        // no key in the slots of this worker, ask the other slot workers
+        Function<OneSlot, String> searchOneSlot = this::randomKeyInOneSlot;
+        return localPersist.doSthInSlots(searchOneSlot, keyList -> {
+            for (var oneKey : keyList) {
+                if (oneKey != null) {
+                    return new BulkReply(oneKey);
+                }
+            }
+            return NilReply.INSTANCE;
+        });
+    }
+
+    /**
+     * Searches a random live key of one slot, must run on the slot worker thread.
+     *
+     * @param oneSlot the slot to search
+     * @return a live key of the slot, or null when the slot has no live key
+     */
+    private String randomKeyInOneSlot(OneSlot oneSlot) {
         var random = new Random();
         final int maxTryTimes = 10;
         for (int i = 0; i < maxTryTimes; i++) {
             var bucketIndex = random.nextInt(ConfForSlot.global.confBucket.bucketsPerSlot);
 
             var walGroupIndex = Wal.calcWalGroupIndex(bucketIndex);
-            var keyInLRU = firstOneSlot.randomKeyInLRU(walGroupIndex);
+            var keyInLRU = oneSlot.randomKeyInLRU(walGroupIndex);
             if (keyInLRU != null) {
-                return new BulkReply(keyInLRU);
+                return keyInLRU;
             }
 
-            var keyInBucket = randomKeyInBucket(firstOneSlot, bucketIndex, random);
+            var keyInBucket = randomKeyInBucket(oneSlot, bucketIndex, random);
             if (keyInBucket != null) {
-                return new BulkReply(keyInBucket);
+                return keyInBucket;
             }
         }
-
-        return NilReply.INSTANCE;
+        return null;
     }
 
     /**
