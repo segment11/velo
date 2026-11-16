@@ -13,13 +13,6 @@ public class BulkReply implements Reply {
     private byte[] raw;
 
     /**
-     * @return the raw bytes of this bulk reply
-     */
-    public byte[] getRaw() {
-        return raw;
-    }
-
-    /**
      * @return the raw bytes decoded as a string
      */
     @TestOnly

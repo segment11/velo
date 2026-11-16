@@ -299,7 +299,7 @@ class InfoCommandTest extends Specification {
         def reply = infoCommand.execute('info cpu')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('used_cpu_sys:')
+        (reply as BulkReply).asString().contains('used_cpu_sys:')
 
         cleanup:
         RuntimeCpuCollector.close()
@@ -315,7 +315,7 @@ class InfoCommandTest extends Specification {
         def reply = infoCommand.execute('info cluster')
         then:
         reply instanceof BulkReply
-        new String((reply as BulkReply).raw).contains('cluster_enabled:')
+        (reply as BulkReply).asString().contains('cluster_enabled:')
 
     }
 
@@ -336,7 +336,7 @@ class InfoCommandTest extends Specification {
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof BulkReply
-                    && new String((result as BulkReply).raw).contains('keys:0')
+                    && (result as BulkReply).asString().contains('keys:0')
         }.result
 
         cleanup:

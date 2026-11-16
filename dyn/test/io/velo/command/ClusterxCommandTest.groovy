@@ -124,9 +124,9 @@ slots
 
     static List<String> infoToLines(Reply reply) {
         if (reply instanceof BulkReply) {
-            return new String(((BulkReply) reply).raw).split('\n')
+            return (reply as BulkReply).asString().split('\n')
         } else if (reply instanceof AsyncReply) {
-            return new String(((BulkReply) reply.settablePromise.getResult()).raw).split('\n')
+            return (reply.settablePromise.getResult() as BulkReply).asString().split('\n')
         } else {
             throw new RuntimeException("reply type error: ${reply.getClass()}")
         }
@@ -763,20 +763,20 @@ slots
         def reply = clusterx.myid()
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw) == mySelfNodeId
+        (reply as BulkReply).asString() == mySelfNodeId
 
         when:
         def reply2 = clusterx.myshardid()
         then:
         reply2 instanceof BulkReply
-        new String(((BulkReply) reply2).raw) == DigestUtils.sha256Hex('shard_0')
+        (reply2 as BulkReply).asString() == DigestUtils.sha256Hex('shard_0')
 
         when:
         shards.clear()
         reply = clusterx.myid()
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw) == mySelfNodeId
+        (reply as BulkReply).asString() == mySelfNodeId
 
         when:
         reply2 = clusterx.myshardid()
@@ -1112,7 +1112,7 @@ slots
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        new String(((BulkReply) (reply as MultiBulkReply).replies[0]).raw).startsWith shard0.nodes[1].nodeId()
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString().startsWith shard0.nodes[1].nodeId()
 
         when:
         // two shards with different slot ranges - reply must contain ONLY matched shard's slot range
@@ -1125,7 +1125,7 @@ slots
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        def replicaLine = new String(((BulkReply) (reply as MultiBulkReply).replies[0]).raw)
+        def replicaLine = ((reply as MultiBulkReply).replies[0] as BulkReply).asString()
         replicaLine.contains('0-16383')
         !replicaLine.contains('8192-16383')
 

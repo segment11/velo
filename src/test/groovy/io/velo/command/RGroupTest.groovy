@@ -286,7 +286,7 @@ class RGroupTest extends Specification {
         def distinctKeys = [] as Set
         100.times {
             def randomReply = rGroup.execute('randomkey')
-            distinctKeys << new String((randomReply as BulkReply).raw)
+            distinctKeys << (randomReply as BulkReply).asString()
         }
         then: 'more than one key of the bucket is returned'
         distinctKeys.size() > 1
@@ -917,7 +917,7 @@ class RGroupTest extends Specification {
         reply = rGroup.execute('rpoplpush a b')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == '9'.bytes
+        (reply as BulkReply).asString() == '9'
 
         when:
         def eventloop = Eventloop.builder()
@@ -938,7 +938,7 @@ class RGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         awaitReply(reply as AsyncReply) instanceof BulkReply &&
-                (awaitReply(reply as AsyncReply) as BulkReply).raw == '8'.bytes
+                (awaitReply(reply as AsyncReply) as BulkReply).asString() == '8'
 
         when:
         reply = rGroup.execute('rpoplpush >key b')
@@ -1026,7 +1026,7 @@ class RGroupTest extends Specification {
         def sameReply = sameGroup.execute('rpoplpush same same')
         then:
         sameReply instanceof BulkReply
-        (sameReply as BulkReply).raw == '2'.bytes
+        (sameReply as BulkReply).asString() == '2'
         def rlSameAfter = LGroup.getRedisList(sameGroup.slotWithKeyHashListParsed.getFirst(), sameGroup)
         rlSameAfter.size() == 2
         rlSameAfter.get(0) == '2'.bytes
@@ -1080,7 +1080,7 @@ class RGroupTest extends Specification {
         and: 'the element is moved and answered to the client'
         movePromise.isComplete()
         movePromise.getResult() instanceof BulkReply
-        (movePromise.getResult() as BulkReply).raw == 'b'.bytes
+        (movePromise.getResult() as BulkReply).asString() == 'b'
 
         and: 'the destination list on worker 2 holds the moved element'
         def dstList = new AtomicReference<Object>()
@@ -1170,7 +1170,7 @@ class RGroupTest extends Specification {
         then: 'the element is moved and answered to the client'
         blmovePromise.isComplete()
         blmovePromise.getResult() instanceof BulkReply
-        (blmovePromise.getResult() as BulkReply).raw == 'x'.bytes
+        (blmovePromise.getResult() as BulkReply).asString() == 'x'
 
         when: 'bug 85.14: a cross worker rpoplpush whose destination write fails answers the client'
         def failSrcKey = (1..500).collect { 'failsrc_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
@@ -1324,7 +1324,7 @@ class RGroupTest extends Specification {
                 true, true, 0)
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == '1'.bytes
+        (reply as BulkReply).asString() == '1'
 
         when:
         // bug 4 regression: moveBlock wrong-type dest should not lose source element
@@ -1368,13 +1368,13 @@ class RGroupTest extends Specification {
         pushReply == IntegerReply.REPLY_1
         asyncMoveTimeout.settablePromise.isComplete()
         asyncMoveTimeout.settablePromise.getResult() instanceof BulkReply
-        (asyncMoveTimeout.settablePromise.getResult() as BulkReply).raw == 'moved'.bytes
+        (asyncMoveTimeout.settablePromise.getResult() as BulkReply).asString() == 'moved'
         when:
         Thread.sleep(400)
         eventloopCurrent.run()
         then:
         asyncMoveTimeout.settablePromise.getResult() instanceof BulkReply
-        (asyncMoveTimeout.settablePromise.getResult() as BulkReply).raw == 'moved'.bytes
+        (asyncMoveTimeout.settablePromise.getResult() as BulkReply).asString() == 'moved'
 
         when:
         localPersist.cleanUp()
@@ -1401,7 +1401,7 @@ class RGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         awaitReply(reply as AsyncReply) instanceof BulkReply &&
-                (awaitReply(reply as AsyncReply) as BulkReply).raw == '1'.bytes
+                (awaitReply(reply as AsyncReply) as BulkReply).asString() == '1'
 
         cleanup:
         eventloop.breakEventloop()

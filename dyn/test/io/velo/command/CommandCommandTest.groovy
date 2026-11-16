@@ -53,14 +53,14 @@ class CommandCommandTest extends Specification {
         listReply.replies.length > 0
         // names match the registry, insertion order preserved
         def expectedNames = CommandRegistry.all().collect { it.name() }
-        def actualNames = listReply.replies.collect { new String((it as BulkReply).raw) }
+        def actualNames = listReply.replies.collect { (it as BulkReply).asString() }
         actualNames == expectedNames
 
         when: 'filter by aclcat connection'
         reply = commandCommand.execute('command list filterby aclcat connection')
         then:
         reply instanceof MultiBulkReply
-        def connNames = (reply as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        def connNames = (reply as MultiBulkReply).replies.collect { (it as BulkReply).asString() }
         connNames.size() == CommandRegistry.all().count { it.aclCategories().contains('@connection') }
         connNames.every { CommandRegistry.get(it).aclCategories().contains('@connection') }
 
@@ -68,14 +68,14 @@ class CommandCommandTest extends Specification {
         reply = commandCommand.execute('command list filterby pattern cl*')
         then:
         reply instanceof MultiBulkReply
-        def patNames = (reply as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        def patNames = (reply as MultiBulkReply).replies.collect { (it as BulkReply).asString() }
         patNames == CommandRegistry.all().collect { it.name() }.findAll { it.startsWith('cl') }
 
         when: 'filter by pattern is case-insensitive (Redis stringmatchlen nocase)'
         reply = commandCommand.execute('command list filterby pattern CL*')
         then:
         reply instanceof MultiBulkReply
-        def ciNames = (reply as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        def ciNames = (reply as MultiBulkReply).replies.collect { (it as BulkReply).asString() }
         ciNames == patNames
 
         when: 'filter by module (always empty)'
@@ -159,8 +159,8 @@ class CommandCommandTest extends Specification {
         def pairs = (reply as MultiBulkReply).replies
         pairs.length == 2
         def first = pairs[0] as MultiBulkReply
-        new String((first.replies[0] as BulkReply).raw) == 'a'
-        def flags = (first.replies[1] as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        (first.replies[0] as BulkReply).asString() == 'a'
+        def flags = (first.replies[1] as MultiBulkReply).replies.collect { (it as BulkReply).asString() }
         flags.contains('RW')
         flags.contains('access')
 
@@ -168,7 +168,7 @@ class CommandCommandTest extends Specification {
         reply = commandCommand.execute('command getkeysandflags mget a b')
         then:
         def pairs2 = (reply as MultiBulkReply).replies
-        def readFlags = ((pairs2[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+        def readFlags = ((pairs2[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies.collect { (it as BulkReply).asString() }
         readFlags.contains('RO')
         readFlags.contains('access')
     }
@@ -188,12 +188,12 @@ class CommandCommandTest extends Specification {
         outer.replies.length == 1
         def ten = outer.replies[0] as MultiBulkReply
         ten.replies.length == 10
-        new String((ten.replies[0] as BulkReply).raw) == 'copy'
+        (ten.replies[0] as BulkReply).asString() == 'copy'
         (ten.replies[1] as IntegerReply).integer == -3
         (ten.replies[3] as IntegerReply).integer == 1
         (ten.replies[4] as IntegerReply).integer == 2
         (ten.replies[5] as IntegerReply).integer == 1
-        def flags = (ten.replies[2] as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) } as Set
+        def flags = (ten.replies[2] as MultiBulkReply).replies.collect { (it as BulkReply).asString() } as Set
         flags.contains('write')
 
         when: 'info for known + unknown name'
@@ -224,11 +224,11 @@ class CommandCommandTest extends Specification {
         reply instanceof MultiBulkReply
         def docsPairs = reply as MultiBulkReply
         docsPairs.replies.length == 2
-        new String((docsPairs.replies[0] as BulkReply).raw) == 'copy'
+        (docsPairs.replies[0] as BulkReply).asString() == 'copy'
         def docsMap = docsPairs.replies[1] as MultiBulkReply
         def mapKeys = new ArrayList<String>()
         for (int i = 0; i < docsMap.replies.length; i += 2) {
-            mapKeys.add(new String((docsMap.replies[i] as BulkReply).raw))
+            mapKeys.add((docsMap.replies[i] as BulkReply).asString())
         }
         mapKeys.contains('group')
         mapKeys.contains('summary')
@@ -255,8 +255,8 @@ class CommandCommandTest extends Specification {
         reply instanceof MultiBulkReply
         def helpReplies = (reply as MultiBulkReply).replies
         helpReplies.length == 21
-        new String((helpReplies[0] as BulkReply).raw).startsWith('COMMAND <subcommand>')
-        def texts = helpReplies.collect { new String((it as BulkReply).raw) }
+        (helpReplies[0] as BulkReply).asString().startsWith('COMMAND <subcommand>')
+        def texts = helpReplies.collect { (it as BulkReply).asString() }
         texts.contains('COUNT')
         texts.contains('LIST')
         texts.contains('HELP')

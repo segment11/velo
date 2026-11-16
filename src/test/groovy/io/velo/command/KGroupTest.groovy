@@ -169,6 +169,6 @@ class KGroupTest extends Specification {
         def reply = kGroup.execute(line)
         assert reply instanceof AsyncReply
         def result = (reply as AsyncReply).settablePromise.toCompletableFuture().get(10, TimeUnit.SECONDS) as MultiBulkReply
-        return result.replies.collect { new String((it as BulkReply).raw) }.sort()
+        return result.replies.collect { (it as BulkReply).asString() }.sort()
     }
 }

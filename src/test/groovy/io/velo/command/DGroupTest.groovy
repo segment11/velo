@@ -706,7 +706,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then: 'the string is dumped as a raw string, not as an integer'
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '0004303132330b00633bb1e163a48dab'
+        (reply as BulkReply).asString() == new String('0004303132330b00633bb1e163a48dab'.decodeHex())
 
         when:
         stringCv.compressedData = '007'.bytes
@@ -714,7 +714,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00033030370b001b875f08b1f65350'
+        (reply as BulkReply).asString() == new String('00033030370b001b875f08b1f65350'.decodeHex())
 
         when:
         stringCv.compressedData = '+123'.bytes
@@ -722,7 +722,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00042b3132330b004c29d361e52083db'
+        (reply as BulkReply).asString() == new String('00042b3132330b004c29d361e52083db'.decodeHex())
 
         when:
         stringCv.compressedData = '-0'.bytes
@@ -730,7 +730,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00022d300b00bc9ea2aa2b4fb945'
+        (reply as BulkReply).asString() == new String('00022d300b00bc9ea2aa2b4fb945'.decodeHex())
 
         when: 'dump a string that is a canonical integer'
         stringCv.compressedData = '-5'.bytes
@@ -738,7 +738,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then: 'the integer encoding is used'
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00c0fb0b00201b7b872ab9d6e1'
+        (reply as BulkReply).asString() == new String('00c0fb0b00201b7b872ab9d6e1'.decodeHex())
 
         when:
         stringCv.compressedData = '0'.bytes
@@ -746,7 +746,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00c0000b00f19f1a0b05cfea81'
+        (reply as BulkReply).asString() == new String('00c0000b00f19f1a0b05cfea81'.decodeHex())
 
         when:
         stringCv.compressedData = new byte[0]
@@ -754,7 +754,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00000b003444e133f2e04b53'
+        (reply as BulkReply).asString() == new String('00000b003444e133f2e04b53'.decodeHex())
 
         when:
         stringCv.compressedData = '-'.bytes
@@ -762,7 +762,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00012d0b00c7118ce794402b1d'
+        (reply as BulkReply).asString() == new String('00012d0b00c7118ce794402b1d'.decodeHex())
 
         when:
         stringCv.compressedData = '1a'.bytes
@@ -770,7 +770,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '000231610b0074404f6b25f34fbc'
+        (reply as BulkReply).asString() == new String('000231610b0074404f6b25f34fbc'.decodeHex())
 
         when: 'dump an integer that does not fit in one byte'
         stringCv.compressedData = '300'.bytes
@@ -778,7 +778,7 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00c12c010b00fc9ddc81981db599'
+        (reply as BulkReply).asString() == new String('00c12c010b00fc9ddc81981db599'.decodeHex())
 
         when: 'dump an integer that does not fit in two bytes'
         stringCv.compressedData = '70000'.bytes
@@ -786,6 +786,6 @@ class DGroupTest extends Specification {
         reply = dGroup.execute('dump a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).getRaw().encodeHex().toString() == '00c2701101000b00687bb58d68af7c2c'
+        (reply as BulkReply).asString() == new String('00c2701101000b00687bb58d68af7c2c'.decodeHex())
     }
 }

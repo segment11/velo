@@ -139,7 +139,7 @@ class MGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == cv.compressedData
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == new String(cv.compressedData)
         (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:

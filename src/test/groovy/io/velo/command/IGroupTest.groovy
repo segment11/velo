@@ -511,7 +511,7 @@ class IGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 100 skip: 0"
 
         when:
         // not all fields
@@ -520,7 +520,7 @@ class IGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 100 skip: 0"
 
         when:
         // key index over size
@@ -548,7 +548,7 @@ class IGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 100 skip: 0"
 
         when:
         // not all fields
@@ -557,7 +557,7 @@ class IGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 100 skip: 0"
 
         when:
         // json value_fields=* is the documented form and means all fields
@@ -565,7 +565,7 @@ class IGroupTest extends Specification {
                 'key_field=name key_prefix=star_ value_fields=*')
         then:
         reply instanceof AsyncReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 100 skip: 0"
         def starCv = inMemoryGetSet.getBuf(slot, 'star_name0', 0, 0).cv()
         new String(starCv.getCompressedData()) == '{"name":"name0","age":20,"address":"address0"}'
 
@@ -575,7 +575,7 @@ class IGroupTest extends Specification {
                 'key_field=name key_prefix=cnt_ value_fields=x,y,z')
         then:
         reply instanceof AsyncReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 100 skip: 0"
         def cntCv = inMemoryGetSet.getBuf(slot, 'cnt_name0', 0, 0).cv()
         new ObjectMapper().readValue(new String(cntCv.getCompressedData()), HashMap) == [x: null, y: null, z: null]
 
@@ -585,7 +585,7 @@ class IGroupTest extends Specification {
                 'key_field_index=0 key_prefix=ord_ value_fields_indexes=2,1,0')
         then:
         reply instanceof AsyncReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 100 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 100 skip: 0"
         def ordCv = inMemoryGetSet.getBuf(slot, 'ord_0', 0, 0).cv()
         new String(ordCv.getCompressedData()) == 'bbb,aaa,0'
 
@@ -632,7 +632,7 @@ class IGroupTest extends Specification {
                 'key_field=name key_prefix=gg_ value_fields=*')
         then:
         reply instanceof AsyncReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 1 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 1 skip: 0"
         new String(inMemoryGetSet.getBuf(slot, 'gg_g1', 0, 0).cv().getCompressedData()) == '{"name":"g1","age":1}'
 
         when:
@@ -657,7 +657,7 @@ class IGroupTest extends Specification {
                 'key_field_index=0 key_prefix=multi_ value_fields_indexes=0,1,2')
         then:
         reply instanceof AsyncReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 102 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 102 skip: 0"
         inMemoryGetSet.getBuf(slot, 'multi_0', 0, 0) != null
         inMemoryGetSet.getBuf(slot, 'multi_1', 0, 0) != null
 
@@ -681,7 +681,7 @@ class IGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 300 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 300 skip: 0"
 
         when:
         reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.parquet file_format=parquet ' +
@@ -689,7 +689,7 @@ class IGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: 300 skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: 300 skip: 0"
 
         when:
         // dir not exists
@@ -786,7 +786,7 @@ class IGroupTest extends Specification {
         then:
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.getResult() instanceof MultiBulkReply
-        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).raw == "slot: 0 put: ${count} skip: 0".bytes
+        (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[0] as BulkReply).asString() == "slot: 0 put: ${count} skip: 0"
 
         when:
         // dir not exists

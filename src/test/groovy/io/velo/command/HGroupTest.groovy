@@ -458,14 +458,14 @@ httl
         reply = hGroup.execute('hget a field')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == cvField.compressedData
+        (reply as BulkReply).asString() == new String(cvField.compressedData)
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
         reply = hGroup.execute('hget a field')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == ' '.bytes
+        (reply as BulkReply).asString() == ' '
 
         when:
         reply = hGroup.execute('hstrlen a field1')
@@ -534,9 +534,9 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'field'
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == cvField.compressedData
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == new String(cvField.compressedData)
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -551,9 +551,9 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'field'
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == ' '.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == ' '
 
         when:
         rhh.remove('field')
@@ -571,7 +571,7 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'field'
         (reply as MultiBulkReply).replies[1] instanceof NilReply
 
         when:
@@ -977,7 +977,7 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'field'
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -992,7 +992,7 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'field'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'field'
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1086,9 +1086,9 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == cvField.compressedData
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == new String(cvField.compressedData)
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == cvField1.compressedData
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == new String(cvField1.compressedData)
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -1104,9 +1104,9 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == ' '.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == ' '
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == ' '.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == ' '
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1238,9 +1238,9 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'value'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value'
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == 'value0'.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'value0'
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -1249,9 +1249,9 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'value'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value'
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[1]).raw == 'value0'.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'value0'
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -1278,7 +1278,7 @@ httl
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
-        (hGroup.execute('hget hashEmpty _0') as BulkReply).raw == 'value'.bytes
+        (hGroup.execute('hget hashEmpty _0') as BulkReply).asString() == 'value'
         (hGroup.execute('hlen hashEmpty') as IntegerReply).integer == 1
 
         when: 'split mode, an empty value'
@@ -1286,7 +1286,7 @@ httl
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
-        (hGroup.execute('hget hashEmpty field') as BulkReply).raw == ''.bytes
+        (hGroup.execute('hget hashEmpty field') as BulkReply).asString() == ''
 
         when: 'HH mode, an empty field name and an empty value'
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -1295,7 +1295,7 @@ httl
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
-        (hGroup.execute('hget hashEmptyHH _0') as BulkReply).raw == 'value'.bytes
+        (hGroup.execute('hget hashEmptyHH _0') as BulkReply).asString() == 'value'
         (hGroup.execute('hlen hashEmptyHH') as IntegerReply).integer == 1
 
         when:
@@ -1303,7 +1303,7 @@ httl
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 1
-        (hGroup.execute('hget hashEmptyHH field') as BulkReply).raw == ''.bytes
+        (hGroup.execute('hget hashEmptyHH field') as BulkReply).asString() == ''
 
         // bug 78.5: overwriting the value clears the field ttl, like redis does
         when: 'HH mode, the field has a ttl and the value is overwritten'
@@ -1901,8 +1901,8 @@ httl
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
-        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
-        new String(((reply as MultiBulkReply).replies[1] as BulkReply).raw) == 'value2'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value1'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'value2'
 
         and:
         def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
@@ -1933,7 +1933,7 @@ httl
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
-        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value1'
         (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when:
@@ -1952,8 +1952,8 @@ httl
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
-        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
-        new String(((reply as MultiBulkReply).replies[1] as BulkReply).raw) == 'value2'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value1'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'value2'
 
         and:
         def rhhCv = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
@@ -2067,15 +2067,15 @@ httl
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
-        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
-        new String(((reply as MultiBulkReply).replies[1] as BulkReply).raw) == 'value2'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value1'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'value2'
 
         when: 'test EX option'
         reply = hGroup.execute('hgetex hashA EX 3600 FIELDS 1 field1')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
-        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value1'
         def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
         def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
         savedRHK.getCachedExpireAt('field1') > System.currentTimeMillis()
@@ -2085,7 +2085,7 @@ httl
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
-        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value1'
         (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
 
         when: 'test EX with nonexistent field'
@@ -2093,7 +2093,7 @@ httl
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
-        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value1'
         (reply as MultiBulkReply).replies[1] == NilReply.INSTANCE
         def keysCv2 = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)
         def savedRHK2 = RedisHashKeys.decode(keysCv2.cv().getCompressedData(), false)
@@ -2144,8 +2144,8 @@ httl
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
-        new String(((reply as MultiBulkReply).replies[0] as BulkReply).raw) == 'value1'
-        new String(((reply as MultiBulkReply).replies[1] as BulkReply).raw) == 'value2'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'value1'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'value2'
 
         when: 'test HH mode EX option'
         reply = hGroup.execute('hgetex hashA EX 3600 FIELDS 1 field1')
@@ -2294,7 +2294,7 @@ httl
         reply = hGroup.execute('hsetex hashFnx fnx FIELDS 1 field value2')
         then:
         reply == IntegerReply.REPLY_0
-        (hGroup.execute('hget hashFnx field') as BulkReply).raw == 'value'.bytes
+        (hGroup.execute('hget hashFnx field') as BulkReply).asString() == 'value'
 
         when: 'split mode, the field exists and is live, fxx sets it'
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -2304,7 +2304,7 @@ httl
         reply = hGroup.execute('hsetex hashFxx fxx FIELDS 1 field value2')
         then:
         reply == IntegerReply.REPLY_1
-        (hGroup.execute('hget hashFxx field') as BulkReply).raw == 'value2'.bytes
+        (hGroup.execute('hget hashFxx field') as BulkReply).asString() == 'value2'
 
         when: 'split mode, the field is expired and fnx is used'
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -2315,7 +2315,7 @@ httl
         reply = hGroup.execute('hsetex hashExpired fnx FIELDS 1 field value2')
         then:
         reply == IntegerReply.REPLY_1
-        (hGroup.execute('hget hashExpired field') as BulkReply).raw == 'value2'.bytes
+        (hGroup.execute('hget hashExpired field') as BulkReply).asString() == 'value2'
         (hGroup.execute('hlen hashExpired') as IntegerReply).integer == 1
 
         when: 'split mode, the field is expired and fxx is used'
@@ -2339,7 +2339,7 @@ httl
         reply = hGroup.execute('hsetex hashFnxAll fnx FIELDS 2 a 9 b 8')
         then:
         reply == IntegerReply.REPLY_0
-        (hGroup.execute('hget hashFnxAll a') as BulkReply).raw == '1'.bytes
+        (hGroup.execute('hget hashFnxAll a') as BulkReply).asString() == '1'
         hGroup.execute('hget hashFnxAll b') == NilReply.INSTANCE
 
         when: 'split mode, fxx with one missing field sets nothing'
@@ -2350,7 +2350,7 @@ httl
         reply = hGroup.execute('hsetex hashFxxAll fxx FIELDS 2 a 9 b 8')
         then:
         reply == IntegerReply.REPLY_0
-        (hGroup.execute('hget hashFxxAll a') as BulkReply).raw == '1'.bytes
+        (hGroup.execute('hget hashFxxAll a') as BulkReply).asString() == '1'
         hGroup.execute('hget hashFxxAll b') == NilReply.INSTANCE
 
         when: 'HH mode, fnx with one existing field sets nothing'
@@ -2360,7 +2360,7 @@ httl
         reply = hGroup.execute('hsetex hashFnxAllHH fnx FIELDS 2 a 9 b 8')
         then:
         reply == IntegerReply.REPLY_0
-        (hGroup.execute('hget hashFnxAllHH a') as BulkReply).raw == '1'.bytes
+        (hGroup.execute('hget hashFnxAllHH a') as BulkReply).asString() == '1'
         hGroup.execute('hget hashFnxAllHH b') == NilReply.INSTANCE
 
         when: 'HH mode, fxx with one missing field sets nothing'
@@ -2369,7 +2369,7 @@ httl
         reply = hGroup.execute('hsetex hashFxxAllHH fxx FIELDS 2 a 9 b 8')
         then:
         reply == IntegerReply.REPLY_0
-        (hGroup.execute('hget hashFxxAllHH a') as BulkReply).raw == '1'.bytes
+        (hGroup.execute('hget hashFxxAllHH a') as BulkReply).asString() == '1'
         hGroup.execute('hget hashFxxAllHH b') == NilReply.INSTANCE
 
         when: 'split mode, fxx on a key that does not exist sets nothing'
@@ -2502,7 +2502,7 @@ httl
         (keepTtlBefore as IntegerReply).integer > 0
         (keepTtlAfter as IntegerReply).integer > 0
         (keepTtlAfter as IntegerReply).integer <= (keepTtlBefore as IntegerReply).integer
-        (hGroup.execute('hget hashKeep field') as BulkReply).raw == 'v2'.bytes
+        (hGroup.execute('hget hashKeep field') as BulkReply).asString() == 'v2'
 
         when: 'split mode, the cached ttl is over but the field is alive'
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -2523,7 +2523,7 @@ httl
         reply = hGroup.execute('hsetex hashKeepStale keepttl FIELDS 1 field v2')
         then:
         reply == IntegerReply.REPLY_1
-        (hGroup.execute('hget hashKeepStale field') as BulkReply).raw == 'v2'.bytes
+        (hGroup.execute('hget hashKeepStale field') as BulkReply).asString() == 'v2'
         def keepStaleTtl = (hGroup.execute('httl hashKeepStale fields 1 field') as MultiBulkReply).replies[0]
         (keepStaleTtl as IntegerReply).integer == -1
 
@@ -2538,7 +2538,7 @@ httl
         (keepTtlBeforeHH as IntegerReply).integer > 0
         (keepTtlAfterHH as IntegerReply).integer > 0
         (keepTtlAfterHH as IntegerReply).integer <= (keepTtlBeforeHH as IntegerReply).integer
-        (hGroup.execute('hget hashKeepHH field') as BulkReply).raw == 'v2'.bytes
+        (hGroup.execute('hget hashKeepHH field') as BulkReply).asString() == 'v2'
 
         when: 'split mode, keepttl on a field without a ttl keeps it without a ttl'
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -2549,7 +2549,7 @@ httl
         def keepNoTtl = (hGroup.execute('httl hashKeepNoTtl fields 1 field') as MultiBulkReply).replies[0]
         then:
         (keepNoTtl as IntegerReply).integer == -1
-        (hGroup.execute('hget hashKeepNoTtl field') as BulkReply).raw == 'v2'.bytes
+        (hGroup.execute('hget hashKeepNoTtl field') as BulkReply).asString() == 'v2'
 
         when: 'split mode, keepttl on an expired field sets the value without a ttl'
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -2561,7 +2561,7 @@ httl
         def keepExpiredTtl = (hGroup.execute('httl hashKeepExpired fields 1 field') as MultiBulkReply).replies[0]
         then:
         (keepExpiredTtl as IntegerReply).integer == -1
-        (hGroup.execute('hget hashKeepExpired field') as BulkReply).raw == 'v2'.bytes
+        (hGroup.execute('hget hashKeepExpired field') as BulkReply).asString() == 'v2'
 
         // bug 78.8: the split layout stores the hash out of line, the type of the
         // main key must be checked, redis answers WRONGTYPE for another type
@@ -2632,7 +2632,7 @@ httl
         reply = hGroup.execute('hsetnx hashNxEmpty field _0')
         then:
         reply == IntegerReply.REPLY_1
-        (hGroup.execute('hget hashNxEmpty field') as BulkReply).raw == ''.bytes
+        (hGroup.execute('hget hashNxEmpty field') as BulkReply).asString() == ''
 
         when: 'HH mode, an empty value'
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -2640,7 +2640,7 @@ httl
         reply = hGroup.execute('hsetnx hashNxEmptyHH field _0')
         then:
         reply == IntegerReply.REPLY_1
-        (hGroup.execute('hget hashNxEmptyHH field') as BulkReply).raw == ''.bytes
+        (hGroup.execute('hget hashNxEmptyHH field') as BulkReply).asString() == ''
 
         // bug 78.9: an expired field does not exist, redis creates it again
         when: 'split mode, the field is expired'
@@ -2652,7 +2652,7 @@ httl
         reply = hGroup.execute('hsetnx hashExpired field value2')
         then:
         reply == IntegerReply.REPLY_1
-        (hGroup.execute('hget hashExpired field') as BulkReply).raw == 'value2'.bytes
+        (hGroup.execute('hget hashExpired field') as BulkReply).asString() == 'value2'
         // the field is live again, the stale cached ttl must not hide it
         (hGroup.execute('hlen hashExpired') as IntegerReply).integer == 1
 
@@ -2731,7 +2731,7 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == ' '.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == ' '
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -2742,7 +2742,7 @@ httl
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == cvField.compressedData
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == new String(cvField.compressedData)
 
         when:
         reply = hGroup.execute('hvals >key')
@@ -3442,7 +3442,7 @@ httl
         def savedRHK = RedisHashKeys.decode(keysCv.cv().getCompressedData(), false)
         savedRHK.getCachedExpireAt('field') == CompressedValue.NO_EXPIRE
         (hGroup.execute('hlen hashExpired') as IntegerReply).integer == 1
-        (hGroup.execute('hget hashExpired field') as BulkReply).raw == '3'.bytes
+        (hGroup.execute('hget hashExpired field') as BulkReply).asString() == '3'
     }
 
     def 'test hincrby on non-numeric value does not clear cached ttl'() {

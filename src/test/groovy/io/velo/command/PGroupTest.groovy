@@ -670,8 +670,8 @@ class PGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 3
         // redis pushes the confirmation with the first element 'psubscribe'
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'psubscribe'.bytes
-        ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'news.*'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'psubscribe'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'news.*'
         ((reply as MultiBulkReply).replies[2] as IntegerReply).integer == 1
     }
 
@@ -692,8 +692,8 @@ class PGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 3
         // redis pushes the confirmation with the first element 'punsubscribe'
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'punsubscribe'.bytes
-        ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'news.*'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'punsubscribe'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'news.*'
         ((reply as MultiBulkReply).replies[2] as IntegerReply).integer == 0
     }
 
@@ -769,7 +769,7 @@ class PGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == channel
 
         when:
         reply = pGroup.execute('pubsub numpat')
@@ -784,7 +784,7 @@ class PGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == channel
         (reply as MultiBulkReply).replies[1] instanceof IntegerReply
         ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 1
 
@@ -808,7 +808,7 @@ class PGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'no_such_channel'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'no_such_channel'
         ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 0
 
         when: 'the pattern subscriptions are not listed as channels'
@@ -816,14 +816,14 @@ class PGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == channel
 
         when:
         reply = pGroup.execute('pubsub channels test_*')
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == channel
 
         when: 'a glob that matches no channel returns an empty reply'
         reply = pGroup.execute('pubsub channels other_*')

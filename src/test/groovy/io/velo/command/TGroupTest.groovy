@@ -76,8 +76,8 @@ class TGroupTest extends Specification {
 
         when:
         def reply = tGroup.handle() as MultiBulkReply
-        def seconds = ((BulkReply) reply.replies[0]).asString().toLong()
-        def microseconds = ((BulkReply) reply.replies[1]).asString().toLong()
+        def seconds = (reply.replies[0] as BulkReply).asString().toLong()
+        def microseconds = (reply.replies[1] as BulkReply).asString().toLong()
 
         then:
         Math.abs(seconds - nowSeconds) <= 1

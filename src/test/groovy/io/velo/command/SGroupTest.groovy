@@ -488,7 +488,7 @@ sunionstore
             data[1] = '0'.bytes
         }
         for (keyReply in ((MultiBulkReply) (reply as MultiBulkReply).replies[1]).replies) {
-            allKeys << ((BulkReply) keyReply).asString()
+            allKeys << (keyReply as BulkReply).asString()
         }
         then:
         reply instanceof MultiBulkReply
@@ -508,10 +508,10 @@ sunionstore
             def keyListReply = (r as MultiBulkReply).replies[1]
             if (keyListReply instanceof MultiBulkReply) {
                 for (keyReply in ((MultiBulkReply) keyListReply).replies) {
-                    allKeys << ((BulkReply) keyReply).asString()
+                    allKeys << (keyReply as BulkReply).asString()
                 }
             }
-            nextCursor = ((BulkReply) (r as MultiBulkReply).replies[0]).asString()
+            nextCursor = ((r as MultiBulkReply).replies[0] as BulkReply).asString()
             loops++
         }
         then:
@@ -543,10 +543,10 @@ sunionstore
             def keyListReply = (r as MultiBulkReply).replies[1]
             if (keyListReply instanceof MultiBulkReply) {
                 for (keyReply in ((MultiBulkReply) keyListReply).replies) {
-                    allKeys2 << ((BulkReply) keyReply).asString()
+                    allKeys2 << (keyReply as BulkReply).asString()
                 }
             }
-            nextCursor2 = ((BulkReply) (r as MultiBulkReply).replies[0]).asString()
+            nextCursor2 = ((r as MultiBulkReply).replies[0] as BulkReply).asString()
             loops2++
             if (nextCursor2 == '0') {
                 break
@@ -633,7 +633,7 @@ sunionstore
         reply = sGroup.execute('set a value get')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'value'.bytes
+        (reply as BulkReply).asString() == 'value'
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -754,7 +754,7 @@ sunionstore
         reply = sGroup.execute('set a newvalue nx get')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'oldvalue'.bytes
+        (reply as BulkReply).asString() == 'oldvalue'
         inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().compressedData == 'oldvalue'.bytes
 
@@ -776,7 +776,7 @@ sunionstore
         reply = sGroup.execute('set a newvalue keepttl get')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'value'.bytes
+        (reply as BulkReply).asString() == 'value'
         inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt == savedExpireAt
 
@@ -1218,14 +1218,14 @@ sunionstore
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == '2'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '2'
 
         when:
         reply = sGroup.sdiff(true, false)
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == '1'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '1'
 
         when:
         rhkB.remove('1')
@@ -2310,8 +2310,8 @@ sunionstore
             reply = sGroup.execute("sscan a $nextCursor count 2")
             assert reply instanceof MultiBulkReply
             def page = reply as MultiBulkReply
-            nextCursor = new String((page.replies[0] as BulkReply).raw)
-            def members = (page.replies[1] as MultiBulkReply).replies.collect { new String((it as BulkReply).raw) }
+            nextCursor = (page.replies[0] as BulkReply).asString()
+            def members = (page.replies[1] as MultiBulkReply).replies.collect { (it as BulkReply).asString() }
             allMembers.addAll(members)
             pageCount++
             if (nextCursor == '0') break
@@ -2333,7 +2333,7 @@ sunionstore
         def scanReply3 = reply as MultiBulkReply
         scanReply3.replies.length == 2
         (scanReply3.replies[1] as MultiBulkReply).replies.length == 1
-        ((scanReply3.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
+        ((scanReply3.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'x'
 
         when:
         reply = sGroup.execute('sscan a 0 match nomatch*')

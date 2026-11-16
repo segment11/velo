@@ -79,7 +79,7 @@ class EGroupTest extends Specification {
         def reply = eGroup.execute('echo a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         def classpath = Utils.projectPath("/dyn/src")

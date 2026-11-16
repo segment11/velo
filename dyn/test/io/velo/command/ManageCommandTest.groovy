@@ -137,7 +137,7 @@ class ManageCommandTest extends Specification {
         data4[2] = 'calc-key-hash'.bytes
         data4[3] = 'key:0'.bytes
         def reply = manage.debug()
-        println new String(((BulkReply) reply).raw)
+        println((reply as BulkReply).asString())
         then:
         reply instanceof BulkReply
 
@@ -353,7 +353,7 @@ class ManageCommandTest extends Specification {
         data3[2] = 'view-dict-summary'.bytes
         manage.data = data3
         reply = manage.dict()
-        println new String(((BulkReply) reply).raw)
+        println((reply as BulkReply).asString())
         then:
         reply instanceof BulkReply
 
@@ -371,7 +371,7 @@ class ManageCommandTest extends Specification {
         reply = manage.dict()
         then:
         reply instanceof BulkReply
-        Double.parseDouble(new String(((BulkReply) reply).raw)) < 1
+        Double.parseDouble((reply as BulkReply).asString()) < 1
 
         when:
         def data14 = new byte[14][]
@@ -631,7 +631,7 @@ class ManageCommandTest extends Specification {
         def reply = manage.manageInOneSlot()
         then:
         reply instanceof BulkReply
-        !((BulkReply) reply).asString().contains('",}')
+        !(reply as BulkReply).asString().contains('",}')
 
         when:
         data5[3] = 'view-big-key-top-k'.bytes
@@ -643,14 +643,14 @@ class ManageCommandTest extends Specification {
         data5[3] = 'view-bucket-keys'.bytes
         data5[4] = ''.bytes
         reply = manage.manageInOneSlot()
-        println new String(((BulkReply) reply).raw)
+        println((reply as BulkReply).asString())
         then:
         reply instanceof BulkReply
 
         when:
         data5[4] = 'iterate'.bytes
         reply = manage.manageInOneSlot()
-        println new String(((BulkReply) reply).raw)
+        println((reply as BulkReply).asString())
         then:
         reply instanceof BulkReply
 
@@ -660,14 +660,14 @@ class ManageCommandTest extends Specification {
         oneSlot.keyLoader.persistShortValueListBatchInOneWalGroup(0, shortValueList)
         data5[4] = ''.bytes
         reply = manage.manageInOneSlot()
-        println new String(((BulkReply) reply).raw)
+        println((reply as BulkReply).asString())
         then:
         reply instanceof BulkReply
 
         when:
         data5[4] = 'iterate'.bytes
         reply = manage.manageInOneSlot()
-        println new String(((BulkReply) reply).raw)
+        println((reply as BulkReply).asString())
         then:
         reply instanceof BulkReply
 
@@ -709,7 +709,7 @@ class ManageCommandTest extends Specification {
         reply = manage.manageInOneSlot()
         then:
         reply instanceof BulkReply
-        ((BulkReply) reply).asString().contains('key_bucket_key_count_max=')
+        (reply as BulkReply).asString().contains('key_bucket_key_count_max=')
 
         when:
         data7[5] = 'view-bucket-keys'.bytes
@@ -829,14 +829,14 @@ class ManageCommandTest extends Specification {
         reply = manage.manageInOneSlot()
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains('"mode":"preview"')
+        (reply as BulkReply).asString().contains('"mode":"preview"')
 
         when:
         dataRebuild[5] = 'apply'.bytes
         reply = manage.manageInOneSlot()
         then:
         reply instanceof BulkReply
-        new String(((BulkReply) reply).raw).contains('"applied":true')
+        (reply as BulkReply).asString().contains('"applied":true')
 
         when:
         dataRebuild[5] = 'bad'.bytes

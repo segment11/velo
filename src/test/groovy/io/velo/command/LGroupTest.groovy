@@ -139,7 +139,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lindex a 0')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         reply = lGroup.execute('lindex a 1')
@@ -150,7 +150,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lindex a -1')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         reply = lGroup.execute('lindex a -2')
@@ -342,7 +342,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lmove a b left left')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -350,7 +350,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lmove a b left right')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -358,7 +358,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lmove a b right left')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -366,7 +366,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lmove a b right right')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         reply = lGroup.execute('lmove a b xxx right')
@@ -471,7 +471,7 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpop a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         reply = lGroup.execute('lpop a')
@@ -490,7 +490,7 @@ class LGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == ('aaaaabbbbbccccc' * 5).bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == ('aaaaabbbbbccccc' * 5)
 
         when:
         // clear all
@@ -854,7 +854,7 @@ class LGroupTest extends Specification {
         (reply as IntegerReply).integer == 3
         finalPromise4.isComplete()
         finalPromise4.getResult() instanceof MultiBulkReply
-        ((finalPromise4.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
+        ((finalPromise4.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'a'
 
         when:
         BlockingList.clearBlockingListPromisesForAllKeys()
@@ -866,7 +866,7 @@ class LGroupTest extends Specification {
         (reply as IntegerReply).integer == 3 - 1 + 3
         finalPromise5.isComplete()
         finalPromise5.getResult() instanceof MultiBulkReply
-        ((finalPromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
+        ((finalPromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'a'
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -1375,9 +1375,9 @@ port ${tmpPort}
         then:
         reply instanceof MultiBulkReply
         mb.replies.length == 2
-        (mb.replies[0] as BulkReply).raw == 'mylist'.bytes
+        (mb.replies[0] as BulkReply).asString() == 'mylist'
         (mb.replies[1] as MultiBulkReply).replies.length == 1
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'one'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'one'
 
         when: 'single key, pop right'
         reply = lGroup.execute('lmpop 1 mylist RIGHT')
@@ -1385,7 +1385,7 @@ port ${tmpPort}
         then:
         reply instanceof MultiBulkReply
         (mb.replies[1] as MultiBulkReply).replies.length == 1
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'three'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'three'
 
         when: 'single key, COUNT 2 (only 1 element left)'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT 2')
@@ -1393,7 +1393,7 @@ port ${tmpPort}
         then:
         reply instanceof MultiBulkReply
         (mb.replies[1] as MultiBulkReply).replies.length == 1
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'two'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'two'
 
         when: 'list now empty, key removed'
         reply = lGroup.execute('lmpop 1 mylist LEFT')
@@ -1414,10 +1414,10 @@ port ${tmpPort}
         mb = reply as MultiBulkReply
         then:
         reply instanceof MultiBulkReply
-        (mb.replies[0] as BulkReply).raw == 'b'.bytes
+        (mb.replies[0] as BulkReply).asString() == 'b'
         (mb.replies[1] as MultiBulkReply).replies.length == 2
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
-        ((mb.replies[1] as MultiBulkReply).replies[1] as BulkReply).raw == 'y'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'x'
+        ((mb.replies[1] as MultiBulkReply).replies[1] as BulkReply).asString() == 'y'
 
         when: 'count larger than list size'
         inMemoryGetSet.remove(slot, 'small')
@@ -1432,7 +1432,7 @@ port ${tmpPort}
         then:
         reply instanceof MultiBulkReply
         (mb.replies[1] as MultiBulkReply).replies.length == 1
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'v'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'v'
         // list deleted after popping last element
         lGroup.getCv(lGroup.slotWithKeyHashListParsed.getFirst()) == null
 

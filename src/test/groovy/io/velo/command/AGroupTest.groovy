@@ -124,7 +124,7 @@ class AGroupTest extends Specification {
         def reply = aGroup.execute('acl cat')
         then:
         reply instanceof MultiBulkReply
-        def catNames = (reply as MultiBulkReply).replies.collect { new String(((BulkReply) it).raw) }
+        def catNames = (reply as MultiBulkReply).replies.collect { (it as BulkReply).asString() }
         !catNames.contains('all')
         catNames.contains('dangerous')
         catNames.contains('write')
@@ -141,7 +141,7 @@ class AGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((BulkReply) (reply as MultiBulkReply).replies[0]).raw == 'acl'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'acl'
 
         when:
         reply = aGroup.execute('acl cat dangerous_x')
@@ -246,13 +246,13 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl genpass')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw.length == 64
+        (reply as BulkReply).asString().length() == 64
 
         when:
         reply = aGroup.execute('acl genpass 5')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw.length == 2
+        (reply as BulkReply).asString().length() == 2
 
         when:
         reply = aGroup.execute('acl genpass 0')
@@ -476,14 +476,14 @@ class AGroupTest extends Specification {
         reply = aGroup.execute('acl whoami')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'default'.bytes
+        (reply as BulkReply).asString() == 'default'
 
         when:
         SocketInspector.setAuthUser(socket, 'a')
         reply = aGroup.execute('acl whoami')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'a'.bytes
+        (reply as BulkReply).asString() == 'a'
 
         when:
         reply = aGroup.execute('acl whoami x')

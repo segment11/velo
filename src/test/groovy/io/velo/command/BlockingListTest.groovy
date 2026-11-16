@@ -146,7 +146,7 @@ class BlockingListTest extends Specification {
         then:
         settablePromise.isComplete()
         settablePromise.getResult() instanceof MultiBulkReply
-        ((settablePromise.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
+        ((settablePromise.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'a'
         bb.length == 0
 
         when:
@@ -221,9 +221,9 @@ class BlockingListTest extends Specification {
         def bb5 = BlockingList.setReplyRPushIfBlockingListExist('a', elementValueBytesArray5)
         then:
         settablePromise5.isComplete()
-        ((settablePromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
+        ((settablePromise5.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'a'
         settablePromise6.isComplete()
-        ((settablePromise6.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'c'.bytes
+        ((settablePromise6.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'c'
         bb5.length == 1
 
         when:
@@ -249,7 +249,7 @@ class BlockingListTest extends Specification {
         def bb7 = BlockingList.setReplyIfBlockingListExist('a', true, elementValueBytesArray7, bGroup)
         then:
         settablePromise7.isComplete()
-        (settablePromise7.getResult() as BulkReply).raw == 'a'.bytes
+        (settablePromise7.getResult() as BulkReply).asString() == 'a'
         bb7.length == 0
         inMemoryGetSet.getBuf(slot, 'b', slotForKeyB.bucketIndex(), slotForKeyB.keyHash()) != null
 
@@ -264,7 +264,7 @@ class BlockingListTest extends Specification {
         def bb8 = BlockingList.setReplyIfBlockingListExist('a', true, elementValueBytesArray8, bGroup)
         then:
         settablePromise8.isComplete()
-        (settablePromise8.getResult() as BulkReply).raw == 'a'.bytes
+        (settablePromise8.getResult() as BulkReply).asString() == 'a'
         bb8.length == 2
 
         when:
@@ -278,7 +278,7 @@ class BlockingListTest extends Specification {
         def bb88 = BlockingList.setReplyIfBlockingListExist('a', false, elementValueBytesArray88, bGroup)
         then:
         settablePromise88.isComplete()
-        (settablePromise88.getResult() as BulkReply).raw == 'a'.bytes
+        (settablePromise88.getResult() as BulkReply).asString() == 'a'
         bb88.length == 2
 
         when:
@@ -350,11 +350,11 @@ class BlockingListTest extends Specification {
         promise1.isComplete()
         def result1 = promise1.getResult() as MultiBulkReply
         result1.replies.length == 2
-        (result1.replies[0] as BulkReply).raw == 'mylist'.bytes
+        (result1.replies[0] as BulkReply).asString() == 'mylist'
         result1.replies[1] instanceof MultiBulkReply
         def inner1 = result1.replies[1] as MultiBulkReply
         inner1.replies.length == 1
-        (inner1.replies[0] as BulkReply).raw == 'hello'.bytes
+        (inner1.replies[0] as BulkReply).asString() == 'hello'
 
         when: 'BLMPOP COUNT 2 wake-up collects 2 elements'
         BlockingList.clearBlockingListPromisesForAllKeys()
@@ -370,11 +370,11 @@ class BlockingListTest extends Specification {
         promise2.isComplete()
         def result2 = promise2.getResult() as MultiBulkReply
         result2.replies.length == 2
-        (result2.replies[0] as BulkReply).raw == 'mylist2'.bytes
+        (result2.replies[0] as BulkReply).asString() == 'mylist2'
         def inner2 = result2.replies[1] as MultiBulkReply
         inner2.replies.length == 2
-        (inner2.replies[0] as BulkReply).raw == 'a'.bytes
-        (inner2.replies[1] as BulkReply).raw == 'b'.bytes
+        (inner2.replies[0] as BulkReply).asString() == 'a'
+        (inner2.replies[1] as BulkReply).asString() == 'b'
         // 'c' was not consumed
         remaining.length == 1
 
@@ -392,8 +392,8 @@ class BlockingListTest extends Specification {
         def result3 = promise3.getResult() as MultiBulkReply
         def inner3 = result3.replies[1] as MultiBulkReply
         inner3.replies.length == 2
-        (inner3.replies[0] as BulkReply).raw == 'x'.bytes
-        (inner3.replies[1] as BulkReply).raw == 'y'.bytes
+        (inner3.replies[0] as BulkReply).asString() == 'x'
+        (inner3.replies[1] as BulkReply).asString() == 'y'
 
         when: 'right pop with COUNT 2'
         BlockingList.clearBlockingListPromisesForAllKeys()
@@ -410,8 +410,8 @@ class BlockingListTest extends Specification {
         def result4 = promise4.getResult() as MultiBulkReply
         def inner4 = result4.replies[1] as MultiBulkReply
         inner4.replies.length == 2
-        (inner4.replies[0] as BulkReply).raw == 'r'.bytes
-        (inner4.replies[1] as BulkReply).raw == 'q'.bytes
+        (inner4.replies[0] as BulkReply).asString() == 'r'
+        (inner4.replies[1] as BulkReply).asString() == 'q'
 
         when: 'a waiter that already lost the delivery race consumes nothing and is removed as stale'
         BlockingList.clearBlockingListPromisesForAllKeys()

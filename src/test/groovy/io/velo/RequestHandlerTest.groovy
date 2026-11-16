@@ -595,7 +595,7 @@ class RequestHandlerTest extends Specification {
         reply = requestHandler.handle(getRequest2, socket)
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw.length == 10
+        (reply as BulkReply).asString().length() == 10
 
         when:
         oneSlot.setCanRead(false)

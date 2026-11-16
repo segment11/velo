@@ -170,7 +170,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getdel a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == cv.compressedData
+        (reply as BulkReply).asString() == new String(cv.compressedData)
 
         when: 'key holds a list type value'
         def listCv = Mock.prepareCompressedValueList(1)[0]
@@ -203,7 +203,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getex a')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == cv.compressedData
+        (reply as BulkReply).asString() == new String(cv.compressedData)
 
         when:
         reply = gGroup.execute('getex >key')
@@ -356,7 +356,7 @@ class GGroupTest extends Specification {
         def reply = gGroup.execute('getrange a 0 1')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw.length == 0
+        (reply as BulkReply).asString() == ''
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -365,7 +365,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getrange a 0 1')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'ab'.bytes
+        (reply as BulkReply).asString() == 'ab'
 
         when:
         reply = gGroup.execute('getrange a 0 a')
@@ -377,25 +377,25 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getrange a 99999999999 -1')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw.length == 0
+        (reply as BulkReply).asString() == ''
 
         when:
         reply = gGroup.execute('getrange a -99999999999 2')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'abc'.bytes
+        (reply as BulkReply).asString() == 'abc'
 
         when:
         reply = gGroup.execute('getrange a 9223372036854775806 9223372036854775807')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw.length == 0
+        (reply as BulkReply).asString() == ''
 
         when:
         reply = gGroup.execute('getrange a 2 1')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw.length == 0
+        (reply as BulkReply).asString() == ''
 
         when: 'key holds a list type value'
         def listCv = Mock.prepareCompressedValueList(1)[0]
@@ -438,7 +438,7 @@ class GGroupTest extends Specification {
         reply = gGroup.execute('getset a value2')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).raw == 'abc'.bytes
+        (reply as BulkReply).asString() == 'abc'
 
         when:
         def bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, 0L)
@@ -728,8 +728,8 @@ class GGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         def pos = (reply as MultiBulkReply).replies[0] as MultiBulkReply
-        new String((pos.replies[0] as BulkReply).raw) == '0.0001'
-        new String((pos.replies[1] as BulkReply).raw) == '15'
+        (pos.replies[0] as BulkReply).asString() == '0.0001'
+        (pos.replies[1] as BulkReply).asString() == '15'
     }
 
     def 'test geosearch and geosearchstore'() {
@@ -1020,10 +1020,10 @@ class GGroupTest extends Specification {
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 1
         def row = (reply as MultiBulkReply).replies[0] as MultiBulkReply
-        new String((row.replies[1] as BulkReply).raw) == '0.0000'
+        (row.replies[1] as BulkReply).asString() == '0.0000'
         def coordRow = row.replies[2] as MultiBulkReply
-        new String((coordRow.replies[0] as BulkReply).raw) == '13.361389'
-        new String((coordRow.replies[1] as BulkReply).raw) == '38.115556'
+        (coordRow.replies[0] as BulkReply).asString() == '13.361389'
+        (coordRow.replies[1] as BulkReply).asString() == '38.115556'
 
         when:
         // Bug 77.9: existing source key with a missing frommember member is an error like redis

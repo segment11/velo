@@ -748,7 +748,7 @@ class BGroupTest extends Specification {
         (reply as MultiBulkReply).replies.length == 2
 
         when:
-        def encodedAndCompressed = ((reply as MultiBulkReply).replies[1] as BulkReply).raw
+        def encodedAndCompressed = ((reply as MultiBulkReply).replies[1] as BulkReply).bufferAsHttp().asArray()
         println 'encoded and compressed length: ' + encodedAndCompressed.length
         def data4 = new byte[4][]
         data4[0] = 'bf.loadchunk'.bytes
@@ -985,7 +985,7 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('blpop a 0')
         then:
         reply instanceof MultiBulkReply
-        ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'a'.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == 'a'
         LGroup.getRedisList(bGroup.slotWithKeyHashListParsed.getFirst(), bGroup) == null
 
         when:
@@ -1033,7 +1033,7 @@ class BGroupTest extends Specification {
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
             result instanceof MultiBulkReply &&
-                    ((result as MultiBulkReply).replies[1] as BulkReply).raw == 'b'.bytes
+                    ((result as MultiBulkReply).replies[1] as BulkReply).asString() == 'b'
         }.result
 
         when:
@@ -1114,7 +1114,7 @@ class BGroupTest extends Specification {
         promiseForRace.isComplete()
         promiseForRace.getResult() instanceof MultiBulkReply
         (promiseForRace.getResult() as MultiBulkReply).replies[1] instanceof BulkReply
-        ((promiseForRace.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'pushed-in-window'.bytes
+        ((promiseForRace.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'pushed-in-window'
 
         when: 'an already completed promise is left alone'
         def completedTwice = BGroup.completeIfListNotEmpty(BaseCommand.slot('race', 1), 'race'.bytes, bGroup, bGroup.dictMap, oneForRace, true)
@@ -1153,7 +1153,7 @@ class BGroupTest extends Specification {
         def completedFromRight = BGroup.completeIfListNotEmpty(BaseCommand.slot('raceright', 1), 'raceright'.bytes, bGroup, bGroup.dictMap, oneForRight, false)
         then:
         completedFromRight
-        ((promiseForRight.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'last'.bytes
+        ((promiseForRight.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'last'
 
         when: 'an existing but empty list does not complete the promise'
         def promiseForEmpty = new SettablePromise<Reply>()
@@ -1197,7 +1197,7 @@ class BGroupTest extends Specification {
         then:
         winCompleted
         winPromise.isComplete()
-        ((winPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'must-survive'.bytes
+        ((winPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'must-survive'
 
         when: 'a foreign completion during the re-check does not lose the element'
         def foreignPromise = new SettablePromise<Reply>()
@@ -1232,7 +1232,7 @@ class BGroupTest extends Specification {
         def afterForeignCompleted = BGroup.completeIfListNotEmpty(BaseCommand.slot('foreign', 1), 'foreign'.bytes, bGroupForeign, bGroupForeign.dictMap, afterForeignOne, true)
         then:
         afterForeignCompleted
-        ((afterForeignPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'foreign-window'.bytes
+        ((afterForeignPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'foreign-window'
 
         when: 'a foreign completion during the right-pop re-check also rolls the element back'
         def foreignRightPromise = new SettablePromise<Reply>()
@@ -1266,7 +1266,7 @@ class BGroupTest extends Specification {
         def afterForeignRightCompleted = BGroup.completeIfListNotEmpty(BaseCommand.slot('foreign-right', 1), 'foreign-right'.bytes, bGroupForeignRight, bGroupForeignRight.dictMap, afterForeignRightOne, false)
         then:
         afterForeignRightCompleted
-        ((afterForeignRightPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).raw == 'foreign-right-val'.bytes
+        ((afterForeignRightPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'foreign-right-val'
 
         when: 'a timeout that fires after a delivery cannot nil the reply'
         inMemoryGetSet.remove(slot, 'timeout-after-delivery')
@@ -1348,8 +1348,8 @@ class BGroupTest extends Specification {
         // empty array means every pushed value was handed to a waiting client
         pushedOnWorker2[0] != null && (pushedOnWorker2[0] as byte[][]).length == 0
         crossReply instanceof MultiBulkReply
-        ((crossReply as MultiBulkReply).replies[0] as BulkReply).raw == keyOnWorker2.bytes
-        ((crossReply as MultiBulkReply).replies[1] as BulkReply).raw == 'from-worker-2'.bytes
+        ((crossReply as MultiBulkReply).replies[0] as BulkReply).asString() == keyOnWorker2
+        ((crossReply as MultiBulkReply).replies[1] as BulkReply).asString() == 'from-worker-2'
 
         cleanup:
         BlockingList.clearBlockingListPromisesForAllKeys()
@@ -1407,8 +1407,8 @@ class BGroupTest extends Specification {
         // same worker, the promise is already complete when the reply is returned
         def brpopResult = (reply as AsyncReply).settablePromise.getResult()
         brpopResult instanceof MultiBulkReply
-        ((brpopResult as MultiBulkReply).replies[0] as BulkReply).raw == 'b'.bytes
-        ((brpopResult as MultiBulkReply).replies[1] as BulkReply).raw == 'last'.bytes
+        ((brpopResult as MultiBulkReply).replies[0] as BulkReply).asString() == 'b'
+        ((brpopResult as MultiBulkReply).replies[1] as BulkReply).asString() == 'last'
 
         when: 'second key is empty, the waiter stays pending'
         def cvEmpty = Mock.prepareCompressedValueList(1)[0]
@@ -1505,16 +1505,16 @@ class BGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         mb.replies.length == 2
-        (mb.replies[0] as BulkReply).raw == 'mylist'.bytes
+        (mb.replies[0] as BulkReply).asString() == 'mylist'
         (mb.replies[1] as MultiBulkReply).replies.length == 1
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'a'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'a'
 
         when: 'right pop'
         reply = bGroup.execute('blmpop 1 1 mylist RIGHT')
         mb = reply as MultiBulkReply
         then:
         reply instanceof MultiBulkReply
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'b'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'b'
 
         when: 'all keys empty — block with timeout'
         inMemoryGetSet.remove(slot, 'x')
@@ -1547,7 +1547,7 @@ class BGroupTest extends Specification {
         (((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[1] as MultiBulkReply)
                 .replies[0] instanceof BulkReply
         ((((reply as AsyncReply).settablePromise.getResult() as MultiBulkReply).replies[1] as MultiBulkReply)
-                .replies[0] as BulkReply).raw == 'in-time'.bytes
+                .replies[0] as BulkReply).asString() == 'in-time'
 
         when: 'first key empty, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -1562,9 +1562,9 @@ class BGroupTest extends Specification {
         mb = reply as MultiBulkReply
         then:
         reply instanceof MultiBulkReply
-        (mb.replies[0] as BulkReply).raw == 'b'.bytes
+        (mb.replies[0] as BulkReply).asString() == 'b'
         (mb.replies[1] as MultiBulkReply).replies.length == 1
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'x'.bytes
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'x'
 
         when: 'second key holds another type, WRONGTYPE is returned'
         def cvWrongType = Mock.prepareCompressedValueList(1)[0]
@@ -1591,7 +1591,7 @@ class BGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'b'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'b'
 
         when: 'a middle key holds an existing but empty list, the last key is used'
         inMemoryGetSet.remove(slot, 'a')
@@ -1608,9 +1608,9 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('blmpop 1 3 a c d LEFT')
         then:
         reply instanceof MultiBulkReply
-        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'd'.bytes
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'd'
         ((reply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] instanceof BulkReply
-        (((reply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'from-last'.bytes
+        (((reply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'from-last'
 
         when: 'a key payload that cannot be decoded is reported as an error reply'
         inMemoryGetSet.remove(slot, 'c')
@@ -1662,10 +1662,10 @@ class BGroupTest extends Specification {
         completedMpop
         mpopPromiseForRace.isComplete()
         def mpopRaceReply = mpopPromiseForRace.getResult() as MultiBulkReply
-        (mpopRaceReply.replies[0] as BulkReply).raw == 'mpoprace'.bytes
+        (mpopRaceReply.replies[0] as BulkReply).asString() == 'mpoprace'
         (mpopRaceReply.replies[1] as MultiBulkReply).replies.length == 2
-        ((mpopRaceReply.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'one'.bytes
-        ((mpopRaceReply.replies[1] as MultiBulkReply).replies[1] as BulkReply).raw == 'two'.bytes
+        ((mpopRaceReply.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'one'
+        ((mpopRaceReply.replies[1] as MultiBulkReply).replies[1] as BulkReply).asString() == 'two'
 
         when: 'an already completed promise is left alone'
         def completedMpopTwice = BGroup.completeMpopIfListNotEmpty(BaseCommand.slot('mpoprace', 1), 'mpoprace'.bytes, bGroup, bGroup.dictMap, mpopOneForRace, true, 2)
@@ -1697,8 +1697,8 @@ class BGroupTest extends Specification {
         mpopWinPromise.isComplete()
         def mpopWinReply = mpopWinPromise.getResult() as MultiBulkReply
         (mpopWinReply.replies[1] as MultiBulkReply).replies.length == 2
-        ((mpopWinReply.replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'm-one'.bytes
-        ((mpopWinReply.replies[1] as MultiBulkReply).replies[1] as BulkReply).raw == 'm-two'.bytes
+        ((mpopWinReply.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'm-one'
+        ((mpopWinReply.replies[1] as MultiBulkReply).replies[1] as BulkReply).asString() == 'm-two'
 
         when: 'two slot workers, the second key must be checked on the worker owning it'
         localPersist.cleanUp()
@@ -1756,10 +1756,10 @@ class BGroupTest extends Specification {
         then:
         (mpopPushed[0] as byte[][]).length == 0
         mpopResultHolder[0] instanceof MultiBulkReply
-        ((mpopResultHolder[0] as MultiBulkReply).replies[0] as BulkReply).raw == mpopKey2.bytes
+        ((mpopResultHolder[0] as MultiBulkReply).replies[0] as BulkReply).asString() == mpopKey2
         ((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies.length == 1
         ((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] instanceof BulkReply
-        (((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).raw == 'mpop-value'.bytes
+        (((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'mpop-value'
 
         cleanup:
         BlockingList.clearBlockingListPromisesForAllKeys()
