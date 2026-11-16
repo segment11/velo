@@ -467,6 +467,27 @@ class RGroupTest extends Specification {
         renamePromise85.isResult()
         renamePromise85.getResult() == ErrorReply.READONLY
 
+        when: 'bug 85.15: a destination failure without a message still answers a readable error'
+        LocalPersist.instance.oneSlot(1 as short).setReadonly(false)
+        LocalPersist.instance.oneSlot(1 as short).setCanRead(false)
+        def unreadableReply = []
+        def doneUnreadable = new CountDownLatch(1)
+        loop1.execute({
+            // renamenx reads the destination key, the read fails when the slot can not read
+            unreadableReply << renameGroup.execute("renamenx ${srcKey85} ${dstKey85}")
+            doneUnreadable.countDown()
+        })
+        doneUnreadable.await(5, TimeUnit.SECONDS)
+        def unreadablePromise = (unreadableReply[0] as AsyncReply).settablePromise
+        for (int i = 0; i < 100 && !unreadablePromise.isComplete(); i++) {
+            Thread.sleep(20)
+        }
+        then: 'the error reply has a readable message'
+        unreadablePromise.isComplete()
+        unreadablePromise.isException()
+        unreadablePromise.getException().getMessage() != null
+        LocalPersist.instance.oneSlot(1 as short).setCanRead(true)
+
         when: 'bug 85.3: a cross worker rename whose destination write fails with an unexpected error answers the client too'
         def failMock85 = new FailingPutGetSet()
         failMock85.failSlot = 1 as short
