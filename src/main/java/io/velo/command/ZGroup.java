@@ -1368,6 +1368,11 @@ public class ZGroup extends BaseCommand {
             }
 
             if (doStore) {
+                // Unlike pfmerge/sdiffstore, the parsed slot list EXCLUDES the dst key, so this
+                // worker owns the first SOURCE slot, not the dst slot. The dst write must always
+                // be dispatched: on the reactor path this callback runs on the first source's
+                // worker (Promise.ofFuture bounce), on the non-reactor fallback path on the last
+                // source's worker — neither is guaranteed to own the dst slot — see bug 84.1.
                 var dstOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
                 dstOneSlot.asyncExecute(() -> saveRedisZSet(finalRz, dstSlotWithKeyHash));
                 finalPromise.set(new IntegerReply(finalRz.size()));
@@ -2044,6 +2049,8 @@ public class ZGroup extends BaseCommand {
 
             if (doStore) {
                 var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
+                // the dst key is the last key, handle() runs on the src key's slot worker,
+                // dispatch the store to the dst slot eventloop so the write stays on the owner
                 if (!isCrossRequestWorker) {
                     saveRedisZSet(dstRz, dstSlotWithKeyHash);
                 } else {
@@ -2094,6 +2101,8 @@ public class ZGroup extends BaseCommand {
 
             if (doStore) {
                 var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
+                // the dst key is the last key, handle() runs on the src key's slot worker,
+                // dispatch the store to the dst slot eventloop so the write stays on the owner
                 if (!isCrossRequestWorker) {
                     saveRedisZSet(dstRz, dstSlotWithKeyHash);
                 } else {
@@ -2143,6 +2152,8 @@ public class ZGroup extends BaseCommand {
 
             if (doStore) {
                 var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
+                // the dst key is the last key, handle() runs on the src key's slot worker,
+                // dispatch the store to the dst slot eventloop so the write stays on the owner
                 if (!isCrossRequestWorker) {
                     saveRedisZSet(dstRz, dstSlotWithKeyHash);
                 } else {
@@ -2707,6 +2718,11 @@ public class ZGroup extends BaseCommand {
                 var keyReply = new BulkReply(keyBytes);
                 var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
 
+                // The popped key belongs to this source slot; the save must run on its owning
+                // worker thread. On the reactor path the Promise.ofFuture bounce already runs
+                // this callback on the first key's worker (asyncExecute submits unless that
+                // worker also owns this slot); on the non-reactor fallback path the callback
+                // runs on the last source's worker and asyncExecute submits to the owner.
                 var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
                 oneSlot.asyncExecute(() -> saveRedisZSet(rz, slotWithKeyHash));
                 finalPromise.set(new MultiBulkReply(arr));

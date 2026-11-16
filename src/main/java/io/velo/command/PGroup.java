@@ -591,8 +591,13 @@ public class PGroup extends BaseCommand {
                     srcHllList.addAll(hllList);
                 }
 
-                // the destination key is owned by its own slot, read and write it on the
-                // destination slot worker thread, never on the source slot worker thread
+                // The destination key may only be touched on its owning slot worker thread.
+                // On the reactor path (production: handle() runs on the dst slot worker and
+                // Promise.ofFuture bounces every source promise completion back to that reactor),
+                // this callback already runs on the dst worker thread and asyncCall executes inline.
+                // On the non-reactor fallback path (no bounce, e.g. tests calling execute() directly),
+                // this callback runs on a source slot worker thread, so asyncCall submits the merge
+                // to the dst slot eventloop instead — see bug 84.1.
                 var dstOneSlot = localPersist.oneSlot(dstS.slot());
                 dstOneSlot.asyncCall(() -> {
                     HyperLogLog dstHll;

@@ -335,6 +335,10 @@ public class RGroup extends BaseCommand {
         var dstSlot = dstS.slot();
         var dstOneSlot = localPersist.oneSlot(dstSlot);
 
+        // handle() runs on the src slot worker (src is the first key), so the dst write must be
+        // dispatched to the dst slot eventloop. The src removeDelay in the whenComplete below
+        // relies on the Promise.ofFuture bounce: on the reactor path the dst promise completion
+        // comes back to this (src) worker, so it also runs on the src slot worker thread.
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
@@ -627,6 +631,8 @@ public class RGroup extends BaseCommand {
 
         var dstSlot = dstSlotWithKeyHash.slot();
         var dstOneSlot = localPersist.oneSlot(dstSlot);
+        // handle() runs on the src slot worker (src is the first key), dispatch the dst list
+        // push to the dst slot eventloop so the write stays on the owning slot thread
         dstOneSlot.asyncExecute(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
 
         return asyncReply;
@@ -702,6 +708,8 @@ public class RGroup extends BaseCommand {
 
         var dstSlot = dstSlotWithKeyHash.slot();
         var dstOneSlot = localPersist.oneSlot(dstSlot);
+        // handle() runs on the src slot worker (src is the first key), dispatch the dst list
+        // push to the dst slot eventloop so the write stays on the owning slot thread
         dstOneSlot.asyncExecute(() -> moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
 
         return asyncReply;

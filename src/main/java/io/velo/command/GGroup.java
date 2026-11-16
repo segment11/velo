@@ -1015,11 +1015,11 @@ public class GGroup extends BaseCommand {
                     SettablePromise<Reply> finalPromise = new SettablePromise<>();
                     var asyncReply = new AsyncReply(finalPromise);
 
-                    var p = dstOneSlot.asyncRun(() -> {
+                    // handle() runs on the src key's slot worker, dispatch the dst write to the
+                    // dst slot eventloop so it stays on the owning slot thread
+                    dstOneSlot.asyncRun(() -> {
                         ZGroup.saveRedisZSet(dstRz, dstS, this, dictMap);
-                    });
-
-                    p.whenComplete((v, t) -> {
+                    }).whenComplete((v, t) -> {
                         if (t != null) {
                             finalPromise.setException(t);
                         } else {
@@ -1046,6 +1046,8 @@ public class GGroup extends BaseCommand {
                 SettablePromise<Reply> finalPromise = new SettablePromise<>();
                 var asyncReply = new AsyncReply(finalPromise);
 
+                // handle() runs on the src key's slot worker, dispatch the dst write to the
+                // dst slot eventloop so it stays on the owning slot thread
                 var p = dstOneSlot.asyncRun(() -> {
                     saveRedisGeo(dstRg, dstS);
                 });

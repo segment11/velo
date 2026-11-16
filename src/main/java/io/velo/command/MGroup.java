@@ -715,6 +715,10 @@ public class MGroup extends BaseCommand {
                             count++;
                             if (!isCopyFinal) {
                                 // the copy option keeps the key on the source instance
+                                // removeDelay must run on the key's owning slot worker thread:
+                                // this callback runs on the first key's worker (reactor path,
+                                // Promise.ofFuture bounce) or the last source's worker (fallback
+                                // path), so asyncExecute submits the removal to the owner
                                 var slotWithKeyHash = one.slotWithKeyHash;
                                 var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
                                 oneSlot.asyncExecute(() -> {

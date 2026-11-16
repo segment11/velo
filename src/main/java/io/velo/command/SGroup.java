@@ -1409,6 +1409,12 @@ public class SGroup extends BaseCommand {
         var asyncReply = new AsyncReply(finalPromise);
 
         // need not wait all, can optimize
+        // The dst key is the first key, so this request worker also owns the dst slot. On the
+        // reactor path (production), Promise.ofFuture bounces every source promise completion
+        // back to this reactor, so this callback and the raw removeDelay/saveRedisSet on the
+        // dst key run on the dst slot worker thread. Unlike pfmerge (bug 84.1), the dst writes
+        // here are NOT wrapped in an asyncCall: on the non-reactor fallback path this callback
+        // runs on a source slot worker thread and those writes would trip the owner-thread guard.
         Promises.all(promises).whenComplete((r, e) -> {
             if (e != null) {
                 log.error("sdiffstore error={}, isInter={}, isUnion={}", e.getMessage(), isInter, isUnion);
@@ -2034,6 +2040,8 @@ public class SGroup extends BaseCommand {
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
+        // handle() runs on the src slot worker (src is the first key), so the dst set
+        // read+write must be dispatched to the dst slot eventloop to stay on the owning thread
         dstOneSlot.asyncExecute(() -> {
             var dstRhk = getRedisSet(dstSlotWithKeyHash);
             if (dstRhk == null) {
