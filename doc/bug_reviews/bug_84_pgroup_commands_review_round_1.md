@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** round 1 fix phase complete — 10/10 CONFIRMED (reproduced) by agent 2 and fixed, 10 commits, re-review pending
+**Status:** closed — round 1: 10/10 CONFIRMED (reproduced) and fixed in 10 commits; re-review ACCEPTED (per-commit RED/GREEN + JaCoCo at HEAD + live slotWorkers=2 e2e matching Redis 7.2.11)
 **Review branch:** `review/pgroup`
 **Reviewed commit:** `3d8ee5326ba81b7764e4829a453f9333dd444d40`
 
@@ -875,7 +875,73 @@ The affected existing assertions were updated: `EGroupTest.groovy` (the `expire`
 
 ## Re-review (AI agent 2)
 
-<per-commit verification, repeat as needed>
+**Method:** per-commit independent RED/GREEN re-derivation in a worktree at each fix commit (GREEN: focused test
+at the commit; RED: same tree with only the production files reverted to the parent — reviewed **commit by
+commit**, no loop) + focused regression and JaCoCo at HEAD in the main workspace + live Velo `slotWorkers=2`
+e2e at HEAD (jar built from `bfd1dd0c`, port 7397).
+Full evidence log: `doc/bug_reviews/logs/20261116_132922_pgroup_rereview_agent2_bug_84.log`.
+
+**Reviewer infrastructure note:** in a fresh worktree, `:compileTestGroovy` after `git checkout` churn OOMs
+fast even with a 16g daemon — the groovy incremental-compile state corrupts on tree flip-flops. Running
+`:cleanCompileTestGroovy` + the compile as a separate invocation before the test run makes every build
+reliable (~10 s per compile). Same family as the "gradle daemon heap" open item of bug 73.
+
+### Per-commit verification (10/10 RED + GREEN re-derived)
+
+| Bug | Commit | RED re-derived (production reverted to parent) | GREEN re-derived |
+|---|---|---|---|
+| 84.1 | `8870d553` | `putThreadId[dstKey] == dstOwnerThreadId.get()` → **false**: dst `pfmerge_key_3` written on thread **1**, dst owner is **53** — the foreign-thread write | `test pfcount and pfmerge` 1/1 |
+| 84.2 | `21a91799` | `oneMoreReply == REPLY_1` → **false** (`REPLY_0` for e2471) | `test pfadd` 1/1 |
+| 84.3 | `1383e019` | confirmations were `"subscribe"` / `"unsubscribe"` (both methods) | 2/2 |
+| 84.4 | `090a0a48` | `PUBSUB NUMSUB` count == **2** (pattern subscriber counted) | 1/1 |
+| 84.5 | `8a233333` | `PUBSUB CHANNELS` length == **2** (`test_channel` + pattern `test_*`) | 1/1 |
+| 84.6 | `73170e07` | `reply instanceof IntegerReply` → **false** (`NilReply`) | 1/1 |
+| 84.7 | `900ed778` | bare `RuntimeException: wrong type` escaped `getHllWithBytes:361` (both methods) | 2/2 |
+| 84.8 | `73775785` | `PUBSUB NUMSUB` → `ErrorReply{message='format'}` instead of the empty list | 1/1 |
+| 84.9 | `6cfd1409` | `seq != seqBeforePersist` → **false** (0 → 0, old sequence reused) | 1/1 |
+| 84.10 | `53a62389` | message was `not integer` (28 diffs vs the Redis text; both methods) | 2/2 |
+
+Every RED matches the failing-test evidence column of the Fix Log; every GREEN was re-run at the fix commit.
+
+### JaCoCo at HEAD (focused set: PGroupTest+SGroupTest+UGroupTest+EGroupTest+SocketInspectorTest, all green)
+
+| Class / lines (HEAD) | Bug | Coverage |
+|---|---|---|
+| `PGroup.java` 592-615 (dst slot task) | 84.1 | 15/17 lines; only the defensive `whenComplete` exception branch (614-615) uncovered — as declared |
+| `PGroup.java` 425-440 (isChanged + save) | 84.2 | both branch lines fully covered; only the two defensive `IOException` catches (429-430, 437-438) uncovered — same category as declared |
+| `PGroup.java` 680-720 (pubsub) | 84.4/84.5/84.6/84.8 | 27/27 lines, 9/9 branch lines fully covered |
+| `PGroup.java` 220-230 (`TypeMismatchException` catch) | 84.7 | 3/3 |
+| `PGroup.java` 300-330 (persist) | 84.9 | 15/15, all branches |
+| `SGroup.java` 2290-2300 / `UGroup.java` 78-86 | 84.3 | 7/7 and 8/8, both keyword branches |
+| `EGroup.java` 263-280 / `SGroup.java` 890-910 | 84.10 | 9/9 and 13/13, all branches |
+| `SocketInspector.java` 620-668 + `isPattern()` | 84.4/84.5/84.6 | 20/20 lines, 7/7 branch lines (incl. all 4 glob branches) — via the reviewer-added direct tests below |
+
+**Reviewer-added coverage (this re-review):** the fix phase covered the new `SocketInspector` public helpers
+only indirectly through `PGroupTest`. Added `SocketInspectorTest.'test pubsub channel and pattern helpers'`
+(`subscribePatternCount`, `subscribeChannels(null/glob)`, `exactSubscribeSocketCount` incl. the
+pattern-exclusion and unsubscribe paths, `ChannelAndIsPattern.isPattern()`) — focused run green, class 12/12,
+JaCoCo as above. Test-only commit `5380f463`.
+
+### Live e2e at HEAD (slotNumber=8, slotWorkers=2)
+
+Key placement computed with the project's own `BaseCommand.slot(key, 8)` (Velo **inner** slots, not cluster
+slots): `k1` → slot 0 / worker 0, `k0` → slot 1 / worker 1.
+
+- Cross-worker `PFMERGE k1 k0` and the reverse `PFMERGE k0 k1`: both **+OK**, `PFCOUNT` = 4, 5 repeats exit 0 —
+  no hang (pre-fix the client received no reply at all).
+- The full RESP differential (psubscribe/punsubscribe confirmations, `pubsub channels`/`numsub`/`numpat` with
+  one exact + one pattern subscriber, WRONGTYPE on `pfadd`/`pfcount` of a string key, `pubsub numsub` empty
+  array, `pubsub bogus` error, the four 84.10 error texts, the e2471 register-alteration PFADD → 1 / dup → 0,
+  `persist` + `pttl -1`) — **all identical to the live Redis 7.2.11 ground truth** captured in round 1.
+- Server log after the whole e2e: **0** occurrences of `IllegalStateException` / `Thread id not match` / ERROR.
+
+### Verdict
+
+**ACCEPTED — 10/10 fixes verified.** All four Fix Log evidence columns (failing test → commit → focused green →
+JaCoCo) were independently reproduced per commit; the cross-module impact of 84.10 (EXPIRE/EXPIREAT/SET error
+texts, EGroupTest/SGroupTest updated) is green at HEAD; the live slotWorkers=2 server at HEAD behaves like
+Redis 7.2.11 on every fixed behavior. The Residual Risk list below stands as written; nothing to add except
+the worktree/daemon note above.
 
 ## Residual Risk
 

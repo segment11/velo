@@ -1,0 +1,125 @@
+================================================================================
+Bug 84 PGroup review round 1 - agent 2 RE-REVIEW evidence (Stage 5)
+Date: 2026-11-16 13:29, branch review/pgroup, HEAD bfd1dd0c
+Method: per-commit independent RED/GREEN re-derivation in a worktree (/tmp/opencode/p84/rr)
+        + focused regression + JaCoCo at HEAD in the main workspace
+        + live Velo slotWorkers=2 e2e at HEAD (port 7397, jar built from HEAD)
+================================================================================
+
+----- PART 1: per-commit RED/GREEN (re-derived independently in the worktree) -----
+For each commit: checkout the fix commit -> focused test GREEN; revert ONLY the production
+files to the parent -> same focused test RED for the documented reason. All 10/10 both legs.
+
+### 8870d553  GREEN: 1 test, 0 failures
+RED (production reverted to parent):
+PGroupTest > test pfcount and pfmerge FAILED
+Condition not satisfied:
+recordingGetSet.putThreadId[dstKey] == dstOwnerThreadId.get()
+|               |          ||       |  |                |
+|               |          1|       |  53               53
+|               |           |       false
+|               |           pfmerge_key_3
+|               [pfmerge_key_3:1]
+(at the fix commit the same test passes: the destination write runs on thread 53, the destination owner)
+
+### 21a91799  GREEN: 1 test, 0 failures
+RED (production reverted to parent):
+PGroupTest > test pfadd FAILED
+Condition not satisfied:
+oneMoreReply == IntegerReply.REPLY_1
+|            |  |            |
+|            |  |            <io.velo.reply.IntegerReply$1@493ed8e6>
+|            |  class io.velo.reply.IntegerReply
+false / <io.velo.reply.IntegerReply$2@6bab373c>   (REPLY_0)
+
+### 1383e019  GREEN: 2 tests, 0 failures
+RED (production reverted to parent):
+PGroupTest > test psubscribe FAILED / test punsubscribe FAILED (2 tests, 2 failed)
+((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'psubscribe'.bytes
+  received [115,117,98,115,99,114,105,98,101] = "subscribe"
+((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'punsubscribe'.bytes
+  received [117,110,115,117,98,115,99,114,105,98,101] = "unsubscribe"
+
+### 090a0a48  GREEN: 1 test, 0 failures
+RED (production reverted to parent):
+PGroupTest > test pubsub FAILED
+((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 1
+  received 2   (the pattern subscriber test_* was counted)
+
+### 8a233333  GREEN: 1 test, 0 failures
+RED (production reverted to parent):
+PGroupTest > test pubsub FAILED
+(reply as MultiBulkReply).replies.length == 1
+  received 2   (test_channel AND the pattern test_* were listed)
+
+### 73170e07  GREEN: 1 test, 0 failures
+RED (production reverted to parent):
+PGroupTest > test pubsub FAILED
+reply instanceof IntegerReply
+  received <io.velo.reply.NilReply@7f6137fb>
+
+### 73775785  GREEN: 1 test, 0 failures
+RED (production reverted to parent):
+PGroupTest > test pubsub FAILED
+reply == MultiBulkReply.EMPTY
+  received ErrorReply{message='format'}
+
+### 900ed778  GREEN: 2 tests, 0 failures
+RED (production reverted to parent):
+PGroupTest > test pfadd FAILED / test pfmerge destkey-only FAILED (2 tests, 2 failed)
+java.lang.RuntimeException: wrong type
+    at io.velo.command.PGroup.getHllWithBytes(PGroup.java:361)
+    at io.velo.command.PGroup.pfadd(PGroup.java:399)
+
+### 6cfd1409  GREEN: 1 test, 0 failures
+RED (production reverted to parent):
+PGroupTest > test persist FAILED
+bufOrCv.cv().seq != seqBeforePersist
+  seq=0 before and after  (the write reused the old sequence)
+
+### 53a62389  GREEN: 2 tests, 0 failures
+RED (production reverted to parent):
+PGroupTest > test pexpire FAILED / test psetex FAILED (2 tests, 2 failed)
+(reply as ErrorReply).message == 'value is not an integer or out of range'
+  received 'not integer'
+  28 differences (28% similarity)
+
+----- PART 2: live Velo e2e at HEAD (slotNumber=8, slotWorkers=2, port 7397) -----
+key placement (BaseCommand.slot(key, 8), the project's own inner-slot function - NOT cluster slots):
+  k1 -> slot 0 -> worker 0 (destination)
+  k0 -> slot 1 -> worker 1 (source)
+
+pfadd k1 a b => 1
+pfadd k0 x y => 1
+PFMERGE k1 k0 (dst=worker0, src=worker1): OK
+pfcount k1 => 4
+PFMERGE k0 k1 (dst=worker1, src=worker0): OK
+pfcount k0 => 4
+repeat x5: exit=0 (no hang, pre-fix the client got no reply at all)
+
+== 84.3 ==                    Velo HEAD              Redis 7.2.11
+psubscribe confirmation:      psubscribe/news.*/1    psubscribe/news.*/1
+punsubscribe confirmation:    punsubscribe/news.*/0  punsubscribe/news.*/0
+== 84.4/84.5/84.6 (one exact news.tech + one pattern news.* subscriber) ==
+pubsub channels:              [news.tech]            [news.tech]
+pubsub channels 'news.*':     [news.tech]            [news.tech]
+pubsub numsub news.tech:      news.tech 1            news.tech 1
+pubsub numpat:                1                      1
+== 84.7 ==
+pfadd str a / pfcount str:    WRONGTYPE Key is not a valid HyperLogLog string value.   (same)
+== 84.8 ==
+pubsub numsub:                [] (empty array)       []
+pubsub bogus:                 ERR unknown subcommand 'bogus'. Try PUBSUB HELP.        (same)
+== 84.10 ==
+pexpire k abc:                ERR value is not an integer or out of range             (same)
+pexpireat k abc:              ERR value is not an integer or out of range             (same)
+psetex k abc v:               ERR value is not an integer or out of range             (same)
+psetex k 0 v:                 ERR invalid expire time in 'psetex' command             (same)
+== 84.2 (on Velo's own HLL: e2471 alters a register, the estimate stays 2467) ==
+batch e0..e2470:              1                      1
+pfadd dhll e2471:             1  (pre-fix: 0 + dropped write)
+pfadd dhll e2471 dup:         0                      0
+== 84.9 ==
+persist pxkey:                1; pttl pxkey: -1      (same)
+
+server log after the whole e2e: 0 occurrences of IllegalStateException / 'Thread id not match' / ERROR
