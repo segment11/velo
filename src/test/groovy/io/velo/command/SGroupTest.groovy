@@ -406,6 +406,13 @@ sunionstore
         reply == ErrorReply.INVALID_INTEGER
 
         when:
+        // cursor arg is not an integer, redis replies 'invalid cursor'
+        reply = sGroup.execute('scan abc')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'invalid cursor'
+
+        when:
         // follow-up review: cursor with out of range slot must reply an error, not throw
         def badSlotCursor = new ScanCursor((short) 3, 0, (short) 0, (short) 0, (byte) 0, (byte) 0)
         veloUserData.lastScanAssignCursor = badSlotCursor.toLong()
@@ -441,7 +448,8 @@ sunionstore
         when:
         reply = sGroup.execute('scan a match key:* xxx 10 type string')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'invalid cursor'
 
         when:
         def scanCursor1 = new ScanCursor((short) 0, 0, (short) 0, (short) 0, (byte) 0, (byte) 0)

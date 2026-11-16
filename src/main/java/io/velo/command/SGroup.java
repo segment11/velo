@@ -589,7 +589,8 @@ public class SGroup extends BaseCommand {
         try {
             cursorLong = Long.parseLong(cursor);
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            // redis replies 'invalid cursor' for the cursor arg that is not an integer
+            return INVALID_SCAN_CURSOR;
         }
         var scanCursor = ScanCursor.fromLong(cursorLong);
         if (cursorLong != 0 && (scanCursor.slot() < 0 || scanCursor.slot() >= slotNumber)) {
