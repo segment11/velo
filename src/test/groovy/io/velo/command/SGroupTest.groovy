@@ -674,37 +674,45 @@ sunionstore
         when:
         reply = sGroup.execute('set a value pxat -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        // redis answers "invalid expire time in 'set' command"
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'set' command"
 
         when:
         reply = sGroup.execute('set a value pxat 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'set' command"
 
         when:
         reply = sGroup.execute('set a value ex -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'set' command"
 
         when:
         reply = sGroup.execute('set a value ex 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'set' command"
 
         when:
         reply = sGroup.execute('set a value px -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'set' command"
 
         when:
         reply = sGroup.execute('set a value exat -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'set' command"
 
         when:
         reply = sGroup.execute('set a value pxat a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        // redis answers 'value is not an integer or out of range'
+        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
 
         when:
         reply = sGroup.execute('set a value zz')

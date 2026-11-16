@@ -7,16 +7,59 @@ import io.velo.SocketInspector
 import io.velo.SocketInspectorTest
 import io.velo.acl.AclUsers
 import io.velo.acl.RPubSub
+import io.velo.mock.ByPassGetSet
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.Mock
+import io.velo.persist.OneSlot
 import io.velo.reply.*
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 class PGroupTest extends Specification {
     def _PGroup = new PGroup(null, null, null)
+
+    /**
+     * A by pass get set that records the thread which wrote each key, to check the slot thread affinity.
+     */
+    static class RecordingGetSet implements ByPassGetSet {
+        final Map<String, CompressedValue> map = new ConcurrentHashMap<>()
+        final Map<String, Long> putThreadId = new ConcurrentHashMap<>()
+
+        @Override
+        void put(short slot, String key, int bucketIndex, CompressedValue cv) {
+            map.put(key, cv)
+            putThreadId.put(key, Thread.currentThread().threadId())
+        }
+
+        @Override
+        boolean remove(short slot, String key) {
+            return map.remove(key) != null
+        }
+
+        @Override
+        OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash) {
+            var cv = map.get(key)
+            if (cv == null) {
+                return null
+            }
+            return new OneSlot.BufOrCompressedValue(null, cv)
+        }
+    }
+
+    /**
+     * Waits until the async reply is settled.
+     */
+    static Object waitForReply(AsyncReply reply, long timeoutMs = 5000) {
+        def deadline = System.currentTimeMillis() + timeoutMs
+        while (!reply.settablePromise.isComplete() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5)
+        }
+        return reply.settablePromise.getResult()
+    }
 
     static SocketInspector initSocketInspector() {
         def inspector = new SocketInspector()
@@ -203,6 +246,12 @@ class PGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
         cv.expireAt > System.currentTimeMillis()
+
+        when: 'a not integer ttl'
+        reply = pGroup.execute('pexpire a abc')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'value is not an integer or out of range'
     }
 
     def 'test pexpireat'() {
@@ -232,6 +281,12 @@ class PGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_1
         inMemoryGetSet.getBuf(slot, 'a', 0, 0) == null
+
+        when: 'a not integer expire time'
+        reply = pGroup.execute('pexpireat a abc')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'value is not an integer or out of range'
     }
 
     def 'test persist'() {
@@ -259,6 +314,7 @@ class PGroupTest extends Specification {
         when:
         cv.expireAt = System.currentTimeMillis() + 1000
         inMemoryGetSet.put(slot, 'a', 0, cv)
+        def seqBeforePersist = cv.seq
         reply = pGroup.execute('persist a')
         then:
         reply == IntegerReply.REPLY_1
@@ -267,6 +323,8 @@ class PGroupTest extends Specification {
         def bufOrCv = inMemoryGetSet.getBuf(slot, 'a', 0, cv.keyHash)
         then:
         bufOrCv.cv().expireAt == CompressedValue.NO_EXPIRE
+        // the write must allocate a new sequence number, the replication compares the sequences
+        bufOrCv.cv().seq != seqBeforePersist
 
         when:
         reply = pGroup.execute('persist')
@@ -293,22 +351,20 @@ class PGroupTest extends Specification {
         then:
         reply == IntegerReply.REPLY_0
 
-        when:
-        boolean exception = false
-        String errorMessage = null
+        when: 'PFADD on a wrong type key answers WRONGTYPE'
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        try {
-            reply = pGroup.execute('pfadd a abc')
-        } catch (RuntimeException e) {
-            println e.message
-            errorMessage = e.message
-            exception = true
-        }
+        def wrongTypeReply = pGroup.execute('pfadd a abc')
         then:
-        exception
-        errorMessage == ErrorReply.WRONG_TYPE.message
+        wrongTypeReply instanceof ErrorReply
+        (wrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
+
+        when: 'PFCOUNT on a wrong type key answers WRONGTYPE'
+        wrongTypeReply = pGroup.execute('pfcount a')
+        then:
+        wrongTypeReply instanceof ErrorReply
+        (wrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
 
         when: 'PFADD key-only on missing key creates HLL and returns 1'
         inMemoryGetSet.remove(slot, 'hll_empty')
@@ -321,22 +377,15 @@ class PGroupTest extends Specification {
         then:
         keyOnlyReply == IntegerReply.REPLY_0
 
-        when: 'PFADD key-only on wrong type key throws WRONGTYPE'
+        when: 'PFADD key-only on wrong type key answers WRONGTYPE'
         inMemoryGetSet.remove(slot, 'hll_wrong')
         def cvWrong = Mock.prepareCompressedValueList(1)[0]
         cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'hll_wrong', 0, cvWrong)
-        boolean keyOnlyException = false
-        String keyOnlyError = null
-        try {
-            pGroup.execute('pfadd hll_wrong')
-        } catch (RuntimeException e) {
-            keyOnlyError = e.message
-            keyOnlyException = true
-        }
+        def keyOnlyWrongTypeReply = pGroup.execute('pfadd hll_wrong')
         then:
-        keyOnlyException
-        keyOnlyError == ErrorReply.WRONG_TYPE.message
+        keyOnlyWrongTypeReply instanceof ErrorReply
+        (keyOnlyWrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
 
         when:
         inMemoryGetSet.remove(slot, 'ttl_hll')
@@ -350,6 +399,26 @@ class PGroupTest extends Specification {
         then:
         ttlReply == IntegerReply.REPLY_1
         ttlCvAfterRewrite.expireAt == expireAt
+
+        when: 'a PFADD that alters the HLL registers but not the estimated cardinality must be persisted'
+        // 2471 elements, the estimated cardinality is 2467
+        def manyElements = (0..2470).collect { "e$it" }.join(' ')
+        def manyReply = pGroup.execute('pfadd big_hll ' + manyElements)
+        def sBigHll = pGroup.slot('big_hll'.bytes, pGroup.slotNumber)
+        def countReply = pGroup.execute('pfcount big_hll')
+        then:
+        manyReply == IntegerReply.REPLY_1
+        (countReply as IntegerReply).integer == 2467
+
+        when: 'the next element alters a register but the estimated cardinality stays the same'
+        def beforeBytes = inMemoryGetSet.getBuf(slot, 'big_hll', sBigHll.bucketIndex(), sBigHll.keyHash()).cv().compressedData
+        def oneMoreReply = pGroup.execute('pfadd big_hll e2471')
+        def afterBytes = inMemoryGetSet.getBuf(slot, 'big_hll', sBigHll.bucketIndex(), sBigHll.keyHash()).cv().compressedData
+        then:
+        // redis answers 1 when at least one HyperLogLog internal register was altered
+        oneMoreReply == IntegerReply.REPLY_1
+        // the altered HLL must not be dropped
+        afterBytes != beforeBytes
     }
 
     def 'test pfcount and pfmerge'() {
@@ -359,6 +428,10 @@ class PGroupTest extends Specification {
         def pGroup = new PGroup('pfcount', null, null)
         pGroup.byPassGetSet = inMemoryGetSet
         pGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def eventloopDst = null
+        def eventloopSrc = null
 
         when:
         inMemoryGetSet.remove(slot, 'a')
@@ -431,6 +504,26 @@ class PGroupTest extends Specification {
             result == OKReply.INSTANCE
         }.result
 
+        when: 'a cross worker pfcount on a wrong type key answers WRONGTYPE'
+        def wrongTypeCv = Mock.prepareCompressedValueList(1)[0]
+        wrongTypeCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, 'b', 0, wrongTypeCv)
+        reply = pGroup.execute('pfcount a b')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        waitForReply(reply as AsyncReply) instanceof ErrorReply
+        (waitForReply(reply as AsyncReply) as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
+
+        when: 'a cross worker pfmerge with a wrong type destination answers WRONGTYPE'
+        inMemoryGetSet.put(slot, 'dst_wrong_type', 0, wrongTypeCv)
+        reply = pGroup.execute('pfmerge dst_wrong_type a')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        waitForReply(reply as AsyncReply) instanceof ErrorReply
+        (waitForReply(reply as AsyncReply) as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
+
         when:
         pGroup.crossRequestWorker = false
         reply = pGroup.execute('pfcount dst')
@@ -438,8 +531,63 @@ class PGroupTest extends Specification {
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 2
 
+        when: 'a cross worker pfmerge writes the destination key on the destination slot thread'
+        eventloopDst = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloopDst.keepAlive(true)
+        def dstOwnerThreadId = new AtomicLong(-1)
+        Thread.start {
+            dstOwnerThreadId.set(Thread.currentThread().threadId())
+            eventloopDst.run()
+        }
+        eventloopSrc = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        // the destination slot is owned by the other thread, the source slot by the current thread
+        LocalPersist.instance.addOneSlotForTest2((short) 0)
+        LocalPersist.instance.oneSlot((short) 0).setSlotWorkerEventloop(eventloopDst)
+        LocalPersist.instance.addOneSlotForTest2((short) 1)
+        LocalPersist.instance.oneSlot((short) 1).setSlotWorkerEventloop(eventloopSrc)
+
+        def recordingGetSet = new RecordingGetSet()
+        def crossGroup = new PGroup('pfmerge', null, null)
+        crossGroup.byPassGetSet = recordingGetSet
+        crossGroup.from(BaseCommand.mockAGroup((byte) 0, (byte) 2, (short) 2))
+        crossGroup.crossRequestWorker = true
+
+        def dstKey = null
+        def srcKey = null
+        for (int i = 0; i < 1000 && (dstKey == null || srcKey == null); i++) {
+            def candidate = "pfmerge_key_$i"
+            def candidateSlot = crossGroup.slot(candidate, 2).slot()
+            if (candidateSlot == 0 && dstKey == null) {
+                dstKey = candidate
+            } else if (candidateSlot == 1 && srcKey == null) {
+                srcKey = candidate
+            }
+        }
+
+        def crossReply = crossGroup.execute("pfmerge $dstKey $srcKey")
+        // run the source slot task, the aggregation callback runs on the source slot thread
+        def deadline = System.currentTimeMillis() + 5000
+        while (!crossReply.settablePromise.isComplete() && System.currentTimeMillis() < deadline) {
+            eventloopSrc.run()
+            Thread.sleep(5)
+        }
+        then:
+        dstKey != null
+        srcKey != null
+        crossReply instanceof AsyncReply
+        waitForReply(crossReply as AsyncReply) == OKReply.INSTANCE
+        // the destination key must be written on the destination slot owner thread
+        recordingGetSet.putThreadId[dstKey] == dstOwnerThreadId.get()
+
         cleanup:
-        eventloop.breakEventloop()
+        eventloop?.breakEventloop()
+        eventloopDst?.breakEventloop()
+        eventloopSrc?.breakEventloop()
     }
 
     def 'test pfmerge destkey-only'() {
@@ -464,22 +612,89 @@ class PGroupTest extends Specification {
         def countReply = pGroup.execute('pfcount existing_hll')
         (countReply as IntegerReply).integer == 1
 
-        when: 'PFMERGE destkey-only on wrong type key throws WRONGTYPE'
+        when: 'PFMERGE destkey-only on wrong type key answers WRONGTYPE'
         inMemoryGetSet.remove(slot, 'dst_wrong')
         def cvWrong = Mock.prepareCompressedValueList(1)[0]
         cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
         inMemoryGetSet.put(slot, 'dst_wrong', 0, cvWrong)
-        boolean exception = false
-        String errorMessage = null
-        try {
-            pGroup.execute('pfmerge dst_wrong')
-        } catch (RuntimeException e) {
-            errorMessage = e.message
-            exception = true
-        }
+        def wrongTypeReply = pGroup.execute('pfmerge dst_wrong')
         then:
-        exception
-        errorMessage == ErrorReply.WRONG_TYPE.message
+        wrongTypeReply instanceof ErrorReply
+        (wrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
+    }
+
+    def 'test psetex'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def pGroup = new PGroup('psetex', null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = pGroup.execute('psetex a 100000 value')
+        then:
+        reply == OKReply.INSTANCE
+
+        when:
+        def sTtl = pGroup.slot('a'.bytes, pGroup.slotNumber)
+        def cv = inMemoryGetSet.getBuf(slot, 'a', sTtl.bucketIndex(), sTtl.keyHash()).cv()
+        then:
+        cv.expireAt > System.currentTimeMillis()
+
+        when: 'a not integer ttl'
+        reply = pGroup.execute('psetex a abc value')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == 'value is not an integer or out of range'
+
+        when: 'a not positive ttl'
+        reply = pGroup.execute('psetex a 0 value')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "invalid expire time in 'psetex' command"
+    }
+
+    def 'test psubscribe'() {
+        given:
+        AclUsers.instance.initForTest()
+        def socketInspector = initSocketInspector()
+        LocalPersist.instance.socketInspector = socketInspector
+        def socket = SocketInspectorTest.mockTcpSocket()
+        def pGroup = new PGroup('psubscribe', null, socket)
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when:
+        def reply = pGroup.execute('psubscribe news.*')
+
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 3
+        // redis pushes the confirmation with the first element 'psubscribe'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'psubscribe'.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'news.*'.bytes
+        ((reply as MultiBulkReply).replies[2] as IntegerReply).integer == 1
+    }
+
+    def 'test punsubscribe'() {
+        given:
+        AclUsers.instance.initForTest()
+        def socketInspector = initSocketInspector()
+        LocalPersist.instance.socketInspector = socketInspector
+        def socket = SocketInspectorTest.mockTcpSocket()
+        def pGroup = new PGroup('psubscribe', null, socket)
+        pGroup.from(BaseCommand.mockAGroup())
+        pGroup.execute('psubscribe news.*')
+
+        when:
+        def reply = pGroup.execute('punsubscribe news.*')
+
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 3
+        // redis pushes the confirmation with the first element 'punsubscribe'
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'punsubscribe'.bytes
+        ((reply as MultiBulkReply).replies[1] as BulkReply).raw == 'news.*'.bytes
+        ((reply as MultiBulkReply).replies[2] as IntegerReply).integer == 0
     }
 
     def 'test publish'() {
@@ -559,7 +774,9 @@ class PGroupTest extends Specification {
         when:
         reply = pGroup.execute('pubsub numpat')
         then:
-        reply == NilReply.INSTANCE
+        // redis returns the number of the unique patterns all the clients are subscribed to
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
 
         when:
         reply = pGroup.execute('pubsub numsub ' + channel)
@@ -571,14 +788,57 @@ class PGroupTest extends Specification {
         (reply as MultiBulkReply).replies[1] instanceof IntegerReply
         ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 1
 
-        when:
-        reply = pGroup.execute('pubsub numsub')
+        when: 'a pattern subscription is not counted by PUBSUB NUMSUB'
+        def patternSocket = SocketInspectorTest.mockTcpSocket()
+        socketInspector.subscribe('test_*', true, patternSocket)
+        reply = pGroup.execute('pubsub numsub ' + channel)
         then:
-        reply == ErrorReply.FORMAT
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 1
+
+        when: 'the pattern subscriptions are counted by PUBSUB NUMPAT'
+        reply = pGroup.execute('pubsub numpat')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when: 'a channel without any subscriber is reported as zero'
+        reply = pGroup.execute('pubsub numsub no_such_channel')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == 'no_such_channel'.bytes
+        ((reply as MultiBulkReply).replies[1] as IntegerReply).integer == 0
+
+        when: 'the pattern subscriptions are not listed as channels'
+        reply = pGroup.execute('pubsub channels')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
 
         when:
+        reply = pGroup.execute('pubsub channels test_*')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        ((reply as MultiBulkReply).replies[0] as BulkReply).raw == channel.bytes
+
+        when: 'a glob that matches no channel returns an empty reply'
+        reply = pGroup.execute('pubsub channels other_*')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when: 'PUBSUB NUMSUB without a channel returns an empty list'
+        reply = pGroup.execute('pubsub numsub')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when: 'an unknown subcommand is an error'
         reply = pGroup.execute('pubsub xxx')
         then:
-        reply == NilReply.INSTANCE
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message == "unknown subcommand 'xxx'. Try PUBSUB HELP."
     }
 }

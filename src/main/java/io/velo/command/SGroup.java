@@ -29,6 +29,10 @@ import static io.velo.CompressedValue.NO_EXPIRE;
  * This includes commands like SAVE, SCARD, SDIFF, SET, SINTER.
  */
 public class SGroup extends BaseCommand {
+    private static ErrorReply invalidExpireTime(String cmd) {
+        return new ErrorReply("invalid expire time in '" + cmd + "' command");
+    }
+
     static {
         CommandRegistry.register(new CommandEntry(
                 "sadd", -3,
@@ -893,10 +897,12 @@ public class SGroup extends BaseCommand {
             try {
                 value = Long.parseLong(new String(dd[i + 1]));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                // redis answers 'value is not an integer or out of range'
+                return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
             }
             if (value <= 0) {
-                return ErrorReply.INVALID_INTEGER;
+                // redis answers "invalid expire time in '<cmd>' command"
+                return invalidExpireTime(cmd);
             }
             if (isEx) {
                 ex = value;
@@ -2293,7 +2299,7 @@ public class SGroup extends BaseCommand {
         var replies = new Reply[channels.size() * 3];
         int j = 0;
         for (var channel : channels) {
-            replies[j++] = new BulkReply("subscribe");
+            replies[j++] = new BulkReply(isPattern ? "psubscribe" : "subscribe");
             replies[j++] = new BulkReply(channel);
             var size = socketInInspector.subscribe(channel, isPattern, socket);
             replies[j++] = new IntegerReply(size);

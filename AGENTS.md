@@ -19,6 +19,7 @@ system written in Java with Groovy components.
 
 ```bash
 # Build the project, prefer
+# (also copies runtime deps, log4j2.xml, velo.properties and the dyn scripts into build/libs)
 ./gradlew jar
 
 # Run all tests in all Gradle projects, including submodules
@@ -48,7 +49,8 @@ system written in Java with Groovy components.
 # Run specific JMH benchmark
 ./gradlew jmh -Pjmh.includes="SlotCalc*"
 
-# Generate test coverage report
+# Generate test coverage report (also runs automatically after every test task,
+# so its Total row reflects only whatever test class ran last — see Testing Guidelines)
 ./gradlew jacocoTestReport
 
 # Run after build
@@ -168,12 +170,12 @@ io.velo/             # Main package
 ├── mock/            # Mock persist layers, use in memory HashMap for testing
 ├── monitor/         # Monitoring some metrics when running, like top big keys, cpu usage 
 ├── perf/            # Perf test examples
-├── persist/         # Persistence layer, hash index implementations
+├── persist/         # Persistence layer: WAL → Key Buckets → Chunk Segments
 ├── rdb/             # Redis RDB file format read / write, for dump / restore
 ├── repl/            # Replication functionality
 ├── reply/           # Redis protocol reply abstraction
 ├── task/            # Interval execute tasks, delay in an event loop
-└── type/            # Redis data types
+└── type/            # Redis data types: string, hash, list, set, zset, bitmap, hyperloglog, bloomfilter, geo
 ```
 
 TIPS: Main packet io.velo features are:
@@ -225,7 +227,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 
 1. Run relevant tests: `./gradlew test --tests "*YourTest*"`
 2. Run full test suite if changes are significant
-3. Check code coverage with JaCoCo report, if coverage is below 80%, show warnings and consider adding more tests
+3. Check the line coverage of the class you changed with `python3 scripts/jacoco_cover.py <FullyQualifiedClassName> <startLine> <endLine>`. Do NOT judge coverage by the aggregate Total row in `build/reports/jacocoHtml/index.html` — that number only reflects whatever test class ran last, so it is not a property of the codebase. If the changed class is below 80% line coverage, show warnings and consider adding more tests
 4. After running relevant tests, inspect the JaCoCo HTML report under `build/reports/jacocoHtml/` and confirm the changed code lines or branches were actually executed; a passing test alone is not enough
 5. Test Redis protocol compatibility if applicable
 6. Verify performance with JMH benchmarks if relevant
@@ -282,7 +284,7 @@ Notes:
 
 ### Key Configuration Files
 
-- `velo.properties`: Main application configuration
+- `velo.properties`: Main application configuration (slot count, workers, listen address, LRU size, etc.)
 - `log4j2.xml`: Logging configuration
 - `acl.conf`: ACL rules
 - `build.gradle`: Build configuration and dependencies

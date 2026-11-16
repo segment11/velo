@@ -188,7 +188,8 @@ class EGroupTest extends Specification {
         data3[2] = 'a'.bytes
         reply = eGroup.expire(true, true)
         then:
-        reply == ErrorReply.NOT_INTEGER
+        // redis answers 'value is not an integer or out of range'
+        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
