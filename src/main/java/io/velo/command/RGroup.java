@@ -247,7 +247,8 @@ public class RGroup extends BaseCommand {
             return lGroup.lpush(false, true);
         }
 
-        return NilReply.INSTANCE;
+        // the command is not registered, redis answers an unknown command error
+        return ErrorReply.UNKNOWN_COMMAND(cmd);
     }
 
     private Reply randomkey() {

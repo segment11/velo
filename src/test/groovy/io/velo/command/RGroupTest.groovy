@@ -160,6 +160,12 @@ class RGroupTest extends Specification {
         def rGroup = new RGroup(null, null, null)
         rGroup.from(BaseCommand.mockAGroup())
 
+        when: 'bug 85.12: an unknown command is answered like redis does'
+        def unknownReply = rGroup.execute('rfoo')
+        then:
+        unknownReply instanceof ErrorReply
+        (unknownReply as ErrorReply).getMessage() == "unknown command 'rfoo'"
+
         expect:
         rGroup.execute(input) == expected
 
@@ -174,7 +180,6 @@ class RGroupTest extends Specification {
         'rpoplpush' | ErrorReply.FORMAT
         'rpush'     | ErrorReply.FORMAT
         'rpushx'    | ErrorReply.FORMAT
-        'zzz'       | NilReply.INSTANCE
     }
 
     def 'test handle - readonly readwrite role'() {
