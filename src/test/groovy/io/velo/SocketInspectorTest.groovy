@@ -576,6 +576,75 @@ class SocketInspectorTest extends Specification {
         inspector.clearAll()
     }
 
+    def 'test pubsub channel and pattern helpers'() {
+        given:
+        def inspector = new SocketInspector()
+
+        and:
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start { eventloop.run() }
+        Thread.sleep(200)
+        Eventloop[] eventloopArray = [eventloop]
+        inspector.initByNetWorkerEventloopArray(eventloopArray, eventloopArray)
+
+        def socketA = mockTcpSocket(eventloop, 46370)
+        def socketB = mockTcpSocket(eventloop, 46371)
+        def socketC = mockTcpSocket(eventloop, 46372)
+
+        expect: 'empty inspector: no channels, no patterns, no exact subscribers'
+        inspector.subscribePatternCount() == 0
+        inspector.subscribeChannels(null) == []
+        inspector.subscribeChannels('news.*') == []
+        inspector.exactSubscribeSocketCount('news.tech') == 0
+        and: 'the isPattern accessor reports the entry kind'
+        !new SocketInspector.ChannelAndIsPattern('news.tech', false).isPattern()
+        new SocketInspector.ChannelAndIsPattern('news.*', true).isPattern()
+
+        when: 'one exact subscriber of news.tech, one pattern subscriber of news.*, one exact subscriber of news.sport'
+        inspector.subscribe('news.tech', false, socketA)
+        inspector.subscribe('news.*', true, socketB)
+        inspector.subscribe('news.sport', false, socketC)
+
+        then: 'subscribeChannels(null) lists only the channels, the pattern subscriptions are excluded'
+        inspector.subscribeChannels(null).sort() == ['news.sport', 'news.tech']
+
+        and: 'the glob filters the channels, the pattern entry itself is never listed'
+        inspector.subscribeChannels('news.*').sort() == ['news.sport', 'news.tech']
+        inspector.subscribeChannels('news.tech') == ['news.tech']
+        inspector.subscribeChannels('other.*') == []
+
+        and: 'exactSubscribeSocketCount counts only the exact channel subscribers'
+        inspector.exactSubscribeSocketCount('news.tech') == 1
+        inspector.exactSubscribeSocketCount('news.sport') == 1
+        inspector.exactSubscribeSocketCount('not_subscribed') == 0
+
+        and: 'subscribePatternCount counts the unique pattern entries'
+        inspector.subscribePatternCount() == 1
+
+        when: 'another socket subscribes to the same pattern'
+        inspector.subscribe('news.*', true, socketC)
+        then: 'the pattern is counted once, and the pattern subscribers are still not exact subscribers'
+        inspector.subscribePatternCount() == 1
+        inspector.exactSubscribeSocketCount('news.tech') == 1
+
+        when: 'a second, different pattern'
+        inspector.subscribe('biz.*', true, socketA)
+        then:
+        inspector.subscribePatternCount() == 2
+
+        when: 'the exact subscriber unsubscribes'
+        inspector.unsubscribe('news.tech', false, socketA)
+        then: 'the exact count drops to zero'
+        inspector.exactSubscribeSocketCount('news.tech') == 0
+
+        cleanup:
+        eventloop.breakEventloop()
+        inspector.clearAll()
+    }
+
     def 'test max connections atomic admission'() {
         given:
         def inspector = new SocketInspector()
