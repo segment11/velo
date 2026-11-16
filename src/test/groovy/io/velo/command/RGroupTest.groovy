@@ -893,6 +893,41 @@ class RGroupTest extends Specification {
         blmovePromise.getResult() instanceof BulkReply
         (blmovePromise.getResult() as BulkReply).raw == 'x'.bytes
 
+        when: 'bug 85.14: a cross worker rpoplpush whose destination write fails answers the client'
+        def failSrcKey = (1..500).collect { 'failsrc_' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def failDstKey = (1..500).collect { 'faildst_' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+        def failSrcSwkh = BaseCommand.slot(failSrcKey, 2)
+        def rlFail = new RedisList()
+        rlFail.addLast('f'.bytes)
+        def seededFail = new CountDownLatch(1)
+        moveLoop1.execute({
+            moveGroup.set(rlFail.encode(), failSrcSwkh, CompressedValue.SP_TYPE_LIST)
+            seededFail.countDown()
+        })
+        seededFail.await(5, TimeUnit.SECONDS)
+
+        and: 'the destination slot is readonly, so the destination write fails'
+        LocalPersist.instance.oneSlot(1 as short).setReadonly(true)
+        def asyncFailMove = []
+        def doneFailMove = new CountDownLatch(1)
+        moveLoop1.execute({
+            asyncFailMove << moveGroup.execute("rpoplpush ${failSrcKey} ${failDstKey}")
+            doneFailMove.countDown()
+        })
+        doneFailMove.await(5, TimeUnit.SECONDS)
+        def failMovePromise = asyncFailMove[0] instanceof AsyncReply ? (asyncFailMove[0] as AsyncReply).settablePromise : null
+        if (failMovePromise != null) {
+            for (int i = 0; i < 100 && !failMovePromise.isComplete(); i++) {
+                Thread.sleep(20)
+            }
+        }
+
+        then: 'the client gets an answer instead of hanging forever'
+        failMovePromise != null
+        failMovePromise.isComplete()
+        failMovePromise.isResult()
+        failMovePromise.getResult() == ErrorReply.READONLY
+
         cleanup:
         eventloop.breakEventloop()
         moveWorkers?.each { SlotWorker w -> w.thread.interrupt() }

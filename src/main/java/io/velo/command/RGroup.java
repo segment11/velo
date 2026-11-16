@@ -670,14 +670,20 @@ public class RGroup extends BaseCommand {
 
             // step 2: the source worker pops the element
             srcOneSlot.asyncExecute(() -> {
-                var memberValueBytes = popFromSource(srcSlotWithKeyHash, srcLeft);
+                byte[] memberValueBytes;
+                try {
+                    memberValueBytes = popFromSource(srcSlotWithKeyHash, srcLeft);
+                } catch (Exception e) {
+                    finalPromise.setException(e);
+                    return;
+                }
                 if (memberValueBytes == null) {
                     finalPromise.set(NilReply.INSTANCE);
                     return;
                 }
                 // step 3: the destination worker pushes the element
                 dstOneSlot.asyncExecute(() ->
-                        moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+                        pushToDestination(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise));
             });
         });
 
@@ -849,7 +855,13 @@ public class RGroup extends BaseCommand {
 
             // step 2: the source side runs on the source slot worker
             srcOneSlot.asyncExecute(() -> {
-                var memberValueBytes = popFromSource(srcSlotWithKeyHash, srcLeft);
+                byte[] memberValueBytes;
+                try {
+                    memberValueBytes = popFromSource(srcSlotWithKeyHash, srcLeft);
+                } catch (Exception e) {
+                    finalPromise.setException(e);
+                    return;
+                }
                 if (memberValueBytes == null) {
                     // the source list is empty, wait for an element to arrive
                     var blockingReply = doBlockWhenMove(srcSlotWithKeyHash.rawKey(), srcLeft, timeoutSeconds,
@@ -865,11 +877,33 @@ public class RGroup extends BaseCommand {
                 }
                 // step 3: the destination worker pushes the element
                 dstOneSlot.asyncExecute(() ->
-                        moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set));
+                        pushToDestination(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise));
             });
         });
 
         return asyncReply;
+    }
+
+    /**
+     * Pushes the moved element to the destination list on the destination slot worker, a failing write
+     * must be reported to the client instead of leaving the request unanswered.
+     *
+     * @param dstSlotWithKeyHash the destination key
+     * @param dstLeft            true to push the element to the head of the destination list
+     * @param memberValueBytes   the moved element bytes
+     * @param finalPromise       the promise that carries the reply
+     */
+    private void pushToDestination(SlotWithKeyHash dstSlotWithKeyHash, boolean dstLeft, byte[] memberValueBytes,
+                                   SettablePromise<Reply> finalPromise) {
+        try {
+            moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, finalPromise::set);
+        } catch (ReadonlyException e) {
+            // the destination slot rejected the write, the client must get an answer
+            finalPromise.set(ErrorReply.READONLY);
+        } catch (Exception e) {
+            log.error("Move to destination slot={} failed", dstSlotWithKeyHash.slot(), e);
+            finalPromise.setException(e);
+        }
     }
 
     @VisibleForTesting
