@@ -216,6 +216,21 @@ class RGroupTest extends Specification {
         then:
         reply == NilReply.INSTANCE
 
+        when: 'bug 85.9: an expired key is not returned'
+        def expiredKey = 'expired:key'
+        def expiredKeyHash = KeyHash.hash(expiredKey.bytes)
+        def expireAtSoon = System.currentTimeMillis() + 300
+        def expiredList = Mock.prepareShortValueList(1, 0, { v ->
+            new Wal.V(v.seq(), v.bucketIndex(), expiredKeyHash, expireAtSoon,
+                    v.spType(), expiredKey, v.cvEncoded(), v.isFromMerge())
+        })
+        localPersist.oneSlot(slot).keyLoader
+                .persistShortValueListBatchInOneWalGroup(Wal.calcWalGroupIndex(0), expiredList)
+        and: 'the key expires'
+        Thread.sleep(500)
+        then: 'the expired key of the bucket is not returned'
+        rGroup.randomKeyInBucket(localPersist.oneSlot(slot), 0, new Random()) == null
+
         when:
         def oneSlot = localPersist.oneSlot(slot)
         def keyLoader = oneSlot.keyLoader
@@ -228,6 +243,15 @@ class RGroupTest extends Specification {
         reply = rGroup.execute('randomkey')
         then:
         reply instanceof BulkReply
+
+        when: 'bug 85.9: the random index inside the bucket is honoured'
+        def distinctKeys = [] as Set
+        100.times {
+            def randomReply = rGroup.execute('randomkey')
+            distinctKeys << new String((randomReply as BulkReply).raw)
+        }
+        then: 'more than one key of the bucket is returned'
+        distinctKeys.size() > 1
 
         when:
         def cvList = Mock.prepareCompressedValueList(10)
@@ -393,6 +417,8 @@ class RGroupTest extends Specification {
         cleanup:
         eventloop.breakEventloop()
         workers?.each { SlotWorker w -> w.thread.interrupt() }
+        // the readonly flag is kept in the slot, reset it for the other test classes
+        LocalPersist.instance.oneSlot(1 as short).setReadonly(false)
     }
 
     def 'test restore'() {
@@ -1059,6 +1085,8 @@ class RGroupTest extends Specification {
         cleanup:
         eventloop.breakEventloop()
         moveWorkers?.each { SlotWorker w -> w.thread.interrupt() }
+        // the readonly flag is kept in the slot, reset it for the other test classes
+        LocalPersist.instance.oneSlot(1 as short).setReadonly(false)
     }
 
     def 'test rpush and rpushx'() {

@@ -5,6 +5,7 @@ import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
+import io.velo.persist.OneSlot;
 import io.velo.persist.ReadonlyException;
 import io.velo.persist.Wal;
 import io.velo.reply.*;
@@ -266,36 +267,63 @@ public class RGroup extends BaseCommand {
                 return new BulkReply(keyInLRU);
             }
 
-            var keyCount = firstOneSlot.getKeyLoader().getKeyCountInBucketIndex(bucketIndex);
-            if (keyCount > 0) {
-                var skipN = random.nextInt(keyCount);
-                final int[] countArray = {0};
-                final String[] targetKeyArray = new String[1];
-
-                var keyBuckets = firstOneSlot.getKeyLoader().readKeyBuckets(bucketIndex);
-                for (var keyBucket : keyBuckets) {
-                    if (keyBucket == null) {
-                        continue;
-                    }
-
-                    keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
-                        if (countArray[0] == skipN) {
-                            targetKeyArray[0] = key;
-                            return;
-                        }
-                        countArray[0]++;
-                    });
-
-                    if (targetKeyArray[0] != null) {
-                        break;
-                    }
-                }
-
-                return new BulkReply(targetKeyArray[0]);
+            var keyInBucket = randomKeyInBucket(firstOneSlot, bucketIndex, random);
+            if (keyInBucket != null) {
+                return new BulkReply(keyInBucket);
             }
         }
 
         return NilReply.INSTANCE;
+    }
+
+    /**
+     * Picks a random live key of one bucket, the random index inside the bucket is honoured and the
+     * expired keys are not returned.
+     *
+     * @param oneSlot     the slot that owns the bucket
+     * @param bucketIndex the bucket index
+     * @param random      the random source
+     * @return a live key of the bucket, or null when the bucket has no live key
+     */
+    @VisibleForTesting
+    String randomKeyInBucket(OneSlot oneSlot, int bucketIndex, Random random) {
+        var keyCount = oneSlot.getKeyLoader().getKeyCountInBucketIndex(bucketIndex);
+        if (keyCount <= 0) {
+            return null;
+        }
+
+        var skipN = random.nextInt(keyCount);
+        final int[] countArray = {0};
+        final String[] targetKeyArray = new String[1];
+
+        var keyBuckets = oneSlot.getKeyLoader().readKeyBuckets(bucketIndex);
+        for (var keyBucket : keyBuckets) {
+            if (keyBucket == null) {
+                continue;
+            }
+
+            keyBucket.iterate((keyHash, expireAt, seq, key, valueBytes) -> {
+                if (targetKeyArray[0] != null) {
+                    // the key is found already, the iteration cannot be stopped
+                    return;
+                }
+                if (expireAt != CompressedValue.NO_EXPIRE && expireAt <= System.currentTimeMillis()) {
+                    // an expired key is not a key of the database anymore
+                    return;
+                }
+                if (countArray[0] == skipN) {
+                    targetKeyArray[0] = key;
+                    return;
+                }
+                countArray[0]++;
+            });
+
+            if (targetKeyArray[0] != null) {
+                break;
+            }
+        }
+
+        return targetKeyArray[0];
     }
 
     private Reply rename(boolean isNx) {
