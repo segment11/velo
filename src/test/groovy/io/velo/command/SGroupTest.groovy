@@ -653,6 +653,12 @@ sunionstore
         reply == ErrorReply.WRONG_TYPE
 
         when:
+        // redis replies syntax error when NX and XX are both given
+        reply = sGroup.execute('set b value nx xx')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
         reply = sGroup.execute('set a value ex 10')
         then:
         reply == OKReply.INSTANCE

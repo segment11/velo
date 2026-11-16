@@ -920,6 +920,11 @@ public class SGroup extends BaseCommand {
             i++;
         }
 
+        if (isNx && isXx) {
+            // redis replies syntax error when NX and XX are both given
+            return ErrorReply.SYNTAX;
+        }
+
         long expireAt = NO_EXPIRE;
         if (isExpireAtSet) {
             if (ex != -1) {
