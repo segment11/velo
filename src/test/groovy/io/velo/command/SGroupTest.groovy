@@ -781,7 +781,7 @@ sunionstore
         inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
                 .cv().expireAt == savedExpireAt
 
-        when: 'NX GET on existing non-string key returns NOT_STRING error'
+        when: 'NX GET on existing non-string key returns WRONGTYPE error'
         inMemoryGetSet.remove(slot, 'a')
         def cvNotString = Mock.prepareCompressedValueList(1)[0]
         cvNotString.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH

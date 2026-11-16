@@ -10,7 +10,7 @@ import java.util.Objects;
  */
 public class ErrorReply implements Reply {
 
-    /** Error reply for bad arguments structure, the text is aligned with redis. */
+    /** Error reply for bad arguments structure, redis' syntax error text, used for both arity and bad-value as a simplification. */
     public static final ErrorReply FORMAT = new ErrorReply("syntax error");
 
     /**
