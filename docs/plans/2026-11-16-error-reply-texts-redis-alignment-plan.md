@@ -538,3 +538,132 @@ Reminders for the executor: one commit per task with the Revision 1 commit messa
 - Task 3: commit `2082f95e` — SGroupTest.test scan/test set/test set nx get and xx get preserve flags + HGroupTest.test hello: 4/4 green; red step verified first (old cursor text, NOT_STRING value mismatch, NOPROTO MissingPropertyException); JaCoCo: SGroup 570-600 (:579 covered, :597 all 6 branches), SGroup 930-970 (:945/:959 covered), HGroup 640-670 21/21 covered.
 - Task 4 (regression): `./gradlew :test --tests "io.velo.command.*GroupTest" --tests "io.velo.command.*CommandTest" --tests "io.velo.reply.*" --tests "io.velo.RequestHandlerTest" --tests "io.velo.MultiWorkerServerTest"` — 602 tests completed, 5 failed. All 5 failures (MultiWorkerServerTest pipeline readonly/connection-state/barrier trio, mock inject and handle, cluster slot cross shards) reproduce identically on baseline main commit `8e811e5c` — pre-existing on main, not regressions. 597/602 green.
 - equals() collisions NOT_INTEGER≡INVALID_INTEGER and FORMAT≡SYNTAX observed as pre-approved (plan Review Checklist).
+
+## Commit Review (Stage 4, 2026-11-16)
+
+Date: 2026-11-16
+Reviewer: AI agent 2 (commit reviewer)
+Branch under review: `refactor/error-reply-texts`, base `main` @ 8e811e5c
+Commits under review: 9bf17626, fc80f509, 2082f95e, 70ed456b
+Method: read-only git plumbing on the checked-out branch (`git show <sha>`, `git diff main..refactor/error-reply-texts -- <path>`, `git log --oneline`), independent re-reads of `src/main/java/io/velo/reply/ErrorReply.java`, `src/main/java/io/velo/command/{SGroup,HGroup,PGroup}.java` and the four touched test files, a stale-text sweep over `src/` + `dyn/`, one focused green check (`./gradlew :test --tests "io.velo.reply.RESPReplyTest.test others"`) and the JaCoCo report it produced. No production code or test was modified by this review; the only write was this section.
+
+### 1. Per-commit verification
+
+| # | Commit | Plan task | Revision-1 `git add` list (plan :359/:366/:373) | Actual `git show --stat` | Verdict |
+|---|---|---|---|---|---|
+| 1 | 9bf17626 `refactor: align the raw error reply texts with redis` | Task 1 | ErrorReply.java, RESPReplyTest.groovy, MultiWorkerServerTest.groovy | identical 3 files (43+/19-) | matches — no scope creep |
+| 2 | fc80f509 `refactor: align the value error reply texts with redis` | Task 2 | ErrorReply.java, RESPReplyTest.groovy, MultiWorkerServerTest.groovy | identical 3 files (27+/15-) | matches — no scope creep |
+| 3 | 2082f95e `refactor: align the inline command error texts with redis` | Task 3 | ErrorReply.java, SGroup.java, HGroup.java, SGroupTest.groovy, HGroupTest.groovy | identical 5 files (13+/13-) | matches — no scope creep |
+| 4 | 70ed456b `refactor: align error reply texts with redis` | Task 4 | plan doc only | `docs/plans/2026-11-16-error-reply-texts-redis-alignment-plan.md` only (540 insertions) | matches — plan doc committed once, with the Validation status (R2-N4) |
+
+Commit messages are byte-identical to the Revision-1 Step 6 messages (plan :359, :366, :373) and the Revision-1 Task-4 message (plan :376). Whole-branch file set (`git diff main..refactor/error-reply-texts --stat`): plan doc + `ErrorReply.java`, `SGroup.java`, `HGroup.java`, `MultiWorkerServerTest.groovy`, `RESPReplyTest.groovy`, `SGroupTest.groovy`, `HGroupTest.groovy` — nothing outside the plan's file list. `git diff main..refactor/error-reply-texts -- src/main/java/io/velo/command/PGroup.java` is **empty** (Revision 1 dropped the PUBSUB change) ✓.
+
+#### Task 1 (9bf17626) — constants vs the Revision-1/2 mapping (branch `ErrorReply.java`)
+
+| Constant | Plan text (Rev 1 + Rev 2 override) | Branch line | Prefix |
+|---|---|---|---|
+| WRONG_TYPE | `WRONGTYPE Operation against a key holding the wrong kind of value` | :100-101 | raw ✓ |
+| AUTH_FAILED | `WRONGPASS invalid username-password pair or user is disabled.` | :49-50 | raw ✓ |
+| NO_AUTH | `NOAUTH Authentication required.` | :53 | raw ✓ |
+| ACL_PERMIT_LIMIT | `NOPERM this user has no permissions to run the command` (Velo paraphrase, plan :473) | :56-57 | raw ✓ |
+| ACL_PERMIT_KEY_LIMIT | `NOPERM No permissions to access a key` (**Revision 2 override** of the body row, plan :473) | :60-61 | raw ✓ |
+| CLUSTER_SLOT_CROSS_SHARDS | `CROSSSLOT Keys in request don't hash to the same slot` | :156-157 | raw ✓ |
+| CLUSTER_SLOT_NOT_SET | `CLUSTERDOWN Hash slot not served` | :160-161 | raw ✓ |
+| ACL_SETUSER_RULE_INVALID | `Error in ACL SETUSER modifier` (ERR prefix kept, `!...!` dropped) | :64 | ERR ✓ |
+
+Task 1 tests: `RESPReplyTest.groovy:78-95` adds `.message` + wire-form asserts for all 8 constants (e.g. `:88-89` `-NOPERM this user has no permissions to run the command\r\n`, `:91-92` `-NOPERM No permissions to access a key\r\n`); `MultiWorkerServerTest.groovy:228` → `'-NOPERM this user has no permissions to run the command\r\n'`, `:399-400` → `'-NOAUTH Authentication required.\r\n'` (×2), `:479` → `'+OK\r\n-NOPERM this user has no permissions to run the command\r\n'` = exactly the 4 planned wire-text updates. No plan doc in this commit ✓.
+
+#### Task 2 (fc80f509) — constants vs the Revision-2 provenance table (plan :476-484)
+
+| Constant | Plan text | Branch line | ✓ |
+|---|---|---|---|
+| NOT_INTEGER | `value is not an integer or out of range` | :76 | ✓ |
+| INVALID_INTEGER | `value is not an integer or out of range` | :88 | ✓ |
+| NOT_FLOAT | `value is not a valid float` | :79 | ✓ |
+| FORMAT | `syntax error` | :14 | ✓ |
+| RANGE_OUT_OF_INDEX | `value is out of range` | :94 | ✓ |
+| NOT_SUPPORT | `operation not supported` | :138 | ✓ |
+| WRONG_NUMBER(cmd) | `wrong number of arguments for '<cmd>' command` — stray `*` dropped | :20-22 | ✓ |
+
+Task 2 tests: `RESPReplyTest.groovy:58-70` (`.message` + `-ERR …\r\n` wire form for each, incl. `:59` `"-ERR wrong number of arguments for 'test' command\r\n"`), `MultiWorkerServerTest.groovy:150-151` → `'-ERR syntax error\r\n'` (×2). No plan doc in this commit ✓.
+
+#### Task 3 (2082f95e) — inline sites, constants, tests
+
+| Planned item (plan :369-373) | Branch evidence | ✓ |
+|---|---|---|
+| `ErrorReply.NOPROTO` added, public constant, raw | `ErrorReply.java:169-170` `new ErrorReply("NOPROTO unsupported protocol version", true)` — created inside `io.velo.reply`, so the private 2-arg ctor stays private and `io.velo.command` compiles (R1-N1 satisfied) | ✓ |
+| `NOT_STRING` deleted | removed at `ErrorReply.java` (was :87-88) | ✓ |
+| unused `TARGET_KEY_BUSY` deleted | removed (was :164) | ✓ |
+| `SGroup.java:579` cursor text → `invalid cursor` | `SGroup.java:579` | ✓ |
+| `SGroup.java:945,:959` NOT_STRING → WRONG_TYPE | `SGroup.java:945`, `:959` | ✓ |
+| `HGroup.java:646` → `ErrorReply.NOPROTO` | `HGroup.java:646` | ✓ |
+| `PGroup.java` unchanged | diff empty | ✓ |
+| tests only in SGroupTest / HGroupTest | `SGroupTest.groovy:415` (`'invalid cursor'` assert inside `'test scan'` :200), `:645` (`'test set'` :575), `:791` (`'test set nx get and xx get preserve flags'` :739); `HGroupTest.groovy:271-274` (`'test hello'` :249) | ✓ |
+
+No forward reference: `NOPROTO` is introduced and consumed in the same commit; the `NOT_STRING` deletion and both call-site swaps land together (R1-N17).
+
+#### Task 4 (70ed456b) — plan doc structure
+
+Body (:1) → `## Review Feedback` (:179) → `### Plan Review — Round 1` (:183) → `## Revision 1` (:330) → `### Plan Review — Round 2` (:381) → `## Revision 2` (:466) → `### Plan Review — Round 3` (:490) → `## Validation status (2026-11-16)` (:534) — order intact, `## Validation status` appended last ✓. Header still reads `Status: Approved for execution (round 3, 2026-11-16)` (:3) ✓.
+
+### 2. Review Checklist verification (plan :169-177 + Revision-1 addition :379)
+
+| Checklist item | Result | Evidence |
+|---|---|---|
+| Raw constants are `-WRONGTYPE …`, no `-ERR` double prefix | PASS | `ErrorReply.java:230` `((rawErrorPrefix ? "-" : "-ERR ") + message + "\r\n")`; `RESPReplyTest.groovy:79-92` asserts the wire form for all 7 raw constants; `buffer()` line 230 is reported "All 2 branches covered" in the current JaCoCo report |
+| No constant renamed; deleted = `NOT_STRING`, `TARGET_KEY_BUSY`; added = `NOPROTO`; no semantic call-site move | PASS | `git diff main..branch -- src/main/java/io/velo/reply/ErrorReply.java` shows only: the 7 Task-1 texts, the 6 Task-2 texts + `WRONG_NUMBER`, `NOT_STRING` removed, `TARGET_KEY_BUSY` removed, `NOPROTO` added. `INVALID_INTEGER` was relocated in the file but not renamed. The two `NOT_STRING` sites are wrong-type reads on `SET NX GET` / `SET XX GET` → `WRONG_TYPE` ✓ |
+| No text changes outside the mapping tables; Finding 10 items untouched | PASS | the branch touches 4 production files only (ErrorReply/SGroup/HGroup + plan doc); `PGroup.java` diff empty; `SERVER_STOPPED`, `DICT_MISSING`, `KEY_TOO_LONG`, `VALUE_TOO_LONG`, `*_SIZE_TO_LONG`, `BF_*`, `CAPACITY_NOT_POSITIVE`, `BAD_DATA_FORMAT`, `DUMP_TYPE_NOT_SUPPORT`, `DEBUG_SUB_COMMAND_NOT_SUPPORT`, `NO_SUCH_FILE`, `INVALID_FILE`, `CANNOT_READ`, `CURSOR_NOT_MATCH` (SGroup.java:578), `SGroup.java:663`, SORT texts, `MGroup.java:649,738`, dyn texts — all unchanged |
+| No new `getMessage()`-based dispatch | PASS | `rg 'getMessage\(\)\s*\.\s*(equals\|startsWith\|contains)' src dyn` → no hits; every `getMessage()` in `src/main` + `dyn/src` is an exception-message or log call (e.g. `RequestHandler.java:351`, `MGroup.java:649`) and none was added by this branch (the diff contains no `getMessage()`) |
+| `WRONG_NUMBER` no longer starts with `*` | PASS | `ErrorReply.java:21` `new ErrorReply("wrong number of arguments for '" + cmd + "' command")`; asserted at `RESPReplyTest.groovy:58-59` |
+| Tests assert the new texts; no test left asserting the old ones | PASS with one cosmetic leftover | `rg` over `src/` + `dyn/` finds no remaining assertion on `'format'`, `'no auth'`, `'!NOPERM!'`, `'invalid scan cursor'`, `'Server protover not support'`, `'range out of index'`, `'not integer'`, `'not float'`, `'target key name is busy'`; the only hits are comments/javadoc/labels — see S4-N1 |
+| One task = one commit, each green independently; JaCoCo inspected per task | PASS (with the caveat in S4-N3) | 4 commits, one per task; each commit is self-consistent (Task 1 left `'-ERR format'` untouched because `FORMAT` was still `'format'`; Task 2 changed the constant and its 2 asserts together); `## Validation status` records the per-task green runs and JaCoCo windows |
+| `equals()` collisions `NOT_INTEGER≡INVALID_INTEGER`, `FORMAT≡SYNTAX` pre-approved | PASS | `ErrorReply.equals()` compares message + `rawErrorPrefix` (`ErrorReply.java:212-221`); the collisions are recorded in the Validation status as pre-approved; no `!=` assertion on `ErrorReply` exists in the test trees, so no existing assertion can flip |
+
+### 3. Stale-text sweep (`src/` + `dyn/`, code and tests)
+
+`rg -e 'auth failed' -e 'no auth' -e 'wrong type' -e '!NOPERM!' -e 'invalid scan cursor' -e 'Server protover not support' -e 'range out of index' -e '"format"' -e 'not integer' -e 'not float' -e 'target key name is busy' -e 'NOT_STRING'` → the only hits are (a) comments/javadoc that describe behaviour rather than assert it (`SGroup.java:331`, `GGroup.java:455`, `ErrorReply.java:93,99,103`), (b) Spock `when:` labels describing the scenario (`DGroupTest.groovy:101,121,471`, `BGroupTest.groovy:1454,1469,1479`, `PGroupTest.groovy:250,285,354,…`, `LGroupTest.groovy:1316,…`, `ZGroupTest.groovy:2806,…`, `HGroupTest.groovy:1798,2418`, `CGroupTest.groovy:874`, `IGroupTest.groovy:188`), (c) the method name `RequestHandlerTest.groovy:116` `'test malformed http basic auth returns auth failed'`, and (d) one leftover naming the deleted constant — see S4-N1. `rg 'TARGET_KEY_BUSY'` → no hits. `rg 'ErrorReply' segment_common/src segmentweb/src` → no cross-module references.
+
+### 4. Validation status accuracy (plan :534-540)
+
+| Claim | Result | Evidence |
+|---|---|---|
+| Task 1 = `9bf17626`, Task 2 = `fc80f509`, Task 3 = `2082f95e`, with the stated messages | PASS | `git log --oneline main..refactor/error-reply-texts` lists exactly these 4 hashes/messages; `git show --stat` matches the planned file lists |
+| Named test methods exist | PASS | `RESPReplyTest.'test others'` (:45), `MultiWorkerServerTest.'test shutdown command requests server stop when acl permits'` (:42), `'test shutdown command is blocked by acl dangerous disallow'` (:167), `'test fast auth gate keeps quit available'` (:326), `'test pipeline auth refresh acl state'` (:412), `RequestHandlerTest.'test malformed http basic auth returns auth failed'` (:116), `SGroupTest.'test scan'` (:200) / `'test set'` (:575) / `'test set nx get and xx get preserve flags'` (:739), `HGroupTest.'test hello'` (:249), `dyn/test/io/velo/command/ManageCommandTest.groovy` (11 `def` methods → the claimed "11/11 dyn") — all present; the asserts the Validation status claims were exercised sit inside exactly these methods (SGroupTest :415/:645/:791, HGroupTest :271-274) |
+| Task 1 "6/6 green" | consistent | 1 (RESPReplyTest) + 4 (MultiWorkerServerTest) + 1 (RequestHandlerTest) = 6 ✓ |
+| Task 3 JaCoCo "HGroup 640-670 21/21 covered" | consistent | the changed HGroup line is :646 (`return ErrorReply.NOPROTO;`) inside the 640-670 window ✓ |
+| Task 4 regression: 602 tests, 5 failed, "reproduce identically on baseline main 8e811e5c" | NOT independently re-verified | the full suite was out of scope for this review. Indirect evidence supports it: the 5 named failing methods (`MultiWorkerServerTest` pipeline readonly / connection-state / barrier trio, `'test mock inject and handle'`, `'test cluster slot cross shards'`) contain **no** assertion on any changed text (rg over `MultiWorkerServerTest.groovy:489-1000` and `:1548-1646` for `ERR|NOAUTH|NOPERM|WRONGTYPE|syntax|format|no auth` → no hits; the cross-shards test asserts a `MOVED …` message, `ErrorReply.clusterMoved` :178-180, unchanged) and the branch touches no production code those paths execute |
+| Task 2 JaCoCo "ErrorReply lines 14-180 48/48 covered" | NOT independently re-verifiable | the current JaCoCo report reflects only the single-class run I performed (see below); historical per-task coverage numbers can only be reproduced by re-running each task's suite |
+
+Fast green check on the branch working tree: `./gradlew :test --tests "io.velo.reply.RESPReplyTest.test others"` → **BUILD SUCCESSFUL**; `build/test-results/test/TEST-io.velo.reply.RESPReplyTest.xml` → `tests="1" skipped="0" failures="0" errors="0"`. (The first invocation aborted with `Java heap space` in `:compileTestGroovy` — a daemon-memory hiccup of the sandbox, not a code failure; the identical command re-run was green.) The JaCoCo report produced by that run shows `ErrorReply.java` declaration lines 14, 21, 49, 53, 56, 60, 64, 76, 79, 88, 94, 100, 138, 156, 160, 170 all covered and `buffer()` :230 "All 2 branches covered" (both the raw and the `-ERR ` paths executed) — i.e. the changed constant lines and the raw-prefix wire branch are executed, as the checklist requires.
+
+### 5. Findings
+
+#### S4-N1: A test label still names the deleted `NOT_STRING` constant
+**Severity:** Low
+**Evidence:** `src/test/groovy/io/velo/command/SGroupTest.groovy:784` — `when: 'NX GET on existing non-string key returns NOT_STRING error'`, while the assertion right below it (`:791`) now asserts `reply == ErrorReply.WRONG_TYPE`. `ErrorReply.NOT_STRING` was deleted in 2082f95e, so the label points at a symbol that no longer exists; it is the only remaining `NOT_STRING` occurrence in `src/` + `dyn/` (all other sweep hits are unrelated scenario labels).
+**Impact:** no behavioural impact (a Spock `when:` description), but it contradicts the plan's stale-text rule (Review Checklist :176) and misleads a reader of the test.
+**Required:** reword the label to `... returns WRONG_TYPE error` in a follow-up commit.
+
+#### S4-N2: The `FORMAT` javadoc claims redis alignment that the plan explicitly qualified
+**Severity:** Info
+**Evidence:** `src/main/java/io/velo/reply/ErrorReply.java:13-14` — `/** Error reply for bad arguments structure, the text is aligned with redis. */ public static final ErrorReply FORMAT = new ErrorReply("syntax error");`, whereas the plan's Revision-2 provenance table (plan :481) records this row as "Redis verbatim text (server.c:1846-1847) but deliberate simplification for mixed arity+bad-value sites — NOT a strict Redis alignment" (R1-N10).
+**Impact:** documentation only; the text is byte-identical to Redis' `syntax error`, so the wording is defensible, but the javadoc drops the "not a strict alignment" qualifier that the plan attached to this constant (the other retexted constants are unconditional Redis texts, so the qualifier only matters here).
+**Required:** none for correctness; optionally append "(the usage is a deliberate simplification for mixed arity sites)" to the javadoc.
+
+#### S4-N3: The per-task JaCoCo numbers and the baseline reproduction of the 5 regressions are historical claims that Stage 4 could not re-verify
+**Severity:** Info
+**Evidence:** plan :537-539 claims "ErrorReply lines 14-180 48/48 covered", "SGroup 570-600 (:597 all 6 branches)", "HGroup 640-670 21/21 covered" and "602 tests completed, 5 failed … reproduce identically on baseline main commit 8e811e5c". The current JaCoCo report was regenerated by my single-class run and therefore reflects only `RESPReplyTest` (SGroup/HGroup show as uncovered), and the full suite was out of scope for this review.
+**Impact:** the claims are internally consistent and supported indirectly (the 5 failing methods assert no changed text, see §4), but they are not independently reproducible from the artefacts left in the tree.
+**Required:** none; if a future round needs the numbers, re-run each task's suite and re-check the windows with `scripts/jacoco_cover.py`.
+
+#### S4-N4: The plan body still carries the pre-Revision-2 key-limit text
+**Severity:** Info
+**Evidence:** the body mapping table (plan :69) lists `ACL_PERMIT_KEY_LIMIT → NOPERM this user has no permissions to access the key`, while Revision 2 (plan :473) overrides it with `NOPERM No permissions to access a key`. The implemented constant (`ErrorReply.java:60-61`) follows Revision 2 — correct — but the body row was never corrected in place, unlike the body edits listed under Round 3 (plan :508-518).
+**Impact:** none for the code; a reader consulting the body table instead of the revisions gets the superseded text.
+**Required:** optionally correct plan :69 to the Revision-2 text for future readers.
+
+### 6. Verdict
+
+All four commits match what the plan promised (Revisions 1+2 authoritative): task boundaries respected, no scope creep, no missing piece, no forward reference, and every planned wire text and constant change present verbatim. The only open items are cosmetic/documentation (S4-N1 stale test label, S4-N2 javadoc qualifier, S4-N4 body row) and two historical numbers that Stage 4 could not re-derive (S4-N3).
+
+executed with concerns: S4-N1 (stale `NOT_STRING` label in `SGroupTest.groovy:784` — follow-up one-liner), S4-N2/S4-N4 (doc wording only), S4-N3 (per-task JaCoCo/baseline numbers not re-verifiable in Stage 4)
