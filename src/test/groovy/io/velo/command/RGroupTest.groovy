@@ -535,12 +535,51 @@ class RGroupTest extends Specification {
         then:
         reply == ErrorReply.SYNTAX
 
+        when: 'bug 85.6: a non numeric ttl is rejected'
+        reply = rGroup.execute('restore ttl_not_int abc bbb') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
+
+        when: 'bug 85.6: a non numeric idletime is rejected'
+        reply = rGroup.execute('restore ttl_not_int 0 bbb replace idletime abc') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
+
+        when: 'bug 85.6: a non numeric freq is rejected'
+        reply = rGroup.execute('restore ttl_not_int 0 bbb replace freq abc') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
+
+        when: 'bug 85.6: the busy key check comes before the ttl parse'
+        inMemoryGetSet.remove(slot, 'busy_ttl')
+        inMemoryGetSet.put(slot, 'busy_ttl', 0, Mock.prepareCompressedValueList(1)[0])
+        reply = rGroup.execute('restore busy_ttl abc bbb') { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == ErrorReply.TARGET_KEY_BUSY
+
         when: 'bug 85.5: a too long key is rejected'
         reply = rGroup.execute('restore >key 0 bbb') { data ->
             data[3] = RDBParser.dumpString('values'.bytes)
         }
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'bug 85.6: an absolute ttl is used as it is'
+        def absttlAt = System.currentTimeMillis() + 100000
+        reply = rGroup.execute("restore absttl_key ${absttlAt} bbb absttl") { data ->
+            data[3] = RDBParser.dumpString('values'.bytes)
+        }
+        then:
+        reply == OKReply.INSTANCE
+        rGroup.getExpireAt(rGroup.slotWithKeyHashListParsed.getFirst()) == absttlAt
 
         when: 'bug 85.4: a restored list keeps the ttl'
         reply = rGroup.execute('restore list_ttl 100000 bbb') { data ->

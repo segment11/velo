@@ -418,7 +418,11 @@ public class RGroup extends BaseCommand {
                     if (data.length <= i + 1) {
                         return ErrorReply.SYNTAX;
                     }
-                    idleTime = Integer.parseInt(new String(data[i + 1]));
+                    try {
+                        idleTime = Integer.parseInt(new String(data[i + 1]));
+                    } catch (NumberFormatException e) {
+                        return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+                    }
                     if (idleTime < 0) {
                         return new ErrorReply("idletime can't be negative");
                     }
@@ -426,11 +430,25 @@ public class RGroup extends BaseCommand {
                     if (data.length <= i + 1) {
                         return ErrorReply.SYNTAX;
                     }
-                    freq = Integer.parseInt(new String(data[i + 1]));
+                    try {
+                        freq = Integer.parseInt(new String(data[i + 1]));
+                    } catch (NumberFormatException e) {
+                        return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+                    }
                     if (freq < 0 || freq > 255) {
                         return new ErrorReply("freq must be in range 0..255");
                     }
                 }
+            }
+        }
+
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        // check if key exists, redis checks the busy key before the ttl
+//        replace = true;
+        if (!replace) {
+            var cv = getCv(slotWithKeyHash);
+            if (cv != null) {
+                return ErrorReply.TARGET_KEY_BUSY;
             }
         }
 
@@ -439,20 +457,16 @@ public class RGroup extends BaseCommand {
             // -1 means no expire, different from redis, important!!!
             expireAt = CompressedValue.NO_EXPIRE;
         } else {
-            if (absttl) {
-                expireAt = Long.parseLong(ttl);
-            } else {
-                expireAt = System.currentTimeMillis() + Long.parseLong(ttl);
+            long ttlValue;
+            try {
+                ttlValue = Long.parseLong(ttl);
+            } catch (NumberFormatException e) {
+                return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
             }
-        }
-
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        // check if key exists
-//        replace = true;
-        if (!replace) {
-            var cv = getCv(slotWithKeyHash);
-            if (cv != null) {
-                return ErrorReply.TARGET_KEY_BUSY;
+            if (absttl) {
+                expireAt = ttlValue;
+            } else {
+                expireAt = System.currentTimeMillis() + ttlValue;
             }
         }
 
