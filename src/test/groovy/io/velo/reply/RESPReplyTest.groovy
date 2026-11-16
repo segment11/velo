@@ -63,6 +63,24 @@ class RESPReplyTest extends Specification {
         new ErrorReply('error').bufferAsHttp().asArray() == "error".bytes
         new ErrorReply('error').toString().contains('error')
 
+        // redis aligned raw error code replies, texts refer to redis 7.2.14 source
+        ErrorReply.WRONG_TYPE.message == 'WRONGTYPE Operation against a key holding the wrong kind of value'
+        ErrorReply.WRONG_TYPE.buffer().asArray() == '-WRONGTYPE Operation against a key holding the wrong kind of value\r\n'.bytes
+        ErrorReply.AUTH_FAILED.message == 'WRONGPASS invalid username-password pair or user is disabled.'
+        ErrorReply.AUTH_FAILED.buffer().asArray() == '-WRONGPASS invalid username-password pair or user is disabled.\r\n'.bytes
+        ErrorReply.NO_AUTH.message == 'NOAUTH Authentication required.'
+        ErrorReply.NO_AUTH.buffer().asArray() == '-NOAUTH Authentication required.\r\n'.bytes
+        ErrorReply.ACL_PERMIT_LIMIT.message == 'NOPERM this user has no permissions to run the command'
+        ErrorReply.ACL_PERMIT_LIMIT.buffer().asArray() == '-NOPERM this user has no permissions to run the command\r\n'.bytes
+        ErrorReply.ACL_PERMIT_KEY_LIMIT.message == 'NOPERM No permissions to access a key'
+        ErrorReply.ACL_PERMIT_KEY_LIMIT.buffer().asArray() == '-NOPERM No permissions to access a key\r\n'.bytes
+        ErrorReply.CLUSTER_SLOT_CROSS_SHARDS.message == "CROSSSLOT Keys in request don't hash to the same slot"
+        ErrorReply.CLUSTER_SLOT_CROSS_SHARDS.buffer().asArray() == "-CROSSSLOT Keys in request don't hash to the same slot\r\n".bytes
+        ErrorReply.CLUSTER_SLOT_NOT_SET.message == 'CLUSTERDOWN Hash slot not served'
+        ErrorReply.CLUSTER_SLOT_NOT_SET.buffer().asArray() == '-CLUSTERDOWN Hash slot not served\r\n'.bytes
+        ErrorReply.ACL_SETUSER_RULE_INVALID.message == 'Error in ACL SETUSER modifier'
+        ErrorReply.ACL_SETUSER_RULE_INVALID.buffer().asArray() == '-ERR Error in ACL SETUSER modifier\r\n'.bytes
+
         BulkReply.numToBytes(100, true) == "100\r\n".bytes
         BulkReply.numToBytes(257, true) == "257\r\n".bytes
         BulkReply.numToBytes(-1, true) == "-1\r\n".bytes

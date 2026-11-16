@@ -225,7 +225,7 @@ class MultiWorkerServerTest extends Specification {
         }.result
 
         then:
-        responseText == '-ERR user acl permit limit !NOPERM!\r\n'
+        responseText == '-NOPERM this user has no permissions to run the command\r\n'
         !shutdownLatch.await(100, TimeUnit.MILLISECONDS)
 
         cleanup:
@@ -396,8 +396,8 @@ class MultiWorkerServerTest extends Specification {
         }.result
 
         then:
-        pingResponseText == '-ERR no auth\r\n'
-        echoResponseText == '-ERR no auth\r\n'
+        pingResponseText == '-NOAUTH Authentication required.\r\n'
+        echoResponseText == '-NOAUTH Authentication required.\r\n'
         quitResponseText == '+OK\r\n'
         quitSocket.isClosed()
 
@@ -476,7 +476,7 @@ class MultiWorkerServerTest extends Specification {
         }.result
 
         then:
-        responseText == '+OK\r\n-ERR user acl permit limit !NOPERM!\r\n'
+        responseText == '+OK\r\n-NOPERM this user has no permissions to run the command\r\n'
 
         cleanup:
         ConfForGlobal.PASSWORD = oldPassword

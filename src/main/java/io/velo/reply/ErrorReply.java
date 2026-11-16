@@ -45,20 +45,23 @@ public class ErrorReply implements Reply {
     /** Error reply for server stopped. */
     public static final ErrorReply SERVER_STOPPED = new ErrorReply("server stopped");
 
-    /** Error reply for authentication failure. */
-    public static final ErrorReply AUTH_FAILED = new ErrorReply("auth failed !WRONGPASS!");
+    /** Error reply for authentication failure, the reply is WRONGPASS prefixed. */
+    public static final ErrorReply AUTH_FAILED = new ErrorReply(
+            "WRONGPASS invalid username-password pair or user is disabled.", true);
 
-    /** Error reply for missing authentication. */
-    public static final ErrorReply NO_AUTH = new ErrorReply("no auth");
+    /** Error reply for missing authentication, the reply is NOAUTH prefixed. */
+    public static final ErrorReply NO_AUTH = new ErrorReply("NOAUTH Authentication required.", true);
 
-    /** Error reply for ACL permit limit reached. */
-    public static final ErrorReply ACL_PERMIT_LIMIT = new ErrorReply("user acl permit limit !NOPERM!");
+    /** Error reply for ACL permit limit reached, the reply is NOPERM prefixed. */
+    public static final ErrorReply ACL_PERMIT_LIMIT = new ErrorReply(
+            "NOPERM this user has no permissions to run the command", true);
 
-    /** Error reply for ACL permit limit reached for a key. */
-    public static final ErrorReply ACL_PERMIT_KEY_LIMIT = new ErrorReply("user acl permit limit !NOPERM! !key!");
+    /** Error reply for ACL permit limit reached for a key, the reply is NOPERM prefixed. */
+    public static final ErrorReply ACL_PERMIT_KEY_LIMIT = new ErrorReply(
+            "NOPERM No permissions to access a key", true);
 
     /** Error reply for invalid ACL SETUSER modifier. */
-    public static final ErrorReply ACL_SETUSER_RULE_INVALID = new ErrorReply("!Error in ACL SETUSER modifier!");
+    public static final ErrorReply ACL_SETUSER_RULE_INVALID = new ErrorReply("Error in ACL SETUSER modifier");
 
     /** Error reply for bloom filter already exists. */
     public static final ErrorReply BF_ALREADY_EXISTS = new ErrorReply("bloom filter already exists");
@@ -96,8 +99,9 @@ public class ErrorReply implements Reply {
     /** Error reply for key does not exist. */
     public static final ErrorReply NO_SUCH_KEY = new ErrorReply("no such key");
 
-    /** Error reply for wrong type. */
-    public static final ErrorReply WRONG_TYPE = new ErrorReply("wrong type");
+    /** Error reply for wrong type, the reply is WRONGTYPE prefixed, the text is aligned with redis. */
+    public static final ErrorReply WRONG_TYPE = new ErrorReply(
+            "WRONGTYPE Operation against a key holding the wrong kind of value", true);
 
     /** Error reply for a wrong type operation on a HyperLogLog key, the text is aligned with redis. */
     public static final ErrorReply WRONG_TYPE_HLL = new ErrorReply(
@@ -151,11 +155,13 @@ public class ErrorReply implements Reply {
     /** Error reply for a debug sub command that is not supported. */
     public static final ErrorReply DEBUG_SUB_COMMAND_NOT_SUPPORT = new ErrorReply("debug subcommand not support");
 
-    /** Error reply for cluster slot crossing shards. */
-    public static final ErrorReply CLUSTER_SLOT_CROSS_SHARDS = new ErrorReply("cluster slot cross shards");
+    /** Error reply for cluster slot crossing shards, the reply is CROSSSLOT prefixed, the text is aligned with redis. */
+    public static final ErrorReply CLUSTER_SLOT_CROSS_SHARDS = new ErrorReply(
+            "CROSSSLOT Keys in request don't hash to the same slot", true);
 
-    /** Error reply for cluster slot not set. */
-    public static final ErrorReply CLUSTER_SLOT_NOT_SET = new ErrorReply("cluster slot not set");
+    /** Error reply for cluster slot not set, the reply is CLUSTERDOWN prefixed, the text is aligned with redis. */
+    public static final ErrorReply CLUSTER_SLOT_NOT_SET = new ErrorReply(
+            "CLUSTERDOWN Hash slot not served", true);
 
     /** Error reply for file does not exist. */
     public static final ErrorReply NO_SUCH_FILE = new ErrorReply("no such file");
