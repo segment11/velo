@@ -84,11 +84,6 @@ public class WGroup extends BaseCommand {
             return new ErrorReply("timeout is negative");
         }
 
-        final int maxTimeoutMillis = 1000 * 60;
-        if (timeoutMillis > maxTimeoutMillis) {
-            return new ErrorReply("timeout should <= " + maxTimeoutMillis);
-        }
-
         var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
         var lastSetSeq = veloUserData.getLastSetSeq();
         if (lastSetSeq == 0L) {

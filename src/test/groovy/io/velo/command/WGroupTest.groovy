@@ -170,10 +170,16 @@ class WGroupTest extends Specification {
         }
 
         when:
-        // over max timeout millis
+        // redis has no timeout cap
+        reply = wGroup.execute('wait 0 60001')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2L
+
+        when:
         reply = wGroup.execute('wait 1 60001')
         then:
-        reply instanceof ErrorReply
+        !(reply instanceof ErrorReply)
 
         when:
         reply = wGroup.execute('wait a 0')
