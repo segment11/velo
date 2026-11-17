@@ -1,0 +1,81 @@
+=== bug 88 agent 2 verification log ===
+date: 2026-11-17 12:45:00 UTC (2026-11-17 20:45 +0800)
+repo: /home/kerry/ws/velo   branch: review/tgroup   HEAD: 569ea2c021328bd143bb4d1bcbb719c1c31b44c8
+redis live: 7.2.11 on port 7777 (SETEX/TTL/PTTL/TIME/TYPE/HASH differential)
+upstream source: ~/ws/redis @ src/expire.c, src/db.c, src/server.c, src/commands/time.json
+velo live: build/libs/velo-1.0.0.jar, HH mode on :41100, split mode (persist.isHashSaveMemberTogether=false) on :41101
+
+--- temp specs (deleted after reproduction, source kept in /tmp/opencode) ---
+/tmp/opencode/Bug88ReviewTempSpec.groovy
+(5 test methods, one per finding; InMemoryGetSet bypass + BaseCommand.mockAGroup(),
+ same harness as src/test/groovy/io/velo/command/TGroupTest.groovy)
+
+--- Spock temp spec stdout (./gradlew :test --tests "io.velo.command.Bug88ReviewTempSpec") ---
+88.1 fresh SETEX 100s: velo TTL=99  redis-formula=100  velo PTTL=99959
+88.1 99600ms left: velo TTL=99  redis-formula=100
+88.1 2500ms left: velo TTL=2  redis-formula=2 (exact 2500 -> 3)
+88.2 split hash: TYPE=io.velo.reply.BulkReply@becb93a  TTL=-2
+88.4 'time x' returned: io.velo.reply.MultiBulkReply@4fb99927 (MultiBulkReply)
+88.5 expired cv injected: TTL=-2 (the storage layer filtered it, no negative value)
+88.5 java arithmetic: (-600+500)/1000 = 0, (-400+500)/1000 = 0, (-600)/1000 = 0
+88.3 test failed with NPE "Cannot load from object array because this.oneSlots is null"
+    at io.velo.persist.LocalPersist.oneSlot(LocalPersist.java:108)
+    at io.velo.BaseCommand.getCv(BaseCommand.java:782)
+    at io.velo.command.TGroup.type(TGroup.java:135)      <-- proves TYPE enters the big-string branch of getCv()
+
+--- live velo :41100 (HH mode) vs redis :7777 ---
+$ redis-cli -p 41100 setex sk 100 v   -> OK
+$ redis-cli -p 41100 ttl sk           -> 99        [redis: 100]
+$ redis-cli -p 41100 pttl sk          -> 99994     [redis: 99998]
+$ redis-cli -p 41100 expire sk 100    -> 1
+$ redis-cli -p 41100 ttl sk           -> 99        [redis: 100]
+$ redis-cli -p 41100 time x           -> 1794919142 / 953831  [redis: ERR wrong number of arguments for 'time' command]
+
+--- live velo :41101 (split mode) vs redis :7777 ---
+$ redis-cli -p 41101 hset h f v       -> 1
+$ redis-cli -p 41101 type h           -> hash      [redis: hash]
+$ redis-cli -p 41101 ttl h            -> -2        [redis: -1]
+$ redis-cli -p 41101 pttl h           -> -2        [redis: -1]
+$ redis-cli -p 41101 exists h         -> 0         [redis: 1]
+$ redis-cli -p 41101 expire h 100     -> 0         [redis: 1]
+$ redis-cli -p 41101 hget h f         -> v         [redis: v]
+
+--- live velo :41100 (DEFAULT HH deployment), key with the split prefix ---
+$ redis-cli -p 41100 hset h_not_hh_k f v -> 1
+$ redis-cli -p 41100 type h_not_hh_k     -> hash     [redis: hash]
+$ redis-cli -p 41100 ttl h_not_hh_k      -> -2       [redis: -1]
+$ redis-cli -p 41100 pttl h_not_hh_k     -> -2       [redis: -1]
+$ redis-cli -p 41100 exists h_not_hh_k   -> 0        [redis: 1]
+
+--- live big string TYPE latency (1MB value, :41100, python raw socket) ---
+SET bigY <1MB>                 -> OK
+TYPE #0: 0.677 ms  (cold: whole big string file read + LRU insert)
+TYPE #1: 0.110 ms  (warm)
+TYPE #2: 0.046 ms
+TYPE #3: 0.033 ms
+TYPE #4: 0.031 ms
+redis-benchmark -n 200 -c 1 type big   -> avg 0.068 ms
+redis-benchmark -n 200 -c 1 type small -> avg 0.062 ms
+redis-benchmark -n 200 -c 1 strlen big -> avg 0.052 ms
+
+--- upstream source citations ---
+~/ws/redis/src/expire.c:688-710  ttlGenericCommand(): `if (ttl < 0) ttl = 0;` and
+                                          `addReplyLongLong(c,output_ms ? ttl : ((ttl+500)/1000));`
+~/ws/redis/src/server.c:3798-3799  processCommand(): generic arity check (arity>0 && arity!=argc)
+~/ws/redis/src/server.c:4547-4551  timeCommand(): [unixtime, ustime-unixtime*1e6]
+~/ws/redis/src/commands/time.json   "arity": 1
+~/ws/redis/src/db.c:1176-1180       typeCommand(): lookupKeyReadWithFlags + getObjectTypeName (O(1))
+
+--- velo source citations ---
+src/main/java/io/velo/command/TGroup.java:185-186  ttl(): plain division, no clamp, no rounding
+src/main/java/io/velo/command/TGroup.java:101-109  time branch: no data.length check
+src/main/java/io/velo/command/TGroup.java:133-135  type(): getCv() ("need not decompress at all, todo: optimize")
+src/main/java/io/velo/command/TGroup.java:176-183  ttl(): no split-hash keysKey fallback
+src/main/java/io/velo/BaseCommand.java:781-795     getCv(): big string -> getBigStringBytes(..., true) full read
+src/main/java/io/velo/persist/KeyLoader.java:409-425 transferToShortType(): geo -> typeAsByteString
+src/main/java/io/velo/persist/OneSlot.java:1615-1652 getExpireAt(): filters expired in WAL/LRU/keyLoader paths
+src/main/java/io/velo/persist/Wal.java:71-73        V.isExpired()
+src/main/java/io/velo/persist/KeyBucket.java:702    getExpireAtAndSeqByKey(): expired -> null
+src/main/java/io/velo/type/RedisHH.java:21          PREFER_MEMBER_NOT_TOGETHER_KEY_PREFIX = "h_not_hh_"
+src/main/java/io/velo/command/HGroup.java:554-564   isUseHH(): split mode selection
+src/main/java/io/velo/command/EGroup.java:300-310   expire(): split hash -> getCv null -> reply 0
