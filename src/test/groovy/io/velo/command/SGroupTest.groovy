@@ -876,6 +876,26 @@ sunionstore
         reply = sGroup.execute('setbit >key 0 10')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        // bug 86.4: a non-string key must answer WRONGTYPE instead of being rewritten as a corrupted string
+        def cvWrongTypeSetbit = Mock.prepareCompressedValueList(1)[0]
+        cvWrongTypeSetbit.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkWrongTypeSetbit = new RedisHashKeys()
+        rhkWrongTypeSetbit.add('m1')
+        cvWrongTypeSetbit.compressedData = rhkWrongTypeSetbit.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvWrongTypeSetbit)
+        sGroup.execute('setbit a 0 1')
+        then:
+        def e2 = thrown(TypeMismatchException)
+        e2.message.contains('Expect type string')
+
+        when:
+        // the wrong-type key must be untouched
+        def cvAfterSetbit = inMemoryGetSet.getBuf(slot, 'a', 0, 0).cv()
+        then:
+        cvAfterSetbit.dictSeqOrSpType == CompressedValue.SP_TYPE_SET
+        RedisHashKeys.decode(cvAfterSetbit.compressedData).contains('m1')
     }
 
     def 'test setex'() {
@@ -989,6 +1009,27 @@ sunionstore
         reply = sGroup.execute('setrange a 1 >value')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
+
+        when:
+        // bug 86.4: a non-string key must answer WRONGTYPE instead of being rewritten as a corrupted string
+        def cvWrongType = Mock.prepareCompressedValueList(1)[0]
+        cvWrongType.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkWrongType = new RedisHashKeys()
+        rhkWrongType.add('m1')
+        cvWrongType.compressedData = rhkWrongType.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvWrongType)
+        sGroup.execute('setrange a 1 value')
+        then:
+        def e1 = thrown(TypeMismatchException)
+        e1.message.contains('Expect type string')
+
+        when:
+        // the wrong-type key must be untouched
+        def cvAfterSetrange = inMemoryGetSet.getBuf(slot, 'a', slotWithKeyHash.bucketIndex(), slotWithKeyHash.keyHash())
+                .cv()
+        then:
+        cvAfterSetrange.dictSeqOrSpType == CompressedValue.SP_TYPE_SET
+        RedisHashKeys.decode(cvAfterSetrange.compressedData).contains('m1')
     }
 
     def 'test strlen'() {

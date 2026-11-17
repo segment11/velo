@@ -1025,7 +1025,11 @@ public class SGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var valueBytes = get(slotWithKeyHash);
+        // expect type string so a collection key answers WRONGTYPE instead of being
+        // rewritten as a corrupted string; number/short/big-string values all pass,
+        // HLL and bloom CVs are rejected too — an accepted deviation, in redis an HLL
+        // is a string but flipping bits inside it corrupts the structure anyway
+        var valueBytes = get(slotWithKeyHash, true);
         var bs = new RedisBitSet(valueBytes);
         var result = bs.set(offset, isBit1);
 
@@ -1068,7 +1072,9 @@ public class SGroup extends BaseCommand {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
         int lengthResult;
-        var valueBytesExist = get(slotWithKeyHash);
+        // expect type string so a collection key answers WRONGTYPE instead of being
+        // rewritten as a corrupted string, see setbit for the HLL/bloom deviation note
+        var valueBytesExist = get(slotWithKeyHash, true);
         int len = offset + valueBytes.length;
         if (valueBytesExist == null) {
             lengthResult = len;
