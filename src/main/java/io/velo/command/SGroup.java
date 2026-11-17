@@ -2040,15 +2040,16 @@ public class SGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
-        saveRedisSet(srcRhk, srcSlotWithKeyHash);
-
         if (!isCrossRequestWorker) {
+            // validate the destination type before persisting the source removal,
+            // a wrong-type dst must not destroy the moved member
             var dstRhk = getRedisSet(dstSlotWithKeyHash);
             if (dstRhk == null) {
                 dstRhk = new RedisHashKeys();
             }
             dstRhk.add(member);
 
+            saveRedisSet(srcRhk, srcSlotWithKeyHash);
             saveRedisSet(dstRhk, dstSlotWithKeyHash);
             return IntegerReply.REPLY_1;
         }
@@ -2059,8 +2060,11 @@ public class SGroup extends BaseCommand {
         var asyncReply = new AsyncReply(finalPromise);
 
         // handle() runs on the src slot worker (src is the first key), so the dst set
-        // read+write must be dispatched to the dst slot eventloop to stay on the owning thread
-        dstOneSlot.asyncExecute(() -> {
+        // read+write must be dispatched to the dst slot eventloop to stay on the owning thread;
+        // the dst read+write runs inside asyncCall so a dst failure (wrong type / missing dict)
+        // settles the reply with an error instead of hanging, and the src removal is persisted
+        // only after the dst write succeeded
+        dstOneSlot.asyncCall(() -> {
             var dstRhk = getRedisSet(dstSlotWithKeyHash);
             if (dstRhk == null) {
                 dstRhk = new RedisHashKeys();
@@ -2068,6 +2072,16 @@ public class SGroup extends BaseCommand {
             dstRhk.add(member);
 
             saveRedisSet(dstRhk, dstSlotWithKeyHash);
+            return dstRhk;
+        }).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("smove dst error={}", e.getMessage());
+                finalPromise.setException(Utils.wrapException("smove", e));
+                return;
+            }
+
+            // on the reactor path this callback is bounced back to the src slot worker
+            saveRedisSet(srcRhk, srcSlotWithKeyHash);
             finalPromise.set(IntegerReply.REPLY_1);
         });
 

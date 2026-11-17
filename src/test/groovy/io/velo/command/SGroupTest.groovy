@@ -2117,6 +2117,32 @@ sunionstore
         reply == IntegerReply.REPLY_1
 
         when:
+        // bug 86.2: dst holds a string-typed value, redis answers WRONGTYPE and the member must stay in src
+        def rhkSrcOnly1 = new RedisHashKeys()
+        rhkSrcOnly1.add('1')
+        cvA.compressedData = rhkSrcOnly1.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+        def cvString = cvList[1]
+        cvString.compressedData = 'x'.bytes
+        inMemoryGetSet.put(slot, 'b', 0, cvString)
+        boolean wrongTypeThrown = false
+        try {
+            sGroup.execute('smove a b 1')
+        } catch (TypeMismatchException e) {
+            wrongTypeThrown = true
+        }
+        then:
+        wrongTypeThrown
+
+        when:
+        // the failed move must not have persisted the source removal
+        def replySmembers = sGroup.execute('smembers a')
+        then:
+        replySmembers instanceof MultiBulkReply
+        (replySmembers as MultiBulkReply).replies.length == 1
+        ((replySmembers as MultiBulkReply).replies[0] as BulkReply).asString() == '1'
+
+        when:
         def eventloop = Eventloop.builder()
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
@@ -2154,6 +2180,28 @@ sunionstore
         (reply as AsyncReply).settablePromise.whenResult { result ->
             result == IntegerReply.REPLY_1
         }.result
+
+        when:
+        // bug 86.3: cross worker dst holds a wrong-type value, the reply promise must settle
+        // with an error instead of hanging and the member must stay in src
+        def rhkSrcOnly1Again = new RedisHashKeys()
+        rhkSrcOnly1Again.add('1')
+        cvA.compressedData = rhkSrcOnly1Again.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvA)
+        inMemoryGetSet.put(slot, 'b', 0, cvString)
+        reply = sGroup.execute('smove a b 1')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.isComplete()
+        (reply as AsyncReply).settablePromise.getException() != null
+
+        when:
+        def replySmembers2 = sGroup.execute('smembers a')
+        then:
+        replySmembers2 instanceof MultiBulkReply
+        (replySmembers2 as MultiBulkReply).replies.length == 1
+        ((replySmembers2 as MultiBulkReply).replies[0] as BulkReply).asString() == '1'
 
         when:
         reply = sGroup.execute('smove a b >key')
