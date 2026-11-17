@@ -925,6 +925,12 @@ public class SGroup extends BaseCommand {
             return ErrorReply.SYNTAX;
         }
 
+        if (isKeepTtl && isExpireAtSet) {
+            // redis replies syntax error when KEEPTTL and an expire option are both given,
+            // in either order; isExpireAtSet stays true once any expire option was parsed
+            return ErrorReply.SYNTAX;
+        }
+
         long expireAt = NO_EXPIRE;
         if (isExpireAtSet) {
             if (ex != -1) {

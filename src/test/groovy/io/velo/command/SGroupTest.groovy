@@ -633,6 +633,19 @@ sunionstore
         reply == OKReply.INSTANCE
 
         when:
+        // bug 86.11: keepttl with an expire option is a syntax error in redis, in either order
+        inMemoryGetSet.remove(slot, 'a')
+        sGroup.execute('set a v ex 100')
+        reply = sGroup.execute('set a v2 ex 50 keepttl')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        reply = sGroup.execute('set a v2 keepttl px 5000')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
         inMemoryGetSet.remove(slot, 'a')
         reply = sGroup.execute('set a value get')
         then:
