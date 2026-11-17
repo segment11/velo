@@ -2129,6 +2129,13 @@ sunionstore
         (reply as MultiBulkReply).replies.length == 9
 
         when:
+        // bug 86.6: GET patterns must not be silently ignored
+        reply = sGroup.execute('sort a get obj_*')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains('not support')
+
+        when:
         reply = sGroup.execute('sort a limit 1 5 alpha')
         then:
         reply instanceof MultiBulkReply

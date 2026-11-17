@@ -1833,6 +1833,12 @@ public class SGroup extends BaseCommand {
             return new ErrorReply("sort by pattern not support yet");
         }
 
+        if (!getPatternList.isEmpty()) {
+            // returning the sorted elements while ignoring GET would be a silent wrong
+            // answer, answer an explicit not-support error instead
+            return new ErrorReply("sort get pattern not support yet");
+        }
+
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var cv = getCv(slotWithKeyHash);
         if (cv == null) {

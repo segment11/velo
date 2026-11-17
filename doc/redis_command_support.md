@@ -103,8 +103,8 @@
 - [√] RENAMENX
 - [x] RESTORE
 - [√] SCAN
-- [√] SORT
-- [√] SORT_RO
+- [√] SORT (BY / GET pattern not supported yet)
+- [√] SORT_RO (BY / GET pattern not supported yet)
 - [√] TOUCH
 - [√] TTL
 - [√] TYPE
