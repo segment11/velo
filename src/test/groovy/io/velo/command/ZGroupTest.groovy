@@ -2521,44 +2521,59 @@ zunionstore
 
         when:
         inMemoryGetSet.remove(slot, 'a')
-        def reply = zGroup.execute('zrank a member0 withscore_')
+        def reply = zGroup.execute('zrank a member0')
         then:
         reply == NilReply.INSTANCE
 
         when:
+        // a missing member answers a null array when the score is requested too
         reply = zGroup.execute('zrank a member0 withscore')
         then:
-        reply == MultiBulkReply.EMPTY
+        reply == MultiBulkReply.NULL
+
+        when:
+        // an unknown 4th argument is a syntax error
+        reply = zGroup.execute('zrank a member0 withscore_')
+        then:
+        reply == ErrorReply.SYNTAX
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
-        def rz = new RedisZSet()
+        var rz = new RedisZSet()
         cv.compressedData = rz.encode()
         inMemoryGetSet.put('a', cv)
-        reply = zGroup.execute('zrank a member0 withscore_')
+        reply = zGroup.execute('zrank a member0')
         then:
         reply == NilReply.INSTANCE
 
         when:
         reply = zGroup.execute('zrank a member0 withscore')
         then:
-        reply == MultiBulkReply.EMPTY
+        reply == MultiBulkReply.NULL
 
         when:
         rz.add(0.1, 'member0')
+        rz.add(0.2, 'withscore')
         cv.compressedData = rz.encode()
         inMemoryGetSet.put('a', cv)
-        reply = zGroup.execute('zrank a member0 withscore_')
+        reply = zGroup.execute('zrank a member0')
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 0
 
         when:
-        reply = zGroup.execute('zrevrank a member0 withscore_')
+        reply = zGroup.execute('zrevrank a member0')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        (reply as IntegerReply).integer == 1
+
+        when:
+        // a member named "withscore" is a plain member, the option is positional
+        reply = zGroup.execute('zrank a withscore')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
 
         when:
         reply = zGroup.execute('zrank a member0 withscore')
@@ -2571,14 +2586,14 @@ zunionstore
         ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '0.1'
 
         when:
-        reply = zGroup.execute('zrank a member1 withscore_')
+        reply = zGroup.execute('zrank a member1')
         then:
         reply == NilReply.INSTANCE
 
         when:
         reply = zGroup.execute('zrank a member1 withscore')
         then:
-        reply == MultiBulkReply.EMPTY
+        reply == MultiBulkReply.NULL
 
         when:
         reply = zGroup.execute('zrank a >key withscore')

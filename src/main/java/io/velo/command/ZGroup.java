@@ -2211,22 +2211,29 @@ public class ZGroup extends BaseCommand {
             return ErrorReply.KEY_TOO_LONG;
         }
 
+        // The WITHSCORE option is positional, the member is always the third argument.
+        boolean withScore = false;
+        if (data.length == 4) {
+            if (!"withscore".equalsIgnoreCase(new String(data[3]))) {
+                return ErrorReply.SYNTAX;
+            }
+            withScore = true;
+        }
+
         var memberBytes = data[2];
         if (memberBytes.length > RedisZSet.ZSET_MEMBER_MAX_LENGTH) {
             return ErrorReply.ZSET_MEMBER_LENGTH_TO_LONG;
         }
 
-        boolean withScore = "withscore".equalsIgnoreCase(new String(data[data.length - 1]));
-
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rz = getRedisZSet(slotWithKeyHash);
         if (rz == null || rz.isEmpty()) {
-            return withScore ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
+            return withScore ? MultiBulkReply.NULL : NilReply.INSTANCE;
         }
 
         var sv = rz.get(new String(memberBytes));
         if (sv == null) {
-            return withScore ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
+            return withScore ? MultiBulkReply.NULL : NilReply.INSTANCE;
         }
 
         int rank = sv.getInitRank();
