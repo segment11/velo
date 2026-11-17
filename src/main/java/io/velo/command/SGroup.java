@@ -934,13 +934,26 @@ public class SGroup extends BaseCommand {
         long expireAt = NO_EXPIRE;
         if (isExpireAtSet) {
             if (ex != -1) {
+                // mirror the redis getExpireMillisecondsOrReply overflow checks: reject a
+                // seconds value whose *1000 overflows, then reject a wrapped negative result
+                if (ex > Long.MAX_VALUE / 1000) {
+                    return invalidExpireTime(cmd);
+                }
                 expireAt = System.currentTimeMillis() + ex * 1000;
             } else if (px != -1) {
                 expireAt = System.currentTimeMillis() + px;
             } else if (exAt != -1) {
+                if (exAt > Long.MAX_VALUE / 1000) {
+                    return invalidExpireTime(cmd);
+                }
                 expireAt = exAt * 1000;
             } else if (pxAt != -1) {
                 expireAt = pxAt;
+            }
+
+            if (expireAt <= 0) {
+                // overflow detected after adding the current time
+                return invalidExpireTime(cmd);
             }
         }
 

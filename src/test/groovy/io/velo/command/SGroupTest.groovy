@@ -646,6 +646,26 @@ sunionstore
         reply == ErrorReply.SYNTAX
 
         when:
+        // bug 86.12: expire overflow must be rejected, not stored as an already-expired key
+        inMemoryGetSet.remove(slot, 'a')
+        reply = sGroup.execute('set a v ex 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains("invalid expire time in 'set' command")
+
+        when:
+        reply = sGroup.execute('set a v px 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains("invalid expire time in 'set' command")
+
+        when:
+        reply = sGroup.execute('set a v exat 9223372036854775807')
+        then:
+        reply instanceof ErrorReply
+        (reply as ErrorReply).message.contains("invalid expire time in 'set' command")
+
+        when:
         inMemoryGetSet.remove(slot, 'a')
         reply = sGroup.execute('set a value get')
         then:
