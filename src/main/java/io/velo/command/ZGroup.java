@@ -371,7 +371,8 @@ public class ZGroup extends BaseCommand {
         }
 
         if ("zdiff".equals(cmd) || "zinter".equals(cmd) || "zintercard".equals(cmd) || "zunion".equals(cmd)) {
-            if (data.length < 4) {
+            // cmd + numkeys + one key
+            if (data.length < 3) {
                 return slotWithKeyHashList;
             }
 
@@ -384,7 +385,7 @@ public class ZGroup extends BaseCommand {
 //                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
             }
 
-            if (numKeys < 2) {
+            if (numKeys < 1) {
                 return slotWithKeyHashList;
 //                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
             }
@@ -403,7 +404,8 @@ public class ZGroup extends BaseCommand {
         }
 
         if ("zdiffstore".equals(cmd) || "zinterstore".equals(cmd) || "zunionstore".equals(cmd)) {
-            if (data.length < 5) {
+            // cmd + dst key + numkeys + one key
+            if (data.length < 4) {
                 return slotWithKeyHashList;
             }
 
@@ -421,7 +423,7 @@ public class ZGroup extends BaseCommand {
 //                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
             }
 
-            if (numKeys < 2) {
+            if (numKeys < 1) {
                 return slotWithKeyHashList;
 //                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
             }
@@ -1029,6 +1031,15 @@ public class ZGroup extends BaseCommand {
     private ErrorReply operateZset(RedisZSet rz, ArrayList<RedisZSet> otherRzList, boolean isInter, boolean isUnion,
                                    boolean isAggregateSum, boolean isAggregateMin, boolean isAggregateMax,
                                    boolean isWeights, double[] weights) {
+        // a single input key: the merge loops below never run, weight the first set itself
+        if (isWeights && otherRzList.isEmpty() && !rz.isEmpty()) {
+            var svs = new ArrayList<>(rz.getSet());
+            rz.clear();
+            for (var sv : svs) {
+                rz.add(weights[0] * sv.score(), sv.member());
+            }
+        }
+
         if (isInter) {
             var memberMap = rz.getMemberMap();
 
@@ -1180,23 +1191,24 @@ public class ZGroup extends BaseCommand {
 
     @VisibleForTesting
     Reply zdiffstore(boolean isInter, boolean isUnion) {
-        if (data.length < 5) {
+        // cmd + dst key + numkeys + one key
+        if (data.length < 4) {
             return ErrorReply.FORMAT;
         }
 
+        // dd = [cmd, numkeys, src keys..., remaining args...] — dst key excluded
         var dd = new byte[data.length - 1][];
         dd[0] = data[0];
         dd[1] = data[2];
-        dd[2] = data[3];
-        dd[3] = data[4];
-        System.arraycopy(data, 5, dd, 4, data.length - 5);
+        System.arraycopy(data, 3, dd, 2, data.length - 3);
 
         var dstKeyBytes = data[1];
         return zdiff(dd, isInter, isUnion, dstKeyBytes);
     }
 
     private Reply zdiff(byte[][] dd, boolean isInter, boolean isUnion, byte[] dstKeyBytes) {
-        if (dd.length < 4) {
+        // cmd + numkeys + one key
+        if (dd.length < 3) {
             return ErrorReply.FORMAT;
         }
 
@@ -1211,7 +1223,7 @@ public class ZGroup extends BaseCommand {
             return ErrorReply.INVALID_INTEGER;
         }
 
-        if (numKeys < 2) {
+        if (numKeys < 1) {
             return ErrorReply.INVALID_INTEGER;
         }
 
@@ -1462,7 +1474,8 @@ public class ZGroup extends BaseCommand {
     }
 
     private Reply zintercard() {
-        if (data.length < 4) {
+        // cmd + numkeys + one key
+        if (data.length < 3) {
             return ErrorReply.FORMAT;
         }
 
@@ -1474,7 +1487,7 @@ public class ZGroup extends BaseCommand {
             return ErrorReply.INVALID_INTEGER;
         }
 
-        if (numKeys < 2) {
+        if (numKeys < 1) {
             return ErrorReply.INVALID_INTEGER;
         }
 

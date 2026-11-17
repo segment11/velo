@@ -149,12 +149,21 @@ zunionstore
 
         when:
         data6[1] = '1'.bytes
-        sListList222 = multiKeyCmdList2.collect {
-            def ss = _ZGroup.parseSlots(it, data6, slotNumber)
-            ss.isEmpty() ? ErrorReply.SYNTAX : OKReply.INSTANCE
+        def sListList2222 = multiKeyCmdList2.collect {
+            _ZGroup.parseSlots(it, data6, slotNumber)
         }
         then:
-        sListList222.every { it == ErrorReply.SYNTAX }
+        // a single key is enough for routing, the extra args are rejected by the command body
+        sListList2222.every { it.size() == 1 }
+
+        when:
+        data6[1] = '0'.bytes
+        def sListListZero = multiKeyCmdList2.collect {
+            _ZGroup.parseSlots(it, data6, slotNumber)
+        }
+        then:
+        // zero keys is still an error
+        sListListZero.every { it.size() == 0 }
 
         when:
         def data5 = new byte[5][]
@@ -201,12 +210,21 @@ zunionstore
 
         when:
         data7[2] = '1'.bytes
-        sListList333 = multiKeyCmdList3.collect {
-            def ss = _ZGroup.parseSlots(it, data7, slotNumber)
-            ss.isEmpty() ? ErrorReply.SYNTAX : OKReply.INSTANCE
+        def sListList3333 = multiKeyCmdList3.collect {
+            _ZGroup.parseSlots(it, data7, slotNumber)
         }
         then:
-        sListList333.every { it == ErrorReply.SYNTAX }
+        // a single source key is enough for routing, the extra args are rejected by the command body
+        sListList3333.every { it.size() == 1 }
+
+        when:
+        data7[2] = '0'.bytes
+        def sListListZero2 = multiKeyCmdList3.collect {
+            _ZGroup.parseSlots(it, data7, slotNumber)
+        }
+        then:
+        // zero keys is still an error
+        sListListZero2.every { it.size() == 0 }
 
         when:
         // zrangestore
@@ -1213,7 +1231,8 @@ zunionstore
         data5[1] = '1'.bytes
         reply = zGroup.zdiff(false, false)
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        // numkeys=1 is valid, the trailing extra args are not withscores
+        reply == ErrorReply.SYNTAX
 
         when:
         data5[1] = '2'.bytes
@@ -1259,6 +1278,47 @@ zunionstore
         reply = zGroup.zdiff(true, false)
         then:
         reply == ErrorReply.INVALID_FLOAT
+
+        when:
+        // a single key is a valid number of keys for the set operations
+        def data1 = new byte[3][]
+        data1[1] = '1'.bytes
+        data1[2] = 'a'.bytes
+        zGroup.data = data1
+        zGroup.crossRequestWorker = false
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zdiff', data1, zGroup.slotNumber)
+        reply = zGroup.zdiff(false, false)
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 10
+
+        when:
+        // store form with a single source key, weights applied to the copy
+        def dataStore = new byte[6][]
+        dataStore[1] = 'dst2'.bytes
+        dataStore[2] = '1'.bytes
+        dataStore[3] = 'a'.bytes
+        dataStore[4] = 'weights'.bytes
+        dataStore[5] = '2'.bytes
+        zGroup.data = dataStore
+        zGroup.slotWithKeyHashListParsed = _ZGroup.parseSlots('zunionstore', dataStore, zGroup.slotNumber)
+        reply = zGroup.zdiffstore(false, true)
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 10
+
+        when:
+        def resultRz = fromMem(inMemoryGetSet, 'dst2')
+        then:
+        resultRz.getSet().collect { it.member() } == ['member0', 'member1', 'member2', 'member3', 'member4', 'member5', 'member6', 'member7', 'member8', 'member9']
+        resultRz.getSet().collect { it.score() } == [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0]
+
+        when:
+        // a single missing source key with weights replies 0
+        inMemoryGetSet.remove(slot, 'a')
+        reply = zGroup.zdiffstore(false, true)
+        then:
+        reply == IntegerReply.REPLY_0
 
         cleanup:
         eventloop.breakEventloop()
@@ -1484,9 +1544,16 @@ zunionstore
         reply == ErrorReply.INVALID_INTEGER
 
         when:
+        // a single key is a valid number of keys
+        reply = zGroup.execute('zintercard 1 a limit 0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 3
+
+        when:
         reply = zGroup.execute('zintercard 1 a b limit 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = zGroup.execute('zintercard a a b limit 0')
