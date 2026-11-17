@@ -2228,7 +2228,8 @@ sunionstore
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.execute('sort a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        // redis answers "One or more scores can't be converted into double"
+        reply == ErrorReply.SORT_SCORE_NOT_DOUBLE
 
         when:
         // a non-numeric list member is an error too
@@ -2239,7 +2240,8 @@ sunionstore
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.execute('sort a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        // redis answers "One or more scores can't be converted into double"
+        reply == ErrorReply.SORT_SCORE_NOT_DOUBLE
 
         when:
         // desc on a list sorts the doubles descending
@@ -2261,7 +2263,8 @@ sunionstore
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = sGroup.execute('sort a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        // redis answers "One or more scores can't be converted into double"
+        reply == ErrorReply.SORT_SCORE_NOT_DOUBLE
 
         when:
         // a numeric set with limit stops at count
@@ -2410,6 +2413,13 @@ sunionstore
 
         when:
         reply = sGroup.execute('sort >key')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        // bug 86.14: the STORE destination key length must be validated like every other
+        // multi-key write path in this class
+        reply = sGroup.execute('sort a store >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
 

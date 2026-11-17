@@ -62,6 +62,8 @@ class RESPReplyTest extends Specification {
         ErrorReply.INVALID_INTEGER.message == 'value is not an integer or out of range'
         ErrorReply.NOT_FLOAT.message == 'value is not a valid float'
         ErrorReply.NOT_FLOAT.buffer().asArray() == '-ERR value is not a valid float\r\n'.bytes
+        ErrorReply.SORT_SCORE_NOT_DOUBLE.message == "One or more scores can't be converted into double"
+        ErrorReply.SORT_SCORE_NOT_DOUBLE.buffer().asArray() == "-ERR One or more scores can't be converted into double\r\n".bytes
         ErrorReply.FORMAT.message == 'syntax error'
         ErrorReply.FORMAT.buffer().asArray() == '-ERR syntax error\r\n'.bytes
         ErrorReply.RANGE_OUT_OF_INDEX.message == 'value is out of range'

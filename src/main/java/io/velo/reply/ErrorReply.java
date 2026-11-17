@@ -78,6 +78,10 @@ public class ErrorReply implements Reply {
     /** Error reply for not a float, the text is aligned with redis. */
     public static final ErrorReply NOT_FLOAT = new ErrorReply("value is not a valid float");
 
+    /** Error reply for a SORT element that cannot be converted into a double, the text is aligned with redis. */
+    public static final ErrorReply SORT_SCORE_NOT_DOUBLE = new ErrorReply(
+            "One or more scores can't be converted into double");
+
     /** Error reply for a value that is not an integer or out of range. */
     public static final ErrorReply NOT_INTEGER_OR_OUT_OF_RANGE = new ErrorReply("value is not an integer or out of range");
 

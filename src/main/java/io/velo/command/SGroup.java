@@ -1890,7 +1890,8 @@ public class SGroup extends BaseCommand {
                         return finalIsAsc1 ? r : -r;
                     });
                 } catch (NumberFormatException ignore) {
-                    return ErrorReply.NOT_INTEGER;
+                    // redis answers "One or more scores can't be converted into double"
+                    return ErrorReply.SORT_SCORE_NOT_DOUBLE;
                 }
             }
 
@@ -1945,7 +1946,8 @@ public class SGroup extends BaseCommand {
                     sortedMembers.sort(isAsc ? Comparator.comparingDouble(Double::parseDouble)
                             : Comparator.comparingDouble(Double::parseDouble).reversed());
                 } catch (NumberFormatException ignore) {
-                    return ErrorReply.NOT_INTEGER;
+                    // redis answers "One or more scores can't be converted into double"
+                    return ErrorReply.SORT_SCORE_NOT_DOUBLE;
                 }
 
                 // offset and count
@@ -2035,7 +2037,8 @@ public class SGroup extends BaseCommand {
                     sortedMembers.sort(isAsc ? Comparator.comparingDouble(Double::parseDouble)
                             : Comparator.comparingDouble(Double::parseDouble).reversed());
                 } catch (NumberFormatException ignore) {
-                    return ErrorReply.NOT_INTEGER;
+                    // redis answers "One or more scores can't be converted into double"
+                    return ErrorReply.SORT_SCORE_NOT_DOUBLE;
                 }
 
                 // offset and count
