@@ -770,6 +770,23 @@ public class CompressedValue {
     }
 
     /**
+     * Only reads the Zstd dictionary ID or type marker from the encoded buffer.
+     *
+     * @param buf the encoded bytes buffer
+     * @return the Zstd dictionary ID or type marker
+     */
+    public static int onlyReadSpType(io.netty.buffer.ByteBuf buf) {
+        var firstByte = buf.getByte(0);
+        if (firstByte < 0) {
+            return firstByte;
+        } else {
+            // Normal compressed value encoded.
+            // Skip seq long and expire at long and key hash long.
+            return buf.getInt(8 + 8 + 8);
+        }
+    }
+
+    /**
      * Only reads the expireAt from the encoded bytes without full deserialization.
      * Handles both short/number encodings (type byte prefix) and normal compressed
      * value encodings (seq prefix).
@@ -785,6 +802,21 @@ public class CompressedValue {
             return buffer.getLong(1 + 8);
         } else {
             return buffer.getLong(8);
+        }
+    }
+
+    /**
+     * Only reads the expireAt from the encoded buffer without full deserialization.
+     *
+     * @param buf the encoded bytes buffer
+     * @return the expiration time in milliseconds since epoch
+     */
+    public static long onlyReadExpireAt(io.netty.buffer.ByteBuf buf) {
+        var firstByte = buf.getByte(0);
+        if (firstByte < 0) {
+            return buf.getLong(1 + 8);
+        } else {
+            return buf.getLong(8);
         }
     }
 

@@ -797,6 +797,48 @@ public abstract class BaseCommand {
         return cv;
     }
 
+    /**
+     * Gets the type marker of a key reading only the encoded header — no value payload copy,
+     * no decompression, and no big-string body load.
+     *
+     * @param s the precomputed slot and hash information
+     * @return the dict seq or sp type, or null if the key does not exist or is expired
+     */
+    public Integer getCvSpTypeOnly(SlotWithKeyHash s) {
+        var key = s.rawKey();
+        var slot = s.slot();
+
+        OneSlot.BufOrCompressedValue bufOrCompressedValue;
+        if (byPassGetSet != null) {
+            bufOrCompressedValue = byPassGetSet.getBuf(slot, key, s.bucketIndex, s.keyHash);
+        } else {
+            var oneSlot = localPersist.oneSlot(slot);
+            if (!oneSlot.isCanRead() && !isXGroup) {
+                throw new CannotReadException();
+            }
+            bufOrCompressedValue = oneSlot.get(key, s.bucketIndex, s.keyHash);
+        }
+
+        if (bufOrCompressedValue == null) {
+            return null;
+        }
+
+        if (bufOrCompressedValue.cv() != null) {
+            var cv = bufOrCompressedValue.cv();
+            if (cv.isExpired()) {
+                return null;
+            }
+            return cv.getDictSeqOrSpType();
+        }
+
+        var buf = bufOrCompressedValue.buf();
+        var expireAt = CompressedValue.onlyReadExpireAt(buf);
+        if (expireAt != CompressedValue.NO_EXPIRE && expireAt < System.currentTimeMillis()) {
+            return null;
+        }
+        return CompressedValue.onlyReadSpType(buf);
+    }
+
     @TestOnly
     byte[] getValueBytesByCv(CompressedValue cv) {
         return getValueBytesByCv(cv, null);

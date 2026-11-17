@@ -241,6 +241,24 @@ class TGroupTest extends Specification {
         reply == TGroup.TYPE_STRING
 
         when:
+        // type reads only the encoded header, a big string cv answers string without loading the big string file
+        inMemoryGetSet.remove(slot, 'a')
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.compressedData = new byte[12]
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = tGroup.execute('type a')
+        then:
+        reply == TGroup.TYPE_STRING
+
+        when:
+        // an expired cv answers none
+        cv.expireAt = System.currentTimeMillis() - 1000
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = tGroup.execute('type a')
+        then:
+        reply == TGroup.TYPE_NONE
+
+        when:
         reply = tGroup.execute('type >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG

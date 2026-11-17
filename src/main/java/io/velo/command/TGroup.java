@@ -135,32 +135,32 @@ public class TGroup extends BaseCommand {
             return ErrorReply.KEY_TOO_LONG;
         }
 
-        // need not decompress at all, todo: optimize
+        // only the type marker is needed, never the value payload
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(slotWithKeyHash);
-        if (cv == null) {
+        var spType = getCvSpTypeOnly(slotWithKeyHash);
+        if (spType == null) {
             // hash keys changed
             var keysKey = RedisHashKeys.keysKey(Wal.keyString(keyBytes));
-            cv = getCv(slot(keysKey));
+            spType = getCvSpTypeOnly(slot(keysKey));
 
-            if (cv == null) {
+            if (spType == null) {
                 return TYPE_NONE;
             }
         }
 
-        if (cv.isHash()) {
+        if (CompressedValue.isHash(spType)) {
             return TYPE_HASH;
         }
-        if (cv.isList()) {
+        if (CompressedValue.isList(spType)) {
             return TYPE_LIST;
         }
-        if (cv.isSet()) {
+        if (CompressedValue.isSet(spType)) {
             return TYPE_SET;
         }
-        if (cv.isZSet() || cv.isGeo()) {
+        if (CompressedValue.isZSet(spType) || CompressedValue.isGeo(spType)) {
             return TYPE_ZSET;
         }
-        if (cv.isStream()) {
+        if (CompressedValue.isStream(spType)) {
             return TYPE_STREAM;
         }
 
