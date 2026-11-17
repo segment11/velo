@@ -1085,6 +1085,18 @@ sunionstore
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 6
+
+        when:
+        // bug 86.5: a non-string key must answer WRONGTYPE, not the encoded payload length
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkWrongTypeStrlen = new RedisHashKeys()
+        rhkWrongTypeStrlen.add('m1')
+        rhkWrongTypeStrlen.add('m2')
+        cv.compressedData = rhkWrongTypeStrlen.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('strlen a')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test select'() {

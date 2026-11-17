@@ -1122,6 +1122,12 @@ public class SGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
+        // a non-string key answers WRONGTYPE, HLL and bloom CVs are rejected too —
+        // an accepted deviation, see setbit
+        if (!cv.isTypeString()) {
+            return ErrorReply.WRONG_TYPE;
+        }
+
         if (cv.isTypeNumber()) {
             var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
             return new IntegerReply(valueBytes.length);
