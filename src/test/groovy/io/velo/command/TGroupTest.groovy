@@ -66,6 +66,17 @@ class TGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
+
+        when:
+        // redis answers wrong number of arguments for 'time', the net layer rewrites FORMAT to that text
+        reply = tGroup.execute('time x')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = tGroup.execute('time x y')
+        then:
+        reply == ErrorReply.FORMAT
     }
 
     def 'test time uses epoch seconds'() {

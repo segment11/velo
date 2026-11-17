@@ -99,6 +99,11 @@ public class TGroup extends BaseCommand {
     @Override
     public Reply handle() {
         if ("time".equals(cmd)) {
+            if (data.length != 1) {
+                // redis answers wrong number of arguments, the net layer rewrites FORMAT to that text
+                return ErrorReply.FORMAT;
+            }
+
             var now = Instant.now();
             var seconds = now.getEpochSecond();
             var microseconds = now.getNano() / 1_000;
