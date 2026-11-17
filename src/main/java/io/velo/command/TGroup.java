@@ -183,7 +183,7 @@ public class TGroup extends BaseCommand {
         if (expireAt == null) {
             // the split stored hash keeps only the derived index key, the hash itself has no top-level expire
             var keysKey = RedisHashKeys.keysKey(Wal.keyString(keyBytes));
-            if (getCv(slot(keysKey)) != null) {
+            if (exists(slot(keysKey))) {
                 return new IntegerReply(-1);
             }
             return new IntegerReply(-2);
