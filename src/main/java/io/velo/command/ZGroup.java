@@ -825,6 +825,10 @@ public class ZGroup extends BaseCommand {
 
         int added = 0;
         int changed = 0;
+        // The INCR reply carries the resulting score of the member, or nil when the update
+        // was vetoed by the NX/XX/GT/LT options.
+        boolean incrProcessed = false;
+        double incrScore = 0;
         for (var member : members) {
             if (isNx) {
                 // nx
@@ -861,7 +865,14 @@ public class ZGroup extends BaseCommand {
                         continue;
                     }
                 }
+            }
 
+            if (isIncr) {
+                incrProcessed = true;
+                incrScore = newScore;
+            }
+
+            if (!isNew) {
                 if (newScore == svExist.score()) {
                     continue;
                 }
@@ -882,6 +893,11 @@ public class ZGroup extends BaseCommand {
         var handled = added + changed;
         if (handled > 0) {
             saveRedisZSet(rz, slotWithKeyHash);
+        }
+        if (isIncr) {
+            // The INCR option replies the resulting score of the member, or nil when the
+            // update was vetoed by one of the NX/XX/GT/LT options.
+            return incrProcessed ? new BulkReply(incrScore) : NilReply.INSTANCE;
         }
         return new IntegerReply(isIncludeCh ? changed + added : added);
     }

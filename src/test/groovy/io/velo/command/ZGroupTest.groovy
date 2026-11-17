@@ -465,17 +465,55 @@ zunionstore
         reply == ErrorReply.SYNTAX
 
         when:
+        // INCR on an existing member replies the resulting score
         reply = zGroup.execute('zadd a incr 0 member0')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 0
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '10'
 
         when:
         inMemoryGetSet.remove(slot, 'a')
         reply = zGroup.execute('zadd a incr 0 member0')
         then:
-        reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 1
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '0'
+
+        when:
+        // INCR replies the updated score of the member
+        inMemoryGetSet.remove(slot, 'a')
+        reply = zGroup.execute('zadd a incr 5 member0')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '5'
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 5
+
+        when:
+        // INCR on an existing member replies the incremented score
+        reply = zGroup.execute('zadd a incr 5 member0')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '10'
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
+
+        when:
+        // INCR with a zero increment still replies the unchanged score
+        reply = zGroup.execute('zadd a incr 0 member0')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '10'
+
+        when:
+        // INCR on a missing member with XX is vetoed and replies nil
+        reply = zGroup.execute('zadd a xx incr 5 member1')
+        then:
+        reply == NilReply.INSTANCE
+
+        when:
+        // INCR on an existing member with NX is vetoed and replies nil
+        reply = zGroup.execute('zadd a nx incr 5 member0')
+        then:
+        reply == NilReply.INSTANCE
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
 
         when:
         reply = zGroup.execute('zadd a ch 1 member0')
