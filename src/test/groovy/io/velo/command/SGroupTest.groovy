@@ -996,6 +996,26 @@ sunionstore
         reply == ErrorReply.INVALID_INTEGER
 
         when:
+        // bug 86.13: the resulting length must be bounded, a huge offset used to throw
+        // NegativeArraySizeException or attempt a giant allocation instead of an error reply
+        reply = sGroup.execute('setrange b 2147483647 v')
+        then:
+        reply == ErrorReply.VALUE_TOO_LONG
+
+        when:
+        reply = sGroup.execute('setrange b 1048577 v')
+        then:
+        reply == ErrorReply.VALUE_TOO_LONG
+
+        when:
+        // at the exact cap boundary the write is still allowed
+        inMemoryGetSet.remove(slot, 'b')
+        reply = sGroup.execute('setrange b 1048571 value')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1048576
+
+        when:
         reply = sGroup.execute('setrange a a value')
         then:
         reply == ErrorReply.NOT_INTEGER

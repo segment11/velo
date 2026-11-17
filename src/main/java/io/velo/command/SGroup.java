@@ -1069,6 +1069,14 @@ public class SGroup extends BaseCommand {
             return ErrorReply.INVALID_INTEGER;
         }
 
+        // bound the resulting string before any allocation, redis caps the string at
+        // 512MB with a proto-max-bulk-len error; velo caps the result at VALUE_MAX_LENGTH
+        // and the offset check must run first so a huge offset cannot overflow the
+        // int length arithmetic below
+        if (offset > CompressedValue.VALUE_MAX_LENGTH || offset + valueBytes.length > CompressedValue.VALUE_MAX_LENGTH) {
+            return ErrorReply.VALUE_TOO_LONG;
+        }
+
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
         int lengthResult;
