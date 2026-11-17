@@ -187,7 +187,8 @@ public class TGroup extends BaseCommand {
             return new IntegerReply(-1);
         }
 
-        var ttlMilliseconds = expireAt - System.currentTimeMillis();
-        return new IntegerReply(isMilliseconds ? ttlMilliseconds : ttlMilliseconds / 1000);
+        // redis rounds to nearest, and clamps a negative remainder to 0 like expire.c does
+        var ttlMilliseconds = Math.max(0, expireAt - System.currentTimeMillis());
+        return new IntegerReply(isMilliseconds ? ttlMilliseconds : (ttlMilliseconds + 500) / 1000);
     }
 }

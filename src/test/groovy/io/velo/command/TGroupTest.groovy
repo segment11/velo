@@ -124,12 +124,22 @@ class TGroupTest extends Specification {
         (reply as IntegerReply).integer == -1
 
         when:
-        cv.expireAt = System.currentTimeMillis() + 2500
+        // redis rounds to nearest, (ttl+500)/1000: a ~99.8s remainder rounds up to 100
+        cv.expireAt = System.currentTimeMillis() + 99_800
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = tGroup.execute('ttl a')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2
+        (reply as IntegerReply).integer == 100
+
+        when:
+        // a ~99.1s remainder stays 99
+        cv.expireAt = System.currentTimeMillis() + 99_100
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = tGroup.execute('ttl a')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 99
 
         when:
         def data2 = new byte[2][]
