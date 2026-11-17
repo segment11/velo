@@ -181,6 +181,11 @@ public class TGroup extends BaseCommand {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var expireAt = getExpireAt(slotWithKeyHash);
         if (expireAt == null) {
+            // the split stored hash keeps only the derived index key, the hash itself has no top-level expire
+            var keysKey = RedisHashKeys.keysKey(Wal.keyString(keyBytes));
+            if (getCv(slot(keysKey)) != null) {
+                return new IntegerReply(-1);
+            }
             return new IntegerReply(-2);
         }
         if (expireAt == CompressedValue.NO_EXPIRE) {

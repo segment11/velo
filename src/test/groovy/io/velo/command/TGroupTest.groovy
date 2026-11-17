@@ -152,6 +152,16 @@ class TGroupTest extends Specification {
         (reply as IntegerReply).integer > 2000
 
         when:
+        // the split stored hash keeps only the h_k_ index key, ttl answers -1 like redis for a hash without expire
+        inMemoryGetSet.remove(slot, 'a')
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        inMemoryGetSet.put(slot, RedisHashKeys.keysKey('a'), 0, cv)
+        reply = tGroup.execute('ttl a')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == -1
+
+        when:
         reply = tGroup.execute('ttl >key')
         then:
         reply == ErrorReply.KEY_TOO_LONG
