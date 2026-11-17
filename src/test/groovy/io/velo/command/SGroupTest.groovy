@@ -1204,6 +1204,30 @@ sunionstore
         reply == MultiBulkReply.EMPTY
 
         when:
+        // a single missing key is still an empty union
+        reply = sGroup.sdiff(false, true)
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        // bug 86.1: a missing first key does not empty the union, redis continues with the remaining keys
+        def cvListU = Mock.prepareCompressedValueList(1)
+        def cvBUnion = cvListU[0]
+        cvBUnion.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkBUnion = new RedisHashKeys()
+        rhkBUnion.add('x')
+        rhkBUnion.add('y')
+        rhkBUnion.add('z')
+        cvBUnion.compressedData = rhkBUnion.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvBUnion)
+        reply = sGroup.sdiff(false, true)
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 3
+
+        when:
+        // cleanup for the following cases
+        inMemoryGetSet.remove(slot, 'b')
         boolean wrongTypeException = false
         def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
@@ -1376,6 +1400,32 @@ sunionstore
         reply == IntegerReply.REPLY_0
 
         when:
+        // bug 86.1: sunionstore with a missing first key stores the union of the remaining keys
+        def cvListU2 = Mock.prepareCompressedValueList(1)
+        def cvBUnion2 = cvListU2[0]
+        cvBUnion2.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkBUnion2 = new RedisHashKeys()
+        rhkBUnion2.add('x')
+        rhkBUnion2.add('y')
+        rhkBUnion2.add('z')
+        cvBUnion2.compressedData = rhkBUnion2.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvBUnion2)
+        reply = sGroup.sdiffstore(false, true)
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 3
+
+        when:
+        // the dst key must hold the union members now
+        def cvDstUnion = inMemoryGetSet.getBuf(slot, 'dst', 0, 0).cv()
+        then:
+        cvDstUnion.dictSeqOrSpType == CompressedValue.SP_TYPE_SET
+        def rhkDstUnion = RedisHashKeys.decode(cvDstUnion.compressedData)
+        rhkDstUnion.contains('x') && rhkDstUnion.contains('y') && rhkDstUnion.contains('z')
+
+        when:
+        // cleanup for the following cases
+        inMemoryGetSet.remove(slot, 'b')
         boolean wrongTypeException = false
         def cvList = Mock.prepareCompressedValueList(2)
         def cvA = cvList[0]
@@ -1567,6 +1617,16 @@ sunionstore
         reply instanceof AsyncReply
         (reply as AsyncReply).settablePromise.whenResult { result ->
             reply == IntegerReply.REPLY_0
+        }.result
+
+        when:
+        // bug 86.1 cross worker: sunionstore with a missing first key stores the union of the rest
+        reply = sGroup.sdiffstore(false, true)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            (result instanceof IntegerReply) && (result as IntegerReply).integer == 3
         }.result
 
         when:

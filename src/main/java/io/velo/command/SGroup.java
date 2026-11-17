@@ -1297,7 +1297,13 @@ public class SGroup extends BaseCommand {
         var first = list.getFirst();
         var rhk = getRedisSet(first);
         if (rhk == null) {
-            return MultiBulkReply.EMPTY;
+            if (isUnion) {
+                // a missing first key is an empty set, the union continues with the remaining keys
+                rhk = new RedisHashKeys();
+            } else {
+                // a missing first key makes the diff / intersection empty
+                return MultiBulkReply.EMPTY;
+            }
         }
         if (rhk.size() == 0) {
             if (isInter) {
@@ -1401,8 +1407,13 @@ public class SGroup extends BaseCommand {
             var first = list.getFirst();
             var rhk = getRedisSet(first);
             if (rhk == null) {
-                removeDelay(dstSlotWithKeyHash);
-                return IntegerReply.REPLY_0;
+                if (isUnion) {
+                    // a missing first key is an empty set, the union continues with the remaining keys
+                    rhk = new RedisHashKeys();
+                } else {
+                    removeDelay(dstSlotWithKeyHash);
+                    return IntegerReply.REPLY_0;
+                }
             }
             if (rhk.size() == 0) {
                 if (isInter) {
@@ -1456,9 +1467,14 @@ public class SGroup extends BaseCommand {
 
             var rhk = promises.getFirst().getResult();
             if (rhk == null) {
-                removeDelay(dstSlotWithKeyHash);
-                finalPromise.set(IntegerReply.REPLY_0);
-                return;
+                if (isUnion) {
+                    // a missing first key is an empty set, the union continues with the remaining keys
+                    rhk = new RedisHashKeys();
+                } else {
+                    removeDelay(dstSlotWithKeyHash);
+                    finalPromise.set(IntegerReply.REPLY_0);
+                    return;
+                }
             }
             if (rhk.size() == 0) {
                 if (isInter) {
