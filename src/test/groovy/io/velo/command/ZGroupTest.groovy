@@ -1844,7 +1844,19 @@ zunionstore
         ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '10'
 
         when:
+        // count 0 replies an empty array
         reply = zGroup.execute('zpopmax a 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        reply = zGroup.execute('zpopmin a 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        // a negative count is still an error
+        reply = zGroup.execute('zpopmax a -1')
         then:
         reply == ErrorReply.VALUE_NOT_POSITIVE
 
@@ -1948,9 +1960,15 @@ zunionstore
         reply == ErrorReply.SYNTAX
 
         when:
+        // count 0 replies an empty array
+        reply = zGroup.execute('zrandmember a 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
         reply = zGroup.execute('zrandmember a 0 withscores')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == MultiBulkReply.EMPTY
 
         when:
         reply = zGroup.execute('zrandmember a a withscores')

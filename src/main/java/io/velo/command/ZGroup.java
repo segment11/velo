@@ -1725,8 +1725,11 @@ public class ZGroup extends BaseCommand {
             } catch (NumberFormatException e) {
                 return ErrorReply.INVALID_INTEGER;
             }
-            if (count <= 0) {
+            if (count < 0) {
                 return ErrorReply.VALUE_NOT_POSITIVE;
+            }
+            if (count == 0) {
+                return MultiBulkReply.EMPTY;
             }
         }
 
@@ -1781,7 +1784,7 @@ public class ZGroup extends BaseCommand {
                 return ErrorReply.INVALID_INTEGER;
             }
             if (count == 0) {
-                return ErrorReply.INVALID_INTEGER;
+                return MultiBulkReply.EMPTY;
             }
             hasCount = true;
         }
