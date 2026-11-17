@@ -2368,7 +2368,7 @@ public class SGroup extends BaseCommand {
             if (mainKeyCv.getDictSeqOrSpType() != CompressedValue.SP_TYPE_SET) {
                 return ErrorReply.WRONG_TYPE;
             }
-        } else if (getCv(slot(RedisHashKeys.keysKey(slotWithKeyHash.rawKey()))) != null) {
+        } else if (exists(slot(RedisHashKeys.keysKey(slotWithKeyHash.rawKey())))) {
             // a split stored hash keeps no value under the main key, only the h_k_ index
             return ErrorReply.WRONG_TYPE;
         }

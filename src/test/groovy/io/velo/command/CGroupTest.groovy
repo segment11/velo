@@ -1001,5 +1001,17 @@ class CGroupTest extends Specification {
             }
             return super.getCv(s)
         }
+
+        // the dst existence check reads metadata via exists(), not getCv()
+        @Override
+        boolean exists(SlotWithKeyHash s) {
+            if ('b' == new String(s.rawKey())) {
+                throw new CannotReadException()
+            }
+            if ('b2' == new String(s.rawKey())) {
+                throw new RuntimeException('boom')
+            }
+            return super.exists(s)
+        }
     }
 }

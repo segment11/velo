@@ -2497,8 +2497,7 @@ public class HGroup extends BaseCommand {
         var fieldKey = RedisHashKeys.fieldKey(key, field);
         var slotWithKeyHashThisField = slot(fieldKey);
 
-        var fieldCv = getCv(slotWithKeyHashThisField);
-        if (fieldCv != null) {
+        if (exists(slotWithKeyHashThisField)) {
             throw new IllegalStateException("Hash field cv exists, key=" + key + ", field=" + field);
 //            return IntegerReply.REPLY_0;
         }

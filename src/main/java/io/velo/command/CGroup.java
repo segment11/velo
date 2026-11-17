@@ -662,8 +662,7 @@ public class CGroup extends BaseCommand {
             boolean finalReplace = replace;
             dstOneSlot.asyncExecute(() -> {
                 try {
-                    var dstCv = getCv(dstSlotWithKeyHash);
-                    if (dstCv != null && !finalReplace) {
+                    if (exists(dstSlotWithKeyHash) && !finalReplace) {
                         finalPromise.set(IntegerReply.REPLY_0);
                         return;
                     }
@@ -682,8 +681,7 @@ public class CGroup extends BaseCommand {
 
             return asyncReply;
         } else {
-            var existCv = getCv(dstSlotWithKeyHash);
-            if (existCv != null && !replace) {
+            if (exists(dstSlotWithKeyHash) && !replace) {
                 return IntegerReply.REPLY_0;
             }
 
