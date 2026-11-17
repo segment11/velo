@@ -2110,11 +2110,6 @@ sunionstore
         reply == ErrorReply.NOT_INTEGER
 
         when:
-        reply = sGroup.execute('sort a limit -1 10')
-        then:
-        reply instanceof ErrorReply
-
-        when:
         def cv = Mock.prepareCompressedValueList(1)[0]
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
         def rhk = new RedisHashKeys()
@@ -2277,6 +2272,37 @@ sunionstore
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
+
+        when:
+        // bug 86.15: LIMIT offset 0 returns an empty array, not the whole collection
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cv.compressedData = rl.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a limit 0 0')
+        then:
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        // a negative offset clamps to 0 like redis
+        reply = sGroup.execute('sort a limit -1 2')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '0'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '1'
+
+        when:
+        // a negative count means no limit
+        reply = sGroup.execute('sort a limit 0 -1')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 10
+
+        when:
+        // limit 0 with store answers 0
+        def replyStoreLimit0 = sGroup.execute('sort a limit 0 0 store dst')
+        then:
+        replyStoreLimit0 == IntegerReply.REPLY_0
 
         when:
         // desc on a set sorts the members as doubles, descending

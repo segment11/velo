@@ -1821,13 +1821,20 @@ public class SGroup extends BaseCommand {
         }
 
         if (offset < 0) {
-            return new ErrorReply("offset must >= 0");
+            // redis clamps a negative limit offset to 0
+            offset = 0;
         }
 
         if (!canDoStore && dstKeyBytes != null) {
             return new ErrorReply("sort_ro not support store");
         }
         var isStore = dstKeyBytes != null;
+
+        if (count == 0) {
+            // LIMIT offset 0 was given — redis returns an empty result; count is -1
+            // when no LIMIT was parsed and never 0 otherwise
+            return isStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
+        }
 
         if (byPattern != null) {
             return new ErrorReply("sort by pattern not support yet");
@@ -1853,7 +1860,7 @@ public class SGroup extends BaseCommand {
         if (cv.isList()) {
             var rl = RedisList.decode(encodedBytes);
             var list = rl.getList();
-            if (count <= 0) {
+            if (count < 0) {
                 count = list.size();
             }
 
@@ -1917,7 +1924,7 @@ public class SGroup extends BaseCommand {
         } else if (cv.isSet()) {
             var rhk = RedisHashKeys.decode(encodedBytes);
             var set = rhk.getSet();
-            if (count <= 0) {
+            if (count < 0) {
                 count = set.size();
             }
 
@@ -2003,7 +2010,7 @@ public class SGroup extends BaseCommand {
         } else {
             var rz = RedisZSet.decode(encodedBytes);
             var set = rz.getSet();
-            if (count <= 0) {
+            if (count < 0) {
                 count = set.size();
             }
 
