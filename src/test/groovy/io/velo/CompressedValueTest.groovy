@@ -1,11 +1,49 @@
 package io.velo
 
 import io.activej.bytebuf.ByteBuf
+import io.netty.buffer.Unpooled
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
 
 class CompressedValueTest extends Specification {
+
+    def 'test only read sp type and expire at from byte buf'() {
+        given:
+        def cv = new CompressedValue()
+        cv.seq = 100
+        cv.keyHash = 100
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cv.compressedData = new byte[10]
+
+        when:
+        // normal encoded form, the first byte is the seq msb >= 0
+        def encoded = cv.encode()
+        def buf = Unpooled.wrappedBuffer(encoded)
+        then:
+        CompressedValue.onlyReadSpType(buf) == CompressedValue.SP_TYPE_HASH
+        CompressedValue.onlyReadExpireAt(buf) == CompressedValue.NO_EXPIRE
+        // agrees with the byte array overload
+        CompressedValue.onlyReadSpType(encoded) == CompressedValue.onlyReadSpType(buf)
+        CompressedValue.onlyReadExpireAt(encoded) == CompressedValue.onlyReadExpireAt(buf)
+
+        when:
+        cv.expireAt = System.currentTimeMillis() + 10_000
+        encoded = cv.encode()
+        then:
+        CompressedValue.onlyReadSpType(Unpooled.wrappedBuffer(encoded)) == CompressedValue.SP_TYPE_HASH
+        CompressedValue.onlyReadExpireAt(Unpooled.wrappedBuffer(encoded)) == cv.expireAt
+
+        when:
+        // short string encoded form, the first byte is the sp type marker < 0
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cv.compressedData = 'abc'.bytes
+        def shortEncoded = cv.encodeAsShortString()
+        then:
+        CompressedValue.onlyReadSpType(Unpooled.wrappedBuffer(shortEncoded)) == CompressedValue.SP_TYPE_SHORT_STRING
+        CompressedValue.onlyReadExpireAt(Unpooled.wrappedBuffer(shortEncoded)) == cv.expireAt
+        CompressedValue.onlyReadSpType(shortEncoded) == CompressedValue.onlyReadSpType(Unpooled.wrappedBuffer(shortEncoded))
+    }
 
     def 'test type'() {
         given:

@@ -437,6 +437,84 @@ class BaseCommandTest extends Specification {
         Consts.persistDir.deleteDir()
     }
 
+    def 'test get cv sp type only'() {
+        given:
+        def data2 = new byte[2][0]
+        data2[0] = 'get'.bytes
+        data2[1] = 'key'.bytes
+
+        def c = new SubCommand('get', data2, null)
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def requestHandler = new RequestHandler((byte) 0, (byte) 1, (short) 1, null, Config.create())
+        c.init(requestHandler, new Request(data2, false, false))
+
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+
+        when:
+        def key = 'key'
+        def sKey = BaseCommand.slot(key, slotNumber)
+        c.byPassGetSet = inMemoryGetSet
+        then:
+        // missing key
+        c.getCvSpTypeOnly(sKey) == null
+
+        when:
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.keyHash = sKey.keyHash()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, key, sKey.bucketIndex(), cv)
+        then:
+        // the decoded cv branch
+        c.getCvSpTypeOnly(sKey) == CompressedValue.SP_TYPE_HASH
+
+        when:
+        cv.expireAt = System.currentTimeMillis() - 1000
+        inMemoryGetSet.put(slot, key, sKey.bucketIndex(), cv)
+        then:
+        // an expired cv answers null
+        c.getCvSpTypeOnly(sKey) == null
+
+        when:
+        c.byPassGetSet = null
+        cv.expireAt = CompressedValue.NO_EXPIRE
+        oneSlot.put(key, sKey.bucketIndex(), cv)
+        then:
+        // the production branch reads the marker from the wal encoded bytes, no payload copy
+        c.getCvSpTypeOnly(sKey) == CompressedValue.SP_TYPE_HASH
+
+        when:
+        oneSlot.canRead = false
+        c.getCvSpTypeOnly(sKey)
+        then:
+        thrown(CannotReadException)
+
+        when:
+        oneSlot.canRead = true
+        then:
+        c.getCvSpTypeOnly(sKey) == CompressedValue.SP_TYPE_HASH
+
+        when:
+        // begin test big string
+        def bigStringKey = 'kerry-test-big-string-key-type-only'
+        def sBigString = BaseCommand.slot(bigStringKey, slotNumber)
+        def cvBigString = Mock.prepareCompressedValueList(1)[0]
+        cvBigString.keyHash = sBigString.keyHash()
+        cvBigString.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigString.setCompressedDataAsBigString(1235L, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.put(bigStringKey, sBigString.bucketIndex(), cvBigString)
+        then:
+        // the marker is answered without loading the big string file, getCv would throw here
+        c.getCvSpTypeOnly(sBigString) == CompressedValue.SP_TYPE_BIG_STRING
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
     def 'test set'() {
         given:
         def snowFlake = new SnowFlake(1, 1)
