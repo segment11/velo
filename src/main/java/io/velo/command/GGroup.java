@@ -801,7 +801,7 @@ public class GGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(dd[i + 1]));
                     if (count <= 0) {
-                        return ErrorReply.VALUE_NOT_POSITIVE;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     i++;
                 } catch (NumberFormatException e) {

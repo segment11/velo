@@ -850,7 +850,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx count -1')
         then:
-        reply == ErrorReply.VALUE_NOT_POSITIVE
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = gGroup.execute('geosearch xxx count a')

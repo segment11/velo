@@ -2212,7 +2212,7 @@ public class SGroup extends BaseCommand {
             }
 
             if (doPop && count < 0) {
-                return ErrorReply.VALUE_NOT_POSITIVE;
+                return ErrorReply.INVALID_INTEGER;
             }
         }
 

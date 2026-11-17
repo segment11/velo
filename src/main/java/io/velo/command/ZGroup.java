@@ -1746,7 +1746,7 @@ public class ZGroup extends BaseCommand {
                 return ErrorReply.INVALID_INTEGER;
             }
             if (count < 0) {
-                return ErrorReply.VALUE_NOT_POSITIVE;
+                return ErrorReply.INVALID_INTEGER;
             }
             if (count == 0) {
                 return MultiBulkReply.EMPTY;
@@ -2720,7 +2720,7 @@ public class ZGroup extends BaseCommand {
                     return ErrorReply.INVALID_INTEGER;
                 }
                 if (count <= 0) {
-                    return ErrorReply.VALUE_NOT_POSITIVE;
+                    return ErrorReply.INVALID_INTEGER;
                 }
             } else {
                 return ErrorReply.SYNTAX;

@@ -2639,7 +2639,7 @@ sunionstore
         when:
         reply = sGroup.execute('spop a -1')
         then:
-        reply == ErrorReply.VALUE_NOT_POSITIVE
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('srandmember a -5')

@@ -1571,13 +1571,13 @@ httl
         when:
         reply = hGroup.execute('hrandfield a a -5')
         then:
-        reply == ErrorReply.VALUE_NOT_POSITIVE
+        reply == ErrorReply.INVALID_INTEGER
         // bug 78.14: the count is the second argument and withvalues is the third
         // one, like redis does
         when: 'withvalues without a count'
         reply = hGroup.execute('hrandfield a withvalues')
         then:
-        reply == ErrorReply.VALUE_NOT_POSITIVE
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'too many arguments'
         reply = hGroup.execute('hrandfield a 2 withvalues 3')

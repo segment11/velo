@@ -123,9 +123,6 @@ public class ErrorReply implements Reply {
     /** Error reply for index out of range. */
     public static final ErrorReply INDEX_OUT_OF_RANGE = new ErrorReply("index out of range");
 
-    /** Error reply for value that must be positive. */
-    public static final ErrorReply VALUE_NOT_POSITIVE = new ErrorReply("value is not an integer or out of range");
-
     /** Error reply for read-only mode, aligned with Redis' reply text. */
     public static final ErrorReply READONLY = new ErrorReply("READONLY You can't write against a read only replica.", true);
 

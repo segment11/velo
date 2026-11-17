@@ -773,7 +773,7 @@ public class BGroup extends BaseCommand {
                     return new ErrorReply("expansion too large");
                 }
                 if (initExpansion <= 0) {
-                    return ErrorReply.VALUE_NOT_POSITIVE;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 needCreateNew = true;
             }
@@ -949,7 +949,7 @@ public class BGroup extends BaseCommand {
                     return new ErrorReply("expansion too large");
                 }
                 if (initExpansion <= 0) {
-                    return ErrorReply.VALUE_NOT_POSITIVE;
+                    return ErrorReply.INVALID_INTEGER;
                 }
             }
 
@@ -1254,7 +1254,7 @@ public class BGroup extends BaseCommand {
                     return ErrorReply.INVALID_INTEGER;
                 }
                 if (count <= 0) {
-                    return ErrorReply.VALUE_NOT_POSITIVE;
+                    return ErrorReply.INVALID_INTEGER;
                 }
             } else {
                 return ErrorReply.SYNTAX;

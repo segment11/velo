@@ -2161,7 +2161,7 @@ public class HGroup extends BaseCommand {
             try {
                 count = Integer.parseInt(new String(data[2]));
             } catch (NumberFormatException e) {
-                return ErrorReply.VALUE_NOT_POSITIVE;
+                return ErrorReply.INVALID_INTEGER;
             }
             hasCount = true;
 

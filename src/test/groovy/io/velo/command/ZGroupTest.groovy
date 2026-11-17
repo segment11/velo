@@ -1950,7 +1950,7 @@ zunionstore
         // a negative count is still an error
         reply = zGroup.execute('zpopmax a -1')
         then:
-        reply == ErrorReply.VALUE_NOT_POSITIVE
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = zGroup.execute('zpopmax a a')
@@ -3256,12 +3256,12 @@ zunionstore
         when: 'count zero rejected'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT 0')
         then:
-        reply == ErrorReply.VALUE_NOT_POSITIVE
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'count negative'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT -1')
         then:
-        reply == ErrorReply.VALUE_NOT_POSITIVE
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'syntax error - extra args'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT 1 extra')
