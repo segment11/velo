@@ -1865,10 +1865,15 @@ public class SGroup extends BaseCommand {
                 });
             } else {
                 try {
+                    // redis converts every element to double, validate even when the sort
+                    // of a short list would never invoke the comparator
+                    for (var bytes : list) {
+                        Double.parseDouble(new String(bytes));
+                    }
                     boolean finalIsAsc1 = isAsc;
                     list.sort((o1, o2) -> {
-                        long l = Long.parseLong(new String(o1)) - Long.parseLong(new String(o2));
-                        var r = l > 0 ? 1 : l < 0 ? -1 : 0;
+                        // redis compares the values as doubles, and Double.compare cannot overflow
+                        var r = Double.compare(Double.parseDouble(new String(o1)), Double.parseDouble(new String(o2)));
                         return finalIsAsc1 ? r : -r;
                     });
                 } catch (NumberFormatException ignore) {
@@ -1918,15 +1923,20 @@ public class SGroup extends BaseCommand {
 
             ArrayList<String> subList = new ArrayList<>();
             if (!isAlpha) {
-                TreeSet<Long> sortedByLong;
+                // redis compares the values as doubles; the original member strings are returned
+                var sortedMembers = new ArrayList<String>(set);
                 try {
-                    sortedByLong = set.stream().map(Long::parseLong).collect(Collectors.toCollection(TreeSet::new));
+                    for (var m : sortedMembers) {
+                        Double.parseDouble(m);
+                    }
+                    sortedMembers.sort(isAsc ? Comparator.comparingDouble(Double::parseDouble)
+                            : Comparator.comparingDouble(Double::parseDouble).reversed());
                 } catch (NumberFormatException ignore) {
                     return ErrorReply.NOT_INTEGER;
                 }
 
                 // offset and count
-                var it = isAsc ? sortedByLong.iterator() : sortedByLong.descendingIterator();
+                var it = sortedMembers.iterator();
                 int c = 0;
                 while (it.hasNext()) {
                     if (c >= count) {
@@ -1934,7 +1944,7 @@ public class SGroup extends BaseCommand {
                     }
                     var e = it.next();
                     if (offset <= 0) {
-                        subList.add(e.toString());
+                        subList.add(e);
                         offset--;
                         c++;
                     } else {
@@ -1999,9 +2009,24 @@ public class SGroup extends BaseCommand {
 
             ArrayList<String> subList = new ArrayList<>();
             if (!isAlpha) {
-                // already sorted by score
+                // redis ignores the scores and sorts the members by value interpreted
+                // as double; the original member strings are returned
+                var sortedMembers = new ArrayList<String>(set.size());
+                for (var sv : set) {
+                    sortedMembers.add(sv.member());
+                }
+                try {
+                    for (var m : sortedMembers) {
+                        Double.parseDouble(m);
+                    }
+                    sortedMembers.sort(isAsc ? Comparator.comparingDouble(Double::parseDouble)
+                            : Comparator.comparingDouble(Double::parseDouble).reversed());
+                } catch (NumberFormatException ignore) {
+                    return ErrorReply.NOT_INTEGER;
+                }
+
                 // offset and count
-                var it = isAsc ? set.iterator() : set.descendingIterator();
+                var it = sortedMembers.iterator();
                 int c = 0;
                 while (it.hasNext()) {
                     if (c >= count) {
@@ -2009,7 +2034,7 @@ public class SGroup extends BaseCommand {
                     }
                     var e = it.next();
                     if (offset <= 0) {
-                        subList.add(e.member());
+                        subList.add(e);
                         offset--;
                         c++;
                     } else {

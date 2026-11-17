@@ -2180,6 +2180,135 @@ sunionstore
         (reply as MultiBulkReply).replies.length == 5
 
         when:
+        // bug 86.9: numeric sort compares doubles, fractional members are sortable
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlFloat = new RedisList()
+        rlFloat.addLast('1.5'.bytes)
+        rlFloat.addLast('2'.bytes)
+        rlFloat.addLast('0.5'.bytes)
+        cv.compressedData = rlFloat.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '0.5'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '1.5'
+        ((reply as MultiBulkReply).replies[2] as BulkReply).asString() == '2'
+
+        when:
+        // bug 86.10: extreme longs must not wrap the comparator sign
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlExtreme = new RedisList()
+        rlExtreme.addLast('9223372036854775807'.bytes)
+        rlExtreme.addLast('-1'.bytes)
+        rlExtreme.addLast('0'.bytes)
+        cv.compressedData = rlExtreme.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '-1'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '0'
+        ((reply as MultiBulkReply).replies[2] as BulkReply).asString() == '9223372036854775807'
+
+        when:
+        // bug 86.8: a zset source is sorted by member value, not by score
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzScoreNotMember = new RedisZSet()
+        rzScoreNotMember.add(1, '9')
+        rzScoreNotMember.add(2, '1')
+        cv.compressedData = rzScoreNotMember.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '1'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '9'
+
+        when:
+        // a non-numeric member without ALPHA is an error, like redis
+        def rzNonNumeric = new RedisZSet()
+        rzNonNumeric.add(1, 'a')
+        cv.compressedData = rzNonNumeric.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        // a non-numeric list member is an error too
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rlNonNumeric = new RedisList()
+        rlNonNumeric.addLast('x'.bytes)
+        cv.compressedData = rlNonNumeric.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        // desc on a list sorts the doubles descending
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cv.compressedData = rlFloat.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a desc')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '2'
+        ((reply as MultiBulkReply).replies[2] as BulkReply).asString() == '0.5'
+
+        when:
+        // a non-numeric set member is an error too
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkNonNumeric = new RedisHashKeys()
+        rhkNonNumeric.add('x')
+        cv.compressedData = rhkNonNumeric.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a')
+        then:
+        reply == ErrorReply.NOT_INTEGER
+
+        when:
+        // a numeric set with limit stops at count
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        cv.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a limit 0 2')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 2
+
+        when:
+        // desc on a set sorts the members as doubles, descending
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhkMixed = new RedisHashKeys()
+        rhkMixed.add('1.5')
+        rhkMixed.add('2')
+        rhkMixed.add('0.5')
+        cv.compressedData = rhkMixed.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a desc')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '2'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '1.5'
+        ((reply as MultiBulkReply).replies[2] as BulkReply).asString() == '0.5'
+
+        when:
+        // desc on a zset sorts the members, descending, scores ignored
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzDesc = new RedisZSet()
+        rzDesc.add(1, '9')
+        rzDesc.add(2, '1')
+        cv.compressedData = rzDesc.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cv)
+        reply = sGroup.execute('sort a desc')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == '9'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '1'
+
+        when:
         // test store
         LocalPersistTest.prepareLocalPersist()
         def localPersist = LocalPersist.instance
