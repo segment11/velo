@@ -1,0 +1,455 @@
+=== AGENT 2 REVIEW EVIDENCE — bug_86 SGroup round 1 ===
+=== agent 2 temp Spock spec (deleted after the reproduction, source inlined below) ===
+
+package io.velo.command
+
+import io.activej.eventloop.Eventloop
+import io.velo.*
+import io.velo.mock.InMemoryGetSet
+import io.velo.persist.*
+import io.velo.reply.*
+import io.velo.type.RedisHashKeys
+import io.velo.type.RedisList
+import io.velo.type.RedisZSet
+import spock.lang.Specification
+
+import java.time.Duration
+
+/**
+ * TEMPORARY reviewer spec for doc/bug_reviews/bug_86_sgroup_commands_review_round_1.md
+ * AI agent 2 (reviewer) evidence collection. Not a permanent test.
+ */
+class SGroupReviewTempTest extends Specification {
+    final short slot = 0
+
+    private def newCmd(String cmd, InMemoryGetSet mem) {
+        def g = new SGroup(cmd, null, null)
+        g.byPassGetSet = mem
+        g.from(BaseCommand.mockAGroup())
+        return g
+    }
+
+    private def setCv(InMemoryGetSet mem, String key, RedisHashKeys rhk) {
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        cv.compressedData = rhk.encode()
+        mem.put(slot, key, 0, cv)
+        return cv
+    }
+
+    private def listCv(InMemoryGetSet mem, String key, List<String> elems) {
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def rl = new RedisList()
+        elems.each { rl.addLast(it.bytes) }
+        cv.compressedData = rl.encode()
+        mem.put(slot, key, 0, cv)
+        return cv
+    }
+
+    private def zsetCv(InMemoryGetSet mem, String key, List<List<Object>> pairs) {
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        pairs.each { rz.add(it[0] as double, it[1] as String) }
+        cv.compressedData = rz.encode()
+        mem.put(slot, key, 0, cv)
+        return cv
+    }
+
+    def '86.1 sunion with a missing first key'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        def rhk = new RedisHashKeys()
+        rhk.add('a')
+        rhk.add('b')
+        rhk.add('c')
+        setCv(mem, 's2', rhk)
+        mem.remove(slot, 's1')
+
+        when:
+        def reply = g.execute('sunion s1 s2')
+        then:
+        println "86.1 sunion reply = ${reply} (redis expects 3 members a b c)"
+        reply == MultiBulkReply.EMPTY
+
+        when:
+        def reply2 = g.execute('sunionstore d s1 s2')
+        then:
+        println "86.1 sunionstore reply = ${reply2} (redis expects 3), dst d present = ${mem.getBuf(slot, 'd', 0, 0L) != null}"
+        reply2 == IntegerReply.REPLY_0
+        mem.getBuf(slot, 'd', 0, 0L) == null
+
+        when:
+        // an existing destination key is deleted too
+        def oldDst = new RedisHashKeys()
+        oldDst.add('keepme')
+        setCv(mem, 'd', oldDst)
+        def reply3 = g.execute('sunionstore d s1 s2')
+        then:
+        println "86.1 sunionstore over an existing dst reply = ${reply3}, dst d present = ${mem.getBuf(slot, 'd', 0, 0L) != null} (redis keeps 3 members)"
+        reply3 == IntegerReply.REPLY_0
+        mem.getBuf(slot, 'd', 0, 0L) == null
+    }
+
+    def '86.2 smove to a wrong type destination loses the member'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        def rhk = new RedisHashKeys()
+        rhk.add('m')
+        setCv(mem, 'src', rhk)
+        // dst holds a plain string
+        def cvStr = new CompressedValue()
+        cvStr.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cvStr.compressedData = 'i am a string'.bytes
+        mem.put(slot, 'dst', 0, cvStr)
+
+        when:
+        g.execute('smove src dst m')
+        then:
+        thrown(Exception)
+
+        then:
+        def after = mem.getBuf(slot, 'src', 0, 0L)
+        println "86.2 src after failed smove = ${after == null ? 'KEY REMOVED (member lost)' : RedisHashKeys.decode(after.cv().compressedData).getSet()}"
+        after == null
+    }
+
+    def '86.4 setbit on a set key corrupts the type'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        def rhk = new RedisHashKeys()
+        rhk.add('a')
+        rhk.add('b')
+        setCv(mem, 'k', rhk)
+
+        when:
+        def reply = g.execute('setbit k 0 1')
+        then:
+        println "86.4 setbit reply = ${reply} (redis expects WRONGTYPE)"
+        !(reply instanceof ErrorReply)
+
+        then:
+        def after = mem.getBuf(slot, 'k', 0, 0L).cv()
+        println "86.4 key type after setbit = ${after.dictSeqOrSpType} (was ${CompressedValue.SP_TYPE_SET} = set)"
+        after.dictSeqOrSpType != CompressedValue.SP_TYPE_SET
+
+        when:
+        g.execute('scard k')
+        then:
+        def e = thrown(TypeMismatchException)
+        println "86.4 scard on the corrupted key threw ${e.class.name}: ${e.message} (redis still answers 2)"
+    }
+
+    def '86.5 strlen on a set key'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        def rhk = new RedisHashKeys()
+        rhk.add('a')
+        rhk.add('b')
+        setCv(mem, 'k', rhk)
+
+        when:
+        def reply = g.execute('strlen k')
+        then:
+        println "86.5 strlen reply = ${reply} (redis expects WRONGTYPE)"
+        reply instanceof IntegerReply
+    }
+
+    def '86.6 sort get pattern is silently ignored'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        listCv(mem, 'ids', ['1', '2'])
+        def cv1 = new CompressedValue()
+        cv1.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cv1.compressedData = 'a'.bytes
+        mem.put(slot, 'obj_1', 0, cv1)
+        def cv2 = new CompressedValue()
+        cv2.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cv2.compressedData = 'b'.bytes
+        mem.put(slot, 'obj_2', 0, cv2)
+
+        when:
+        def reply = g.execute('sort ids get obj_*')
+        then:
+        println "86.6 sort get reply = ${(reply as MultiBulkReply).replies*.asString()} (redis expects a b)"
+        (reply as MultiBulkReply).replies*.asString() == ['1', '2']
+    }
+
+    def '86.8 sort on a zset returns score order'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        zsetCv(mem, 'z', [[1.0d, '9'], [2.0d, '1']])
+
+        when:
+        def reply = g.execute('sort z')
+        then:
+        println "86.8 sort zset reply = ${(reply as MultiBulkReply).replies*.asString()} (redis expects 1 9)"
+        (reply as MultiBulkReply).replies*.asString() == ['9', '1']
+    }
+
+    def '86.9 sort numeric parse is long only'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        listCv(mem, 'l', ['1.5', '2', '0.5'])
+
+        when:
+        def reply = g.execute('sort l')
+        then:
+        println "86.9 sort float list reply = ${reply} (redis expects 0.5 1.5 2)"
+        reply instanceof ErrorReply
+    }
+
+    def '86.10 sort list comparator overflows'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        listCv(mem, 'l', ['0', '-1', '9223372036854775807'])
+
+        when:
+        def reply = g.execute('sort l')
+        then:
+        println "86.10 sort overflow list reply = ${(reply as MultiBulkReply).replies*.asString()} (redis expects -1 0 9223372036854775807)"
+        (reply as MultiBulkReply).replies*.asString() == ['9223372036854775807', '-1', '0']
+    }
+
+    def '86.11 set keepttl together with ex'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+
+        when:
+        def r1 = g.execute('set k v ex 100')
+        then:
+        println "86.11 first set = ${r1}"
+        r1 == OKReply.INSTANCE
+
+        when:
+        def r2 = g.execute('set k v2 ex 50 keepttl')
+        then:
+        println "86.11 set with ex+keepttl = ${r2} (redis expects syntax error)"
+        r2 == OKReply.INSTANCE
+
+        then:
+        def cv = mem.getBuf(slot, 'k', 0, 0L).cv()
+        println "86.11 expireAt = ${cv.expireAt}, now = ${System.currentTimeMillis()} (redis rejects the command)"
+        true
+    }
+
+    def '86.12 set expire arithmetic overflow'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+
+        when:
+        def reply = g.execute('set k v ex 9223372036854775807')
+        then:
+        println "86.12 set huge ex reply = ${reply} (redis expects invalid expire time error)"
+        reply == OKReply.INSTANCE
+
+        then:
+        def cv = mem.getBuf(slot, 'k', 0, 0L).cv()
+        println "86.12 expireAt = ${cv.expireAt}, now = ${System.currentTimeMillis()}, expired = ${cv.isExpired()}"
+        cv.isExpired()
+    }
+
+    def '86.13 setrange with a huge offset'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+
+        when:
+        g.execute('setrange k 2147483647 v')
+        then:
+        def e = thrown(Exception)
+        println "86.13 setrange huge offset threw ${e.class.name}: ${e.message} (redis expects an error reply)"
+        e instanceof NegativeArraySizeException
+    }
+
+    def '86.14 sort store does not validate the destination key length'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        listCv(mem, 'a', ['1', '2'])
+
+        when:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def longKey = 'k' * (CompressedValue.KEY_MAX_LENGTH + 1)
+        def reply = g.execute("sort a store ${longKey}")
+        then:
+        println "86.14 sort store long key reply = ${reply} (redis expects key too long error)"
+        reply != ErrorReply.KEY_TOO_LONG
+        def stored = mem.getBuf(slot, longKey, 0, 0L)
+        println "86.14 oversized dst key stored = ${stored != null}"
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def '86.7 sort store on a set source stores a set'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        def rhk = new RedisHashKeys()
+        rhk.add('1')
+        rhk.add('2')
+        setCv(mem, 'a', rhk)
+
+        when:
+        LocalPersistTest.prepareLocalPersist()
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def reply = g.execute('sort a store d')
+        then:
+        reply instanceof AsyncReply
+        def res = ((AsyncReply) reply).settablePromise.whenResult { r -> r }.result
+        println "86.7 sort store reply = ${res}"
+
+        then:
+        def dst = mem.getBuf(slot, 'd', 0, 0L)
+        println "86.7 dst type = ${dst?.cv()?.dictSeqOrSpType} (set = ${CompressedValue.SP_TYPE_SET}, redis stores a list = ${CompressedValue.SP_TYPE_LIST})"
+        dst != null
+
+        cleanup:
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+
+    def '86.15 candidate sort limit with count 0'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        listCv(mem, 'l', ['3', '1', '2'])
+
+        when:
+        def reply = g.execute('sort l limit 0 0')
+        then:
+        println "86.15 candidate sort l limit 0 0 -> ${(reply as MultiBulkReply).replies*.asString()} (redis returns an empty array)"
+        (reply as MultiBulkReply).replies*.asString() == ['1', '2', '3']
+    }
+
+    def '86.3 cross worker smove never settles the promise on a wrong type dst'() {
+        given:
+        def mem = new InMemoryGetSet()
+        def g = newCmd(null, mem)
+        def rhk = new RedisHashKeys()
+        rhk.add('m')
+        setCv(mem, 'a', rhk)
+        def cvStr = new CompressedValue()
+        cvStr.dictSeqOrSpType = CompressedValue.NULL_DICT_SEQ
+        cvStr.compressedData = 'i am a string'.bytes
+        mem.put(slot, 'b', 0, cvStr)
+
+        when:
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start { eventloop.run() }
+        LocalPersist.instance.addOneSlot(slot, eventloop)
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        g.crossRequestWorker = true
+        def reply = g.execute('smove a b m')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        def promise = (reply as AsyncReply).settablePromise
+        println "86.3 promise complete = ${promise.isComplete()}, result = ${promise.isComplete() ? promise.getResult() : 'n/a'}, exception = ${promise.isComplete() ? promise.getException() : 'n/a'}"
+        !promise.isComplete()
+
+        cleanup:
+        eventloop.breakEventloop()
+    }
+}
+
+=== gradle :test --tests io.velo.command.SGroupReviewTempTest output ===
+SGroupReviewTempTest > 86.1 sunion with a missing first key STANDARD_OUT
+    86.1 sunion reply = io.velo.reply.MultiBulkReply$2@e5c52fa (redis expects 3 members a b c)
+    86.1 sunionstore reply = io.velo.reply.IntegerReply$2@74844216 (redis expects 3), dst d present = false
+    86.1 sunionstore over an existing dst reply = io.velo.reply.IntegerReply$2@74844216, dst d present = false (redis keeps 3 members)
+SGroupReviewTempTest > 86.2 smove to a wrong type destination loses the member STANDARD_OUT
+    86.2 src after failed smove = KEY REMOVED (member lost)
+SGroupReviewTempTest > 86.4 setbit on a set key corrupts the type STANDARD_OUT
+    86.4 setbit reply = io.velo.reply.IntegerReply$2@74844216 (redis expects WRONGTYPE)
+    86.4 key type after setbit = 0 (was -4096 = set)
+    86.4 scard on the corrupted key threw io.velo.TypeMismatchException: Expect sp type array=[-4096], but got sp type=0 (redis still answers 2)
+SGroupReviewTempTest > 86.5 strlen on a set key STANDARD_OUT
+    86.5 strlen reply = io.velo.reply.IntegerReply@66a93b25 (redis expects WRONGTYPE)
+SGroupReviewTempTest > 86.6 sort get pattern is silently ignored STANDARD_OUT
+    86.6 sort get reply = [1, 2] (redis expects a b)
+SGroupReviewTempTest > 86.8 sort on a zset returns score order STANDARD_OUT
+    86.8 sort zset reply = [9, 1] (redis expects 1 9)
+SGroupReviewTempTest > 86.9 sort numeric parse is long only STANDARD_OUT
+    86.9 sort float list reply = ErrorReply{message='value is not an integer or out of range'} (redis expects 0.5 1.5 2)
+SGroupReviewTempTest > 86.10 sort list comparator overflows STANDARD_OUT
+    86.10 sort overflow list reply = [9223372036854775807, -1, 0] (redis expects -1 0 9223372036854775807)
+SGroupReviewTempTest > 86.11 set keepttl together with ex STANDARD_OUT
+    86.11 first set = io.velo.reply.OKReply@3fd6dfbc
+    86.11 set with ex+keepttl = io.velo.reply.OKReply@3fd6dfbc (redis expects syntax error)
+    86.11 expireAt = 1794891147428, now = 1794891047430 (redis rejects the command)
+SGroupReviewTempTest > 86.12 set expire arithmetic overflow STANDARD_OUT
+    86.12 set huge ex reply = io.velo.reply.OKReply@3fd6dfbc (redis expects invalid expire time error)
+    86.12 expireAt = 1794891046431, now = 1794891047432, expired = true
+SGroupReviewTempTest > 86.13 setrange with a huge offset STANDARD_OUT
+    86.13 setrange huge offset threw java.lang.NegativeArraySizeException: -2147483648 (redis expects an error reply)
+SGroupReviewTempTest > 86.14 sort store does not validate the destination key length STANDARD_OUT
+    86.14 sort store long key reply = io.velo.reply.AsyncReply@498bfeec (redis expects key too long error)
+    86.14 oversized dst key stored = true
+SGroupReviewTempTest > 86.7 sort store on a set source stores a set STANDARD_OUT
+    86.7 sort store reply = true
+    86.7 dst type = -4096 (set = -4096, redis stores a list = -2048)
+SGroupReviewTempTest > 86.15 candidate sort limit with count 0 STANDARD_OUT
+    86.15 candidate sort l limit 0 0 -> [1, 2, 3] (redis returns an empty array)
+SGroupReviewTempTest > 86.3 cross worker smove never settles the promise on a wrong type dst STANDARD_OUT
+    86.3 promise complete = false, result = n/a, exception = n/a
+BUILD SUCCESSFUL in 19s
+
+=== LIVE REDIS 7.2.11 DIFFERENTIAL (redis-server --port 6399) ===
+=== 86.1 sunion missing first key ===
+sunion s1 s2  -> a b c 
+sunionstore d s1 s2 -> 3  d members: a b c 
+=== 86.2 smove wrong type dst ===
+smove src dst m -> WRONGTYPE Operation against a key holding the wrong kind of value
+src members after: m 
+=== 86.4 setbit on a set ===
+setbit s 0 1 -> WRONGTYPE Operation against a key holding the wrong kind of value
+type s -> set
+=== 86.5 strlen on a set ===
+strlen s -> WRONGTYPE Operation against a key holding the wrong kind of value
+=== 86.6 sort get ===
+sort ids get obj_* -> a b 
+=== 86.7 sort store type ===
+sort s store d -> 3
+type d -> list ; lrange d -> 1 2 3 
+sort z -> ERR One or more scores can't be converted into double  
+sort z alpha -> a b c 
+=== 86.8 zset member sort ===
+sort z3 -> 1 9 
+=== 86.9 float sort ===
+sort l -> 0.5 1.5 2 
+=== 86.10 overflow sort ===
+sort l -> -1 0 9223372036854775807 
+=== 86.11 keepttl + ex ===
+set k v ex 100 -> OK
+set k v2 ex 50 keepttl -> ERR syntax error
+=== 86.12 huge ex ===
+set k v ex 9223372036854775807 -> ERR invalid expire time in 'set' command
+get k -> 
+=== 86.13 setrange huge offset ===
+setrange k 2147483647 v -> ERR string exceeds maximum allowed size (proto-max-bulk-len)
+setrange k 536870912 v -> ERR string exceeds maximum allowed size (proto-max-bulk-len)
+=== 86.14 sort store long key ===
+sort a store <257 bytes> -> 2
