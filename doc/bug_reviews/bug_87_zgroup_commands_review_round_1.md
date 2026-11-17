@@ -893,6 +893,13 @@ the same red-green-refactor cycle on branch `review/zgroup`).
 Full-class verification after all fixes: `./gradlew :test --tests "io.velo.command.ZGroupTest"` →
 **32 tests, 0 failures, 0 errors** (2026-11-17T12:00:38Z).
 
+Final end-to-end differential (fresh `./gradlew jar` build, live Velo on :7379 vs Redis 7.2.11 on :7777,
+`redis-cli --no-raw`, 76 cases over all 12 findings): **76/76 match** — log at
+`doc/bug_reviews/logs/20261117_201500_zgroup_bug87_final_differential_velo_vs_redis.log`.
+The only velo≠redis outputs are the documented, accepted drifts: 87.2/87.6/87.8/87.10 error-message
+texts (both sides error; e.g. `syntax error` vs "XX and NX options … not compatible") and 87.11's
+KEY_TOO_LONG rejection of a 257-byte dst key (Velo's own invariant; Redis has no key-length limit).
+
 ## Residual Risk
 
 - **SGroup.srandmember count==0** — the reviewer's evidence shows it reaches `members[0]` with an

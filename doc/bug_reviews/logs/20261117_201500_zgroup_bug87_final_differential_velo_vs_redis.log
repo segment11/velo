@@ -1,0 +1,186 @@
+
+=== 87.12 gt/lt direction ===
+[PASS] zadd gta 10 m
+       velo : (integer) 1
+[PASS] zadd gta GT 5 m
+       velo : (integer) 0
+[PASS] zscore gta m
+       velo : "10"
+[PASS] zadd gta GT 20 m
+       velo : (integer) 0
+[PASS] zscore gta m
+       velo : "20"
+[PASS] zadd gtb 10 m
+       velo : (integer) 1
+[PASS] zadd gtb LT 20 m
+       velo : (integer) 0
+[PASS] zscore gtb m
+       velo : "10"
+[PASS] zadd gtb LT 5 m
+       velo : (integer) 0
+[PASS] zscore gtb m
+       velo : "5"
+[PASS] zadd gtc 10 m
+       velo : (integer) 1
+[PASS] zadd gtc GT CH 5 m
+       velo : (integer) 0
+[PASS] zadd gtc GT CH 20 m
+       velo : (integer) 1
+
+=== 87.7 score format ===
+[PASS] zadd fmt 1 a
+       velo : (integer) 1
+[PASS] zscore fmt a
+       velo : "1"
+[PASS] zadd fmt 1e30 b
+       velo : (integer) 1
+[PASS] zscore fmt b
+       velo : "1e+30"
+[PASS] zadd fmt 0.1 c
+       velo : (integer) 1
+[PASS] zscore fmt c
+       velo : "0.1"
+[PASS] zincrby fmt 1 a
+       velo : "2"
+
+=== 87.1 zadd incr reply ===
+[PASS] zadd inc1 INCR 5 m
+       velo : "5"
+[PASS] zadd inc1 INCR 5 m
+       velo : "10"
+[PASS] zadd inc2 XX INCR 5 m
+       velo : (nil)
+[PASS] zadd inc1 NX INCR 5 m
+       velo : (nil)
+[PASS] zadd inc1 INCR 0 m
+       velo : "10"
+
+=== 87.3 zrandmember no count ===
+[PASS] zadd rmk 1 a 2 b 3 c
+       velo : (integer) 3
+[PASS] zrandmember rmk
+       velo : "a"
+       redis: "c"
+[PASS] zrandmember nokey_rm_87
+       velo : (nil)
+
+=== 87.4+87.9 zrank withscore ===
+[PASS] zadd rk 1 a 2 b
+       velo : (integer) 2
+[PASS] zrank rk a WITHSCORE
+       velo : 1) (integer) 0 | 2) "1"
+[PASS] zrank rk nomember WITHSCORE
+       velo : (nil)
+[PASS] zrank nokk_87 m WITHSCORE
+       velo : (nil)
+[PASS] zadd rk 3 withscore
+       velo : (integer) 1
+[PASS] zrank rk withscore
+       velo : (integer) 2
+[PASS] zrank rk a junk
+       velo : (error) ERR syntax error
+[PASS] zrevrank rk nomember WITHSCORE
+       velo : (nil)
+
+=== 87.6 numkeys=1 ===
+[PASS] zadd so1 1 a 2 b 3 c
+       velo : (integer) 3
+[PASS] zinter 1 so1
+       velo : 1) "a" | 2) "b" | 3) "c"
+[PASS] zdiff 1 so1
+       velo : 1) "a" | 2) "b" | 3) "c"
+[PASS] zunion 1 so1
+       velo : 1) "a" | 2) "b" | 3) "c"
+[PASS] zintercard 1 so1
+       velo : (integer) 3
+[PASS] zunionstore sod 1 so1 weights 2
+       velo : (integer) 3
+[PASS] zscore sod a
+       velo : "2"
+[PASS] zscore sod c
+       velo : "6"
+[PASS] zinterstore soi 1 so1
+       velo : (integer) 3
+[PASS] zdiffstore soe 1 so1
+       velo : (integer) 3
+[PASS] zinter 0 so1
+       velo : (error) ERR value is not an integer or out of range
+       redis: (error) ERR at least 1 input key is needed for 'zinter' command
+
+=== 87.2 zadd option exclusivity ===
+[PASS] zadd mx NX XX 2 m
+       velo : (error) ERR syntax error
+       redis: (error) ERR XX and NX options at the same time are not compatible
+[PASS] zadd mx GT LT 2 m
+       velo : (error) ERR syntax error
+       redis: (error) ERR GT, LT, and/or NX options at the same time are not compatible
+[PASS] zadd mx NX GT 2 m
+       velo : (error) ERR syntax error
+       redis: (error) ERR GT, LT, and/or NX options at the same time are not compatible
+[PASS] zadd mx NX LT 2 m
+       velo : (error) ERR syntax error
+       redis: (error) ERR GT, LT, and/or NX options at the same time are not compatible
+[PASS] zadd mx2 10 m
+       velo : (integer) 1
+[PASS] zadd mx2 INCR GT -5 m
+       velo : (nil)
+[PASS] zscore mx2 m
+       velo : "10"
+
+=== 87.5 lex sentinels ===
+[PASS] zadd lx 0 a 0 b 0 c
+       velo : (integer) 3
+[PASS] zlexcount lx - +
+       velo : (integer) 3
+[PASS] zlexcount lx - [b
+       velo : (integer) 2
+[PASS] zadd lx2 0 a 0 b 0 c
+       velo : (integer) 3
+[PASS] zremrangebylex lx2 - +
+       velo : (integer) 3
+
+=== 87.8 count 0 ===
+[PASS] zadd pz 1 a 2 b
+       velo : (integer) 2
+[PASS] zrandmember pz 0
+       velo : (empty array)
+[PASS] zpopmin pz 0
+       velo : (empty array)
+[PASS] zpopmax pz 0
+       velo : (empty array)
+[PASS] zpopmin pz -1
+       velo : (error) ERR value is not an integer or out of range
+       redis: (error) ERR value is out of range, must be positive
+
+=== 87.10 nan/inf ===
+[PASS] zadd nn NaN m
+       velo : (error) ERR value is not a valid float
+[PASS] zadd nn +NaN m
+       velo : (error) ERR value is not a valid float
+[PASS] zincrby nn nan m
+       velo : (error) ERR value is not a valid float
+[PASS] zadd nn inf m
+       velo : (integer) 1
+[PASS] zscore nn m
+       velo : "inf"
+[PASS] zadd nn -INFINITY m2
+       velo : (integer) 1
+[PASS] zscore nn m2
+       velo : "-inf"
+[PASS] zadd nnw_87 1 a
+       velo : (integer) 0
+[PASS] zunion 2 nnw_87 nnw_87 weights nan 1
+       velo : (error) ERR value is not a valid float
+       redis: (error) ERR weight value is not a float
+
+=== 87.11 store dst key too long (velo-only invariant) ===
+[PASS] zadd src11 1 a 2 b
+       velo : (integer) 2
+[PASS] zrangestore ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd src11 0 -1
+       velo : (error) ERR key too long (max length is 256)
+       redis: (integer) 2
+[PASS] zunionstore ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd 2 src11 src11
+       velo : (error) ERR key too long (max length is 256)
+       redis: (integer) 2
+
+==== 76/76 cases match ====
