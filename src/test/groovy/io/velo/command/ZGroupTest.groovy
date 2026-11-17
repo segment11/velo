@@ -565,6 +565,67 @@ zunionstore
         fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
 
         when:
+        // NaN in any case spelling is not a valid score
+        reply = zGroup.execute('zadd a NaN member2')
+        then:
+        reply == ErrorReply.INVALID_FLOAT
+
+        when:
+        reply = zGroup.execute('zadd a +NaN member2')
+        then:
+        reply == ErrorReply.INVALID_FLOAT
+
+        when:
+        reply = zGroup.execute('zadd a -NaN member2')
+        then:
+        reply == ErrorReply.INVALID_FLOAT
+
+        when:
+        // the inf spellings are valid scores
+        reply = zGroup.execute('zadd a inf member2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        reply = zGroup.execute('zscore a member2')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == 'inf'
+
+        when:
+        reply = zGroup.execute('zadd a -INFINITY member3')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+
+        when:
+        reply = zGroup.execute('zscore a member3')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == '-inf'
+
+        when:
+        // parseScore accepts every redis inf spelling and rejects NaN
+        def scores = [
+                ['inf', Double.POSITIVE_INFINITY],
+                ['+inf', Double.POSITIVE_INFINITY],
+                ['infinity', Double.POSITIVE_INFINITY],
+                ['+infinity', Double.POSITIVE_INFINITY],
+                ['INF', Double.POSITIVE_INFINITY],
+                ['-inf', Double.NEGATIVE_INFINITY],
+                ['-infinity', Double.NEGATIVE_INFINITY],
+                ['-INFINITY', Double.NEGATIVE_INFINITY],
+                ['1.5', 1.5d],
+        ]
+        then:
+        scores.every {
+            def parsed = _ZGroup.parseScore(it[0] as String)
+            parsed != null && parsed == it[1]
+        }
+        ['NaN', '+NaN', '-NaN', 'nan', 'a'].every { _ZGroup.parseScore(it) == null }
+
+        when:
         reply = zGroup.execute('zadd a ch 1 member0')
         then:
         reply instanceof IntegerReply
@@ -1357,6 +1418,24 @@ zunionstore
         reply == ErrorReply.INVALID_FLOAT
 
         when:
+        // NaN is not a valid weight
+        data7[6] = 'NaN'.bytes
+        reply = zGroup.zdiff(true, false)
+        then:
+        reply == ErrorReply.INVALID_FLOAT
+
+        when:
+        // the inf spellings are valid weights
+        data7[6] = 'inf'.bytes
+        reply = zGroup.zdiff(true, false)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply && (result as MultiBulkReply).replies.length == 5
+        }.result
+
+        when:
         // a single key is a valid number of keys for the set operations
         def data1 = new byte[3][]
         data1[1] = '1'.bytes
@@ -1444,6 +1523,19 @@ zunionstore
         reply = zGroup.execute('zincrby a a member0')
         then:
         reply == ErrorReply.INVALID_FLOAT
+
+        when:
+        // NaN in any case spelling is not a valid increment
+        reply = zGroup.execute('zincrby a NaN member0')
+        then:
+        reply == ErrorReply.INVALID_FLOAT
+
+        when:
+        // the inf spellings are valid increments
+        reply = zGroup.execute('zincrby a inf member0')
+        then:
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == 'inf'
 
         when:
         reply = zGroup.execute('zincrby >key 1 member0')

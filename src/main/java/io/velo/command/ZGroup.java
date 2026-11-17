@@ -812,11 +812,11 @@ public class ZGroup extends BaseCommand {
         for (int i = scoreBeginIndex; i < data.length; i += 2) {
             var scoreBytes = data[i];
             double score;
-            try {
-                score = Double.parseDouble(new String(scoreBytes));
-            } catch (NumberFormatException e) {
+            var parsedScore = parseScore(new String(scoreBytes));
+            if (parsedScore == null) {
                 return ErrorReply.INVALID_FLOAT;
             }
+            score = parsedScore;
 
             var memberBytes = data[i + 1];
             if (memberBytes.length > RedisZSet.ZSET_MEMBER_MAX_LENGTH) {
@@ -955,6 +955,28 @@ public class ZGroup extends BaseCommand {
             return false;
         }
         return minLex.compareTo(maxLex) <= 0;
+    }
+
+    /**
+     * Parses a double the way redis getDoubleFromObject does: the inf spellings are accepted
+     * case-insensitively and NaN is rejected. Returns null when the string is not a valid float.
+     */
+    @VisibleForTesting
+    static Double parseScore(String s) {
+        var lower = s.toLowerCase();
+        if ("inf".equals(lower) || "+inf".equals(lower) || "infinity".equals(lower) || "+infinity".equals(lower)) {
+            return Double.POSITIVE_INFINITY;
+        }
+        if ("-inf".equals(lower) || "-infinity".equals(lower)) {
+            return Double.NEGATIVE_INFINITY;
+        }
+        try {
+            var d = Double.parseDouble(s);
+            // redis rejects NaN scores
+            return Double.isNaN(d) ? null : d;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private Reply zcount(boolean byLex) {
@@ -1319,13 +1341,11 @@ public class ZGroup extends BaseCommand {
                     weights = new double[numKeys];
                     for (int j = 0; j < numKeys; j++) {
                         var weightBytes = dd[i + 1 + j];
-                        double weight;
-                        try {
-                            weight = Double.parseDouble(new String(weightBytes));
-                        } catch (NumberFormatException e) {
+                        var parsedWeight = parseScore(new String(weightBytes));
+                        if (parsedWeight == null) {
                             return ErrorReply.INVALID_FLOAT;
                         }
-                        weights[j] = weight;
+                        weights[j] = parsedWeight;
                     }
                 } else if ("withscores".equals(tmp)) {
                     withScores = true;
@@ -1479,11 +1499,11 @@ public class ZGroup extends BaseCommand {
 
         var scoreBytes = data[2];
         double score;
-        try {
-            score = Double.parseDouble(new String(scoreBytes));
-        } catch (NumberFormatException e) {
+        var parsedScore = parseScore(new String(scoreBytes));
+        if (parsedScore == null) {
             return ErrorReply.INVALID_FLOAT;
         }
+        score = parsedScore;
 
         var memberBytes = data[3];
         if (memberBytes.length > RedisZSet.ZSET_MEMBER_MAX_LENGTH) {
