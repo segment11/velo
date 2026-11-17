@@ -840,19 +840,6 @@ public class ZGroup extends BaseCommand {
 
             var svExist = rz.get(member.e);
             boolean isNew = svExist == null;
-            if (!isNew) {
-                if (isGt) {
-                    // gt
-                    if (svExist.score() <= member.score) {
-                        continue;
-                    }
-                } else if (isLt) {
-                    // lt
-                    if (svExist.score() >= member.score) {
-                        continue;
-                    }
-                }
-            }
 
             var newScore = member.score;
             if (isIncr) {
@@ -863,6 +850,18 @@ public class ZGroup extends BaseCommand {
             }
 
             if (!isNew) {
+                if (isGt) {
+                    // gt: only update when the new score is greater than the current one
+                    if (newScore <= svExist.score()) {
+                        continue;
+                    }
+                } else if (isLt) {
+                    // lt: only update when the new score is less than the current one
+                    if (newScore >= svExist.score()) {
+                        continue;
+                    }
+                }
+
                 if (newScore == svExist.score()) {
                     continue;
                 }

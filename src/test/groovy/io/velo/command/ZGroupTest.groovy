@@ -376,6 +376,90 @@ zunionstore
         (reply as IntegerReply).integer == 0
 
         when:
+        // GT only updates an existing member when the new score is greater than the current one
+        rz.add(10, 'member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a gt 5 member0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
+
+        when:
+        // GT updates an existing member when the new score is greater than the current one
+        rz.add(10, 'member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a gt 20 member0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 20
+
+        when:
+        // LT does not update an existing member when the new score is greater than the current one
+        rz.add(10, 'member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a lt 20 member0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
+
+        when:
+        // LT updates an existing member when the new score is less than the current one
+        rz.add(10, 'member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a lt 5 member0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 5
+
+        when:
+        // CH counts the members whose score changed
+        rz.add(10, 'member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a gt ch 20 member0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 20
+
+        when:
+        // CH does not count a member whose update was vetoed by GT
+        rz.add(10, 'member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a gt ch 5 member0')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
+
+        when:
+        // INCR applies the increment before the GT comparison
+        rz.add(10, 'member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a incr gt 2 member0')
+        then:
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 12
+
+        when:
+        // INCR with a negative increment is vetoed by GT
+        rz.add(10, 'member0')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.execute('zadd a incr gt -5 member0')
+        then:
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
+
+        when:
         reply = zGroup.execute('zadd a incr 0 member0 1 member1')
         then:
         reply == ErrorReply.SYNTAX
