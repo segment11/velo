@@ -1778,7 +1778,11 @@ public class ZGroup extends BaseCommand {
             j++;
         }
 
-        return new MultiBulkReply(replies);
+        if (hasCount) {
+            return new MultiBulkReply(replies);
+        }
+        // Without the count argument Redis replies the selected member as a bulk string.
+        return replies[0];
     }
 
     private Reply zrange(byte[][] dd) {

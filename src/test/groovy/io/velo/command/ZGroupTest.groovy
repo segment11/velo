@@ -1771,10 +1771,8 @@ zunionstore
         when:
         reply = zGroup.execute('zrandmember a')
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 1
-        (reply as MultiBulkReply).replies[0] instanceof BulkReply
-        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'member100'
+        reply instanceof BulkReply
+        (reply as BulkReply).asString() == 'member100'
 
         when:
         reply = zGroup.execute('zrandmember a 2 withscores')
