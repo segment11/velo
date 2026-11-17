@@ -787,6 +787,14 @@ public class ZGroup extends BaseCommand {
             }
         }
 
+        // mutually exclusive options, same checks as redis zaddGenericCommand
+        if (isNx && isXx) {
+            return ErrorReply.SYNTAX;
+        }
+        if ((isGt && isNx) || (isLt && isNx) || (isGt && isLt)) {
+            return ErrorReply.SYNTAX;
+        }
+
         if (isIncr) {
             // only support one pair
             if (data.length != scoreBeginIndex + 2) {

@@ -534,6 +534,37 @@ zunionstore
         fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
 
         when:
+        // NX and XX are mutually exclusive
+        reply = zGroup.execute('zadd a nx xx 2 member0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // GT and LT are mutually exclusive
+        reply = zGroup.execute('zadd a gt lt 2 member0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // NX and GT are mutually exclusive
+        reply = zGroup.execute('zadd a nx gt 2 member0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // NX and LT are mutually exclusive
+        reply = zGroup.execute('zadd a nx lt 2 member0')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when:
+        // INCR with GT is a valid combination, the resulting score is vetoed here
+        reply = zGroup.execute('zadd a incr gt -5 member0')
+        then:
+        reply == NilReply.INSTANCE
+        fromMem(inMemoryGetSet, 'a').get('member0').score() == 10
+
+        when:
         reply = zGroup.execute('zadd a ch 1 member0')
         then:
         reply instanceof IntegerReply
