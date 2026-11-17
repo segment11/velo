@@ -52,7 +52,7 @@ public class BulkReply implements Reply {
      * @param d the double value
      */
     public BulkReply(double d) {
-        this.raw = String.valueOf(d).getBytes();
+        this.raw = DoubleFormat.format(d).getBytes();
     }
 
     @Override

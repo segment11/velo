@@ -1239,13 +1239,13 @@ zunionstore
         def reply = zGroup.execute('zincrby a 1 member0')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).asString() == '1.0'
+        (reply as BulkReply).asString() == '1'
 
         when:
         reply = zGroup.execute('zincrby a 1 member0')
         then:
         reply instanceof BulkReply
-        (reply as BulkReply).asString() == '2.0'
+        (reply as BulkReply).asString() == '2'
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -1645,7 +1645,7 @@ zunionstore
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
         ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'member100'
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '100.0'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '100'
 
         when:
         rz.add(100, 'member100')
@@ -1659,7 +1659,7 @@ zunionstore
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
         ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'member10'
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '10.0'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '10'
 
         when:
         reply = zGroup.execute('zpopmax a 0')
@@ -1728,7 +1728,7 @@ zunionstore
         (reply as MultiBulkReply).replies[0] instanceof BulkReply
         ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'member100'
         (reply as MultiBulkReply).replies[1] instanceof BulkReply
-        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '100.0'
+        ((reply as MultiBulkReply).replies[1] as BulkReply).asString() == '100'
 
         when:
         reply = zGroup.execute('zrandmember a')
@@ -2957,7 +2957,7 @@ zunionstore
         def valuesReply = mb.replies[1] as MultiBulkReply
         valuesReply.replies.length == 2
         (valuesReply.replies[0] as BulkReply).asString() == 'one'
-        (valuesReply.replies[1] as BulkReply).asString() == '1.0'
+        (valuesReply.replies[1] as BulkReply).asString() == '1'
 
         when: 'single key, pop MAX'
         reply = zGroup.execute('zmpop 1 myzset MAX')
@@ -2967,7 +2967,7 @@ zunionstore
         reply instanceof MultiBulkReply
         valuesReply2.replies.length == 2
         (valuesReply2.replies[0] as BulkReply).asString() == 'three'
-        (valuesReply2.replies[1] as BulkReply).asString() == '3.0'
+        (valuesReply2.replies[1] as BulkReply).asString() == '3'
 
         when: 'single key, COUNT 2 (only 1 element left)'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT 2')
@@ -2977,7 +2977,7 @@ zunionstore
         reply instanceof MultiBulkReply
         valuesReply3.replies.length == 2
         (valuesReply3.replies[0] as BulkReply).asString() == 'two'
-        (valuesReply3.replies[1] as BulkReply).asString() == '2.0'
+        (valuesReply3.replies[1] as BulkReply).asString() == '2'
 
         when: 'zset now empty, key removed'
         reply = zGroup.execute('zmpop 1 myzset MIN')
@@ -3002,9 +3002,9 @@ zunionstore
         (mb.replies[0] as BulkReply).asString() == 'b'
         valuesReply4.replies.length == 4
         (valuesReply4.replies[0] as BulkReply).asString() == 'x'
-        (valuesReply4.replies[1] as BulkReply).asString() == '10.0'
+        (valuesReply4.replies[1] as BulkReply).asString() == '10'
         (valuesReply4.replies[2] as BulkReply).asString() == 'y'
-        (valuesReply4.replies[3] as BulkReply).asString() == '20.0'
+        (valuesReply4.replies[3] as BulkReply).asString() == '20'
 
         when: 'wrong type - key is not a zset'
         inMemoryGetSet.remove(slot, 'mylist')
@@ -3043,7 +3043,7 @@ zunionstore
         def vrSlot = mbSlot.replies[1] as MultiBulkReply
         vrSlot.replies.length == 2
         (vrSlot.replies[0] as BulkReply).asString() == 'seven'
-        (vrSlot.replies[1] as BulkReply).asString() == '7.0'
+        (vrSlot.replies[1] as BulkReply).asString() == '7'
 
         when: 'cross-slot - all keys missing'
         inMemoryGetSet.remove(slot, 'a')
@@ -3090,7 +3090,7 @@ zunionstore
         def vrCs = mbCs.replies[1] as MultiBulkReply
         vrCs.replies.length == 2
         (vrCs.replies[0] as BulkReply).asString() == 'one'
-        (vrCs.replies[1] as BulkReply).asString() == '1.0'
+        (vrCs.replies[1] as BulkReply).asString() == '1'
 
         when: 'cross-slot - first empty, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -3115,9 +3115,9 @@ zunionstore
         (mbCs2.replies[0] as BulkReply).asString() == 'b'
         vrCs2.replies.length == 4
         (vrCs2.replies[0] as BulkReply).asString() == 'z'
-        (vrCs2.replies[1] as BulkReply).asString() == '30.0'
+        (vrCs2.replies[1] as BulkReply).asString() == '30'
         (vrCs2.replies[2] as BulkReply).asString() == 'y'
-        (vrCs2.replies[3] as BulkReply).asString() == '20.0'
+        (vrCs2.replies[3] as BulkReply).asString() == '20'
 
         when: 'cross-slot - first key empty zset, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -3144,7 +3144,7 @@ zunionstore
         (mbCs3.replies[0] as BulkReply).asString() == 'b'
         vrCs3.replies.length == 2
         (vrCs3.replies[0] as BulkReply).asString() == 'm'
-        (vrCs3.replies[1] as BulkReply).asString() == '5.0'
+        (vrCs3.replies[1] as BulkReply).asString() == '5'
 
         when: 'cross-slot - wrong type'
         inMemoryGetSet.remove(slot, 'a')
@@ -3201,11 +3201,11 @@ zunionstore
         def membersReply = scanReply.replies[1] as MultiBulkReply
         membersReply.replies.length == 6
         (membersReply.replies[0] as BulkReply).asString() == 'x'
-        (membersReply.replies[1] as BulkReply).asString() == '1.0'
+        (membersReply.replies[1] as BulkReply).asString() == '1'
         (membersReply.replies[2] as BulkReply).asString() == 'y'
-        (membersReply.replies[3] as BulkReply).asString() == '2.0'
+        (membersReply.replies[3] as BulkReply).asString() == '2'
         (membersReply.replies[4] as BulkReply).asString() == 'z'
-        (membersReply.replies[5] as BulkReply).asString() == '3.0'
+        (membersReply.replies[5] as BulkReply).asString() == '3'
 
         when: // COUNT 2 (partial page)
         reply = zGroup.execute('zscan a 0 count 2')
@@ -3220,9 +3220,9 @@ zunionstore
         // 2 members with scores = 4 elements
         membersReply2.replies.length == 4
         (membersReply2.replies[0] as BulkReply).asString() == 'x'
-        (membersReply2.replies[1] as BulkReply).asString() == '1.0'
+        (membersReply2.replies[1] as BulkReply).asString() == '1'
         (membersReply2.replies[2] as BulkReply).asString() == 'y'
-        (membersReply2.replies[3] as BulkReply).asString() == '2.0'
+        (membersReply2.replies[3] as BulkReply).asString() == '2'
 
         when: // multi-page pagination loop
         rz.add(4.0, 'm')
@@ -3261,7 +3261,7 @@ zunionstore
         def scanReply3 = reply as MultiBulkReply
         (scanReply3.replies[1] as MultiBulkReply).replies.length == 2
         ((scanReply3.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'x'
-        ((scanReply3.replies[1] as MultiBulkReply).replies[1] as BulkReply).asString() == '1.0'
+        ((scanReply3.replies[1] as MultiBulkReply).replies[1] as BulkReply).asString() == '1'
 
         when: // MATCH with no results
         reply = zGroup.execute('zscan a 0 match nomatch*')
