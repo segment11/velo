@@ -387,7 +387,7 @@ sunionstore
             data[1] = scanCursor.toLong().toString().bytes
         }
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('scan . match key:* count -1 type string') { data ->
@@ -760,7 +760,7 @@ sunionstore
         reply = sGroup.execute('set a value pxat a')
         then:
         // redis answers 'value is not an integer or out of range'
-        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('set a value zz')
@@ -903,7 +903,7 @@ sunionstore
         when:
         reply = sGroup.execute('setbit a _ 1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('setbit >key 0 10')
@@ -1051,7 +1051,7 @@ sunionstore
         when:
         reply = sGroup.execute('setrange a a value')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('setrange >key 1 value')
@@ -1881,7 +1881,7 @@ sunionstore
         when:
         reply = sGroup.execute('sintercard a a b limit 0')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('sintercard 1 a b limit 0')
@@ -1891,7 +1891,7 @@ sunionstore
         when:
         reply = sGroup.execute('sintercard 2 a b limit a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('sintercard 2 a b limit_x 0')
@@ -2102,12 +2102,12 @@ sunionstore
         when:
         reply = sGroup.execute('sort a limit a 10')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('sort a limit 0 a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         def cv = Mock.prepareCompressedValueList(1)[0]
@@ -2663,7 +2663,7 @@ sunionstore
         when:
         reply = sGroup.execute('srandmember a a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('srandmember >key 1')
@@ -2762,7 +2762,7 @@ sunionstore
         when:
         reply = sGroup.execute('sscan a notanumber')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('sscan >key 0')
@@ -2787,7 +2787,7 @@ sunionstore
         when:
         reply = sGroup.execute('sscan a 0 count notanumber')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = sGroup.execute('sscan a 0 count -1')
@@ -2999,7 +2999,7 @@ sunionstore
         data3[2] = 'a'.bytes
         reply = sGroup.slaveof()
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'port above 65535'
         data3[1] = 'redis-master.local'.bytes
@@ -3013,7 +3013,7 @@ sunionstore
         data3[2] = 'abc'.bytes
         reply = sGroup.slaveof()
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         // ----- NO ONE semantics (Redis Sentinel) -----
 
@@ -3042,7 +3042,7 @@ sunionstore
         data3[2] = 'TWO'.bytes
         reply = sGroup.slaveof()
         then: 'NO alone parses as a valid hostname, then port parse fails on TWO'
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         // ----- happy path: hostname / IPv4 slaveof -----
 

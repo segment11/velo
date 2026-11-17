@@ -627,7 +627,7 @@ public class CGroup extends BaseCommand {
                 try {
                     dbId = Long.parseLong(new String(data[++i]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 // Velo has a single logical db; mirror the Redis standalone error for other ids
                 if (dbId != 0) {

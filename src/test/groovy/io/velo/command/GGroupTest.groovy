@@ -129,7 +129,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('getbit a _')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = gGroup.execute('getbit >key 0')
@@ -232,7 +232,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('getex a ex a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = gGroup.execute('getex a ex -1')
@@ -370,7 +370,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('getrange a 0 a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         // Bug 77.10: 64 bit offsets are accepted like redis and clamped
@@ -517,48 +517,48 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geoadd a nx 1.a 2.0 m0')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // invalid longitude > 180
         reply = gGroup.execute('geoadd a 181.0 38.115556 m0')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // invalid latitude > 85.05112877980659
         reply = gGroup.execute('geoadd a 15.0 90.0 m0')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // NaN passes every < > comparison, must be rejected explicitly
         reply = gGroup.execute('geoadd b NaN 37.5 m0')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = gGroup.execute('geoadd c 13.36 NaN m0')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // NaN together with a valid triple is still rejected
         reply = gGroup.execute('geoadd d 13.36 38.1 ok NaN 37.5 bad')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // invalid longitude < -180
         reply = gGroup.execute('geoadd e -181.0 38.1 m0')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // invalid latitude < -85.05112877980659
         reply = gGroup.execute('geoadd f 13.36 -86.0 m0')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = gGroup.execute('geoadd a nx 1.0 2.0')
@@ -799,7 +799,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx fromlonlat a b')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37')
@@ -825,7 +825,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx byradius a km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = gGroup.execute('geosearch xxx byradius 100 km bybox')
@@ -855,7 +855,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx count a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = gGroup.execute('geosearch xxx 333')
@@ -963,49 +963,49 @@ class GGroupTest extends Specification {
         // Bug 5: FROMLONLAT invalid longitude should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 181 37 byradius 100 km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // Bug 5: FROMLONLAT invalid latitude should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 90 byradius 100 km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // Bug 5: FROMLONLAT NaN longitude should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat NaN 37 byradius 100 km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // Bug 5: FROMLONLAT NaN latitude should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 NaN byradius 100 km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // Bug 5: BYRADIUS zero should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 0 km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // Bug 5: BYRADIUS negative should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius -1 km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // Bug 5: BYBOX zero width should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 0 10 km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // Bug 5: BYBOX negative height should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 10 -1 km')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         // read mode with a missing source key replies an empty array

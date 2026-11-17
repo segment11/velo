@@ -176,7 +176,7 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lindex a a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = lGroup.execute('lindex >key 1')
@@ -406,7 +406,7 @@ class LGroupTest extends Specification {
         lGroup.data[5] = 'a'.bytes
         reply = lGroup.lmove(true)
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         // negative timeout should be rejected
@@ -539,7 +539,7 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lpop a a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = lGroup.execute('lpop >key 0')
@@ -663,7 +663,7 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lpos a a rank a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         // bug 82.4: redis rejects rank 0, it is not a valid rank
@@ -687,12 +687,12 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lpos a a count a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = lGroup.execute('lpos a a maxlen a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = lGroup.execute('lpos a a maxlen -1')
@@ -928,7 +928,7 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lrange a a 1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = lGroup.execute('lrange >key a 1')
@@ -994,7 +994,7 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lrem a a 2')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = lGroup.execute('lrem >key 3 2')
@@ -1063,7 +1063,7 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lset a a a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = lGroup.execute('lset >key 1 a')
@@ -1164,7 +1164,7 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('ltrim a a 9')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = lGroup.execute('ltrim >key 0 9')
@@ -1316,7 +1316,7 @@ port ${tmpPort}
         when: 'numkeys not integer'
         reply = lGroup.execute('lmpop abc mylist LEFT')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'numkeys zero'
         reply = lGroup.execute('lmpop 0 mylist LEFT')
@@ -1331,7 +1331,7 @@ port ${tmpPort}
         when: 'count not integer'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT abc')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'count zero rejected'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT 0')

@@ -74,7 +74,7 @@ public class WGroup extends BaseCommand {
             numReplicas = Integer.parseInt(new String(data[1]));
             timeoutMillis = Integer.parseInt(new String(data[2]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         if (numReplicas <= 0 || timeoutMillis <= 0) {

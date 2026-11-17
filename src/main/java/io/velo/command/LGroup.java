@@ -314,7 +314,7 @@ public class LGroup extends BaseCommand {
         try {
             index = Integer.parseInt(new String(indexBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (index >= RedisList.LIST_MAX_SIZE) {
             return ErrorReply.LIST_SIZE_TO_LONG;
@@ -550,7 +550,7 @@ public class LGroup extends BaseCommand {
             try {
                 timeoutSeconds = Double.parseDouble(new String(timeoutBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
 
             if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
@@ -581,7 +581,7 @@ public class LGroup extends BaseCommand {
             try {
                 count = Integer.parseInt(new String(countBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
             if (count < 0) {
                 return ErrorReply.RANGE_OUT_OF_INDEX;
@@ -638,7 +638,7 @@ public class LGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(data[1]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (numKeys <= 0) {
             return ErrorReply.RANGE_OUT_OF_INDEX;
@@ -663,7 +663,7 @@ public class LGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(data[4 + numKeys]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 if (count <= 0) {
                     return ErrorReply.VALUE_NOT_POSITIVE;
@@ -740,7 +740,7 @@ public class LGroup extends BaseCommand {
                     try {
                         rank = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     if (rank == 0) {
                         return LPOS_RANK_ZERO;
@@ -754,7 +754,7 @@ public class LGroup extends BaseCommand {
                     try {
                         count = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     if (count < 0) {
                         return ErrorReply.INVALID_INTEGER;
@@ -769,7 +769,7 @@ public class LGroup extends BaseCommand {
                     try {
                         maxlen = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     if (maxlen < 0) {
                         return ErrorReply.INVALID_INTEGER;
@@ -925,7 +925,7 @@ public class LGroup extends BaseCommand {
             start = Integer.parseInt(new String(data[2]));
             end = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -980,7 +980,7 @@ public class LGroup extends BaseCommand {
         try {
             count = Integer.parseInt(new String(countBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -1034,7 +1034,7 @@ public class LGroup extends BaseCommand {
         try {
             index = Integer.parseInt(new String(indexBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         if (index >= RedisList.LIST_MAX_SIZE) {
@@ -1081,7 +1081,7 @@ public class LGroup extends BaseCommand {
             start = Integer.parseInt(new String(data[2]));
             end = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();

@@ -874,7 +874,7 @@ class CGroupTest extends Specification {
         when: 'non-numeric DB value is not integer'
         reply = cGroup.execute('copy a b db nonsense')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'nonzero DB is out of range (Velo is single-db)'
         reply = cGroup.execute('copy a b db 5')

@@ -375,7 +375,7 @@ migrating_state:ok
         try {
             toClientSlot = Integer.parseInt(new String(data[2]))
         } catch (NumberFormatException ignored) {
-            return ErrorReply.NOT_INTEGER
+            return ErrorReply.INVALID_INTEGER
         }
         if (toClientSlot < 0 || toClientSlot >= MultiShard.TO_CLIENT_SLOT_NUMBER) {
             return ErrorReply.INVALID_INTEGER
@@ -411,7 +411,7 @@ migrating_state:ok
         try {
             toClientSlot = Integer.parseInt(new String(data[2]))
         } catch (NumberFormatException ignored) {
-            return ErrorReply.NOT_INTEGER
+            return ErrorReply.INVALID_INTEGER
         }
         if (toClientSlot < 0 || toClientSlot >= MultiShard.TO_CLIENT_SLOT_NUMBER) {
             return ErrorReply.INVALID_INTEGER
@@ -421,7 +421,7 @@ migrating_state:ok
         try {
             count = Integer.parseInt(new String(data[3]))
         } catch (NumberFormatException ignored) {
-            return ErrorReply.NOT_INTEGER
+            return ErrorReply.INVALID_INTEGER
         }
         if (count <= 0) {
             return ErrorReply.INVALID_INTEGER
@@ -743,7 +743,7 @@ migrating_state:ok
         try {
             port = Integer.parseInt(new String(data[3]))
         } catch (NumberFormatException ignored) {
-            return ErrorReply.NOT_INTEGER
+            return ErrorReply.INVALID_INTEGER
         }
         if (port < 0 || port > 65535) {
             return ErrorReply.INVALID_INTEGER

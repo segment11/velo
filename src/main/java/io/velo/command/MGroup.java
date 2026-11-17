@@ -575,7 +575,7 @@ public class MGroup extends BaseCommand {
             timeoutMs = parseMigrateTimeout(new String(data[5]));
         } catch (NumberFormatException e) {
             log.warn("Migrate invalid argument, error={}", e.getMessage());
-            return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         boolean isCopy = args.isCopy();

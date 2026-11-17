@@ -267,7 +267,7 @@ class AGroupTest extends Specification {
         when:
         reply = aGroup.execute('acl genpass x')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = aGroup.execute('acl genpass 1 2')
@@ -374,7 +374,7 @@ class AGroupTest extends Specification {
         when:
         reply = aGroup.execute('acl log a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = aGroup.execute('acl log')

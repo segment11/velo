@@ -501,7 +501,7 @@ public class RGroup extends BaseCommand {
                     try {
                         idleTime = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     if (idleTime < 0) {
                         return new ErrorReply("idletime can't be negative");
@@ -519,7 +519,7 @@ public class RGroup extends BaseCommand {
                     try {
                         freq = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     if (freq < 0 || freq > 255) {
                         return new ErrorReply("freq must be in range 0..255");
@@ -556,7 +556,7 @@ public class RGroup extends BaseCommand {
             try {
                 ttlValue = Long.parseLong(ttl);
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+                return ErrorReply.INVALID_INTEGER;
             }
             if (ttlValue < 0) {
                 return new ErrorReply("Invalid TTL value, must be >= 0");

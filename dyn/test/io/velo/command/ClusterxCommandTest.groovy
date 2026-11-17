@@ -251,7 +251,7 @@ slots
         data3[2] = 'a'.bytes
         reply = clusterx.countkeysinslot()
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         data3[2] = '-1'.bytes
@@ -307,7 +307,7 @@ slots
         when:
         reply = clusterx.execute('cluster getkeysinslot a 10')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = clusterx.execute('cluster getkeysinslot -1 10')
@@ -322,7 +322,7 @@ slots
         when:
         reply = clusterx.execute('cluster getkeysinslot 0 a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = clusterx.execute('cluster getkeysinslot 0 0')
@@ -729,7 +729,7 @@ slots
         when:
         reply = clusterx.execute('cluster meet 127.0.0.1 aaa')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = clusterx.execute('cluster meet aaa 6379')

@@ -73,23 +73,17 @@ public class ErrorReply implements Reply {
     public static final ErrorReply SYNTAX = new ErrorReply("syntax error");
 
     /** Error reply for not an integer, the text is aligned with redis. */
-    public static final ErrorReply NOT_INTEGER = new ErrorReply("value is not an integer or out of range");
+    public static final ErrorReply INVALID_INTEGER = new ErrorReply("value is not an integer or out of range");
 
     /** Error reply for not a float, the text is aligned with redis. */
-    public static final ErrorReply NOT_FLOAT = new ErrorReply("value is not a valid float");
+    public static final ErrorReply INVALID_FLOAT = new ErrorReply("value is not a valid float");
 
     /** Error reply for a SORT element that cannot be converted into a double, the text is aligned with redis. */
     public static final ErrorReply SORT_SCORE_NOT_DOUBLE = new ErrorReply(
             "One or more scores can't be converted into double");
 
-    /** Error reply for a value that is not an integer or out of range. */
-    public static final ErrorReply NOT_INTEGER_OR_OUT_OF_RANGE = new ErrorReply("value is not an integer or out of range");
-
     /** Error reply for a NaN or Infinity value. */
     public static final ErrorReply NAN_OR_INFINITY = new ErrorReply("value is NaN or Infinity");
-
-    /** Error reply for invalid integer, the text is aligned with redis. */
-    public static final ErrorReply INVALID_INTEGER = new ErrorReply("value is not an integer or out of range");
 
     /** Error reply for invalid file. */
     public static final ErrorReply INVALID_FILE = new ErrorReply("invalid file");

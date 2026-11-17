@@ -247,7 +247,7 @@ public class GGroup extends BaseCommand {
         try {
             offset = Integer.parseInt(new String(offsetBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (offset < 0) {
             return ErrorReply.INVALID_INTEGER;
@@ -319,7 +319,7 @@ public class GGroup extends BaseCommand {
             try {
                 x = Long.parseLong(arg2);
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
             if (x < 0) {
                 return ErrorReply.INVALID_INTEGER;
@@ -410,7 +410,7 @@ public class GGroup extends BaseCommand {
             startLong = Long.parseLong(new String(data[2]));
             endLong = Long.parseLong(new String(data[3]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -596,13 +596,13 @@ public class GGroup extends BaseCommand {
                     if (Double.isNaN(lon) || Double.isNaN(lat) ||
                         lon > RedisGeo.GEO_LONG_MAX || lon < RedisGeo.GEO_LONG_MIN ||
                         lat > RedisGeo.GEO_LAT_MAX || lat < RedisGeo.GEO_LAT_MIN) {
-                        return ErrorReply.NOT_FLOAT;
+                        return ErrorReply.INVALID_FLOAT;
                     }
                     var member = new String(data[i + 2]);
                     itemList.add(new GeoItem(lon, lat, member));
                     i += 2;
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
             }
         }
@@ -805,7 +805,7 @@ public class GGroup extends BaseCommand {
                     }
                     i++;
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 if (i + 1 < dd.length && "any".equalsIgnoreCase(new String(dd[i + 1]))) {
                     i++;
@@ -844,11 +844,11 @@ public class GGroup extends BaseCommand {
                         Double.isNaN(fromLat) || Double.isInfinite(fromLat) ||
                         fromLon > RedisGeo.GEO_LONG_MAX || fromLon < RedisGeo.GEO_LONG_MIN ||
                         fromLat > RedisGeo.GEO_LAT_MAX || fromLat < RedisGeo.GEO_LAT_MIN) {
-                        return ErrorReply.NOT_FLOAT;
+                        return ErrorReply.INVALID_FLOAT;
                     }
                     i += 2;
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
                 hasFromLonLat = true;
                 hasCenterSource = true;
@@ -872,11 +872,11 @@ public class GGroup extends BaseCommand {
                 try {
                     byRadius = Double.parseDouble(new String(dd[i + 1]));
                     if (byRadius <= 0 || Double.isInfinite(byRadius) || Double.isNaN(byRadius)) {
-                        return ErrorReply.NOT_FLOAT;
+                        return ErrorReply.INVALID_FLOAT;
                     }
                     i++;
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
 
                 if (i + 1 >= dd.length) {
@@ -902,11 +902,11 @@ public class GGroup extends BaseCommand {
                     byBoxHeight = Double.parseDouble(new String(dd[i + 2]));
                     if (byBoxWidth <= 0 || Double.isInfinite(byBoxWidth) || Double.isNaN(byBoxWidth) ||
                         byBoxHeight <= 0 || Double.isInfinite(byBoxHeight) || Double.isNaN(byBoxHeight)) {
-                        return ErrorReply.NOT_FLOAT;
+                        return ErrorReply.INVALID_FLOAT;
                     }
                     i += 2;
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
 
                 if (i + 1 >= dd.length) {

@@ -152,12 +152,12 @@ class WGroupTest extends Specification {
         when:
         reply = wGroup.execute('wait a 0')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = wGroup.execute('wait 0 a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         cleanup:
         eventloop.breakEventloop()

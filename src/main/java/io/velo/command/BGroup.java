@@ -341,7 +341,7 @@ public class BGroup extends BaseCommand {
                 start = Integer.parseInt(new String(data[2]));
                 end = Integer.parseInt(new String(data[3]));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
 
             isIndexUseBit = data.length == 5 && "bit".equalsIgnoreCase(new String(data[4]));
@@ -421,7 +421,7 @@ public class BGroup extends BaseCommand {
                 start = Integer.parseInt(new String(data[3]));
                 end = data.length >= 5 ? Integer.parseInt(new String(data[4])) : -1;
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
 
             isIndexUseBit = data.length == 6 && "bit".equalsIgnoreCase(new String(data[5]));
@@ -737,7 +737,7 @@ public class BGroup extends BaseCommand {
                 try {
                     initCapacity = Integer.parseInt(new String(data[i + 1]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 if (initCapacity <= 0) {
                     return ErrorReply.CAPACITY_NOT_POSITIVE;
@@ -752,7 +752,7 @@ public class BGroup extends BaseCommand {
                 try {
                     initFpp = Double.parseDouble(new String(data[i + 1]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
                 if (initFpp <= 0 || initFpp >= 1) {
                     return new ErrorReply("error must be > 0 and < 1");
@@ -767,7 +767,7 @@ public class BGroup extends BaseCommand {
                 try {
                     initExpansion = Byte.parseByte(new String(data[i + 1]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 if (initExpansion > RedisBF.MAX_EXPANSION) {
                     return new ErrorReply("expansion too large");
@@ -836,7 +836,7 @@ public class BGroup extends BaseCommand {
         try {
             iterator = Integer.parseInt(new String(iteratorBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         // only support 0, dump all once
         if (iterator != 0) {
@@ -877,7 +877,7 @@ public class BGroup extends BaseCommand {
         try {
             iterator = Integer.parseInt(new String(iteratorBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         // only support 0, dump all once
         if (iterator != 0) {
@@ -917,7 +917,7 @@ public class BGroup extends BaseCommand {
         try {
             initFpp = Double.parseDouble(new String(data[2]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_FLOAT;
+            return ErrorReply.INVALID_FLOAT;
         }
         if (initFpp <= 0 || initFpp >= 1) {
             return new ErrorReply("error must be > 0 and < 1");
@@ -927,7 +927,7 @@ public class BGroup extends BaseCommand {
         try {
             initCapacity = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (initCapacity <= 0) {
             return ErrorReply.CAPACITY_NOT_POSITIVE;
@@ -943,7 +943,7 @@ public class BGroup extends BaseCommand {
                 try {
                     initExpansion = Byte.parseByte(new String(data[i + 1]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 if (initExpansion > RedisBF.MAX_EXPANSION) {
                     return new ErrorReply("expansion too large");
@@ -990,7 +990,7 @@ public class BGroup extends BaseCommand {
         try {
             timeoutSeconds = Double.parseDouble(new String(timeoutBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
@@ -1216,7 +1216,7 @@ public class BGroup extends BaseCommand {
         try {
             timeoutSeconds = Double.parseDouble(new String(data[1]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
             return new ErrorReply("timeout is not a float or out of range");
@@ -1226,7 +1226,7 @@ public class BGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(data[2]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (numKeys <= 0) {
             return ErrorReply.RANGE_OUT_OF_INDEX;
@@ -1251,7 +1251,7 @@ public class BGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(data[5 + numKeys]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 if (count <= 0) {
                     return ErrorReply.VALUE_NOT_POSITIVE;

@@ -720,21 +720,21 @@ class RGroupTest extends Specification {
             data[3] = RDBParser.dumpString('values'.bytes)
         }
         then:
-        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'bug 85.6: a non numeric idletime is rejected'
         reply = rGroup.execute('restore ttl_not_int 0 bbb replace idletime abc') { data ->
             data[3] = RDBParser.dumpString('values'.bytes)
         }
         then:
-        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'bug 85.6: a non numeric freq is rejected'
         reply = rGroup.execute('restore ttl_not_int 0 bbb replace freq abc') { data ->
             data[3] = RDBParser.dumpString('values'.bytes)
         }
         then:
-        reply == ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'bug 85.6: the busy key check comes before the ttl parse'
         inMemoryGetSet.remove(slot, 'busy_ttl')

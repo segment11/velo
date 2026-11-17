@@ -107,7 +107,7 @@ class DGroupTest extends Specification {
         dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrby', data3, dGroup.slotNumber)
         reply = dGroup.handle()
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'decrby'
         data3[1] = 'n'.bytes
@@ -126,7 +126,7 @@ class DGroupTest extends Specification {
         dGroup.slotWithKeyHashListParsed = _DGroup.parseSlots('decrbyfloat', data3, dGroup.slotNumber)
         reply = dGroup.handle()
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when: 'decrbyfloat'
         data3[1] = 'n'.bytes
@@ -372,7 +372,7 @@ class DGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, doubleCv)
         reply = dGroup.execute('decr a')
         then: 'a double value is not an integer'
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
         and: 'the value is not changed'
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().dictSeqOrSpType == CompressedValue.SP_TYPE_NUM_DOUBLE
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == 1.5d
@@ -382,7 +382,7 @@ class DGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, doubleCv)
         reply = dGroup.execute('decr a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
         and: 'the value is not changed'
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == Double.POSITIVE_INFINITY
 
@@ -428,24 +428,24 @@ class DGroupTest extends Specification {
         when: 'decrbyfloat with a not finite delta'
         reply = dGroup.execute('decrbyfloat a 1e400')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = dGroup.execute('decrbyfloat a NaN')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = dGroup.execute('decrbyfloat a Infinity')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when: 'decrbyfloat a key with a not finite value'
         cv.compressedData = ByteBuffer.allocate(8).putDouble(Double.POSITIVE_INFINITY).array()
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = dGroup.execute('decrbyfloat a 1')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
         and: 'the value is not changed'
         inMemoryGetSet.getBuf(slot, 'a', 0, 0L).cv().numberValue().doubleValue() == Double.POSITIVE_INFINITY
     }
@@ -471,7 +471,7 @@ class DGroupTest extends Specification {
         when: 'decrby with a not integer delta'
         reply = dGroup.execute('decrby a abc')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'decrby with a negative delta on the max long value'
         cv.compressedData = ByteBuffer.allocate(8).putLong(Long.MAX_VALUE).array()
@@ -519,14 +519,14 @@ class DGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = dGroup.execute('decrby a 1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
         inMemoryGetSet.put(slot, 'a', 0, cv)
         reply = dGroup.execute('decrby a 1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         cv.compressedData = '1234'.bytes

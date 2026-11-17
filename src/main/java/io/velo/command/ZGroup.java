@@ -381,7 +381,7 @@ public class ZGroup extends BaseCommand {
                 numKeys = Integer.parseInt(new String(numKeysBytes));
             } catch (NumberFormatException e) {
                 return slotWithKeyHashList;
-//                throw new ErrorReplyException(ErrorReply.NOT_INTEGER.getMessage());
+//                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
             }
 
             if (numKeys < 2) {
@@ -418,7 +418,7 @@ public class ZGroup extends BaseCommand {
                 numKeys = Integer.parseInt(new String(numKeysBytes));
             } catch (NumberFormatException e) {
                 return slotWithKeyHashList;
-//                throw new ErrorReplyException(ErrorReply.NOT_INTEGER.getMessage());
+//                throw new ErrorReplyException(ErrorReply.INVALID_INTEGER.getMessage());
             }
 
             if (numKeys < 2) {
@@ -805,7 +805,7 @@ public class ZGroup extends BaseCommand {
             try {
                 score = Double.parseDouble(new String(scoreBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_FLOAT;
+                return ErrorReply.INVALID_FLOAT;
             }
 
             var memberBytes = data[i + 1];
@@ -970,7 +970,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     min = Double.parseDouble(minStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
             }
 
@@ -987,7 +987,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     max = Double.parseDouble(maxStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
             }
 
@@ -1193,7 +1193,7 @@ public class ZGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(numKeysBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         if (numKeys < 2) {
@@ -1257,7 +1257,7 @@ public class ZGroup extends BaseCommand {
                         try {
                             weight = Double.parseDouble(new String(weightBytes));
                         } catch (NumberFormatException e) {
-                            return ErrorReply.NOT_FLOAT;
+                            return ErrorReply.INVALID_FLOAT;
                         }
                         weights[j] = weight;
                     }
@@ -1416,7 +1416,7 @@ public class ZGroup extends BaseCommand {
         try {
             score = Double.parseDouble(new String(scoreBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_FLOAT;
+            return ErrorReply.INVALID_FLOAT;
         }
 
         var memberBytes = data[3];
@@ -1456,7 +1456,7 @@ public class ZGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(numKeysBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         if (numKeys < 2) {
@@ -1482,7 +1482,7 @@ public class ZGroup extends BaseCommand {
             try {
                 limit = Integer.parseInt(new String(limitBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
             if (limit < 0) {
                 return ErrorReply.INVALID_INTEGER;
@@ -1656,7 +1656,7 @@ public class ZGroup extends BaseCommand {
             try {
                 count = Integer.parseInt(new String(countBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
             if (count <= 0) {
                 return ErrorReply.VALUE_NOT_POSITIVE;
@@ -1711,7 +1711,7 @@ public class ZGroup extends BaseCommand {
             try {
                 count = Integer.parseInt(tmp);
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
             if (count == 0) {
                 return ErrorReply.INVALID_INTEGER;
@@ -1818,7 +1818,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     offset = Integer.parseInt(new String(offsetBytes));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 if (offset < 0) {
                     return ErrorReply.INVALID_INTEGER;
@@ -1828,7 +1828,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(countBytes));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
 
                 hasLimit = true;
@@ -1942,7 +1942,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     min = Double.parseDouble(minStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
             }
 
@@ -1959,7 +1959,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     max = Double.parseDouble(maxStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
             }
 
@@ -1989,7 +1989,7 @@ public class ZGroup extends BaseCommand {
                 start = Integer.parseInt(minStr);
                 stop = Integer.parseInt(maxStr);
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
         }
 
@@ -2332,7 +2332,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     min = Double.parseDouble(minStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
             }
 
@@ -2349,7 +2349,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     max = Double.parseDouble(maxStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
             }
 
@@ -2364,12 +2364,12 @@ public class ZGroup extends BaseCommand {
             try {
                 start = Integer.parseInt(minStr);
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
             try {
                 stop = Integer.parseInt(maxStr);
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
         }
 
@@ -2493,7 +2493,7 @@ public class ZGroup extends BaseCommand {
         try {
             cursorLong = Long.parseLong(new String(cursorBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         String matchPattern = null;
@@ -2514,7 +2514,7 @@ public class ZGroup extends BaseCommand {
                     try {
                         count = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     if (count <= 0) {
                         return ErrorReply.SYNTAX;
@@ -2579,7 +2579,7 @@ public class ZGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(data[1]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (numKeys <= 0) {
             return ErrorReply.RANGE_OUT_OF_INDEX;
@@ -2604,7 +2604,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(data[4 + numKeys]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 if (count <= 0) {
                     return ErrorReply.VALUE_NOT_POSITIVE;

@@ -790,7 +790,7 @@ public class HGroup extends BaseCommand {
         try {
             numFields = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         // the field count must match the number of arguments, the comparison is
@@ -944,7 +944,7 @@ public class HGroup extends BaseCommand {
         try {
             timeValue = Long.parseLong(new String(timeBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         final long now = System.currentTimeMillis();
@@ -992,7 +992,7 @@ public class HGroup extends BaseCommand {
         try {
             numFields = Integer.parseInt(new String(data[fieldsIndex]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         fieldsIndex++;
 
@@ -1290,11 +1290,11 @@ public class HGroup extends BaseCommand {
         try {
             numFields = Integer.parseInt(new String(data[3]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         if (numFields <= 0) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         // the field count must match the number of arguments, the comparison is
@@ -1404,7 +1404,7 @@ public class HGroup extends BaseCommand {
                 try {
                     timeValue = Long.parseLong(new String(data[fieldsIndex + 1]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_INTEGER;
+                    return ErrorReply.INVALID_INTEGER;
                 }
                 var computedExpireAt = computeFieldExpireAt(option, timeValue, System.currentTimeMillis());
                 if (computedExpireAt < 0) {
@@ -1433,12 +1433,12 @@ public class HGroup extends BaseCommand {
         try {
             numFields = Integer.parseInt(new String(data[fieldsIndex]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         fieldsIndex++;
 
         if (numFields <= 0) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         // the field count must match the number of arguments, the comparison is
@@ -1554,7 +1554,7 @@ public class HGroup extends BaseCommand {
             try {
                 byFloat = Double.parseDouble(new String(byBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_FLOAT;
+                return ErrorReply.INVALID_FLOAT;
             }
             if (!Double.isFinite(byFloat)) {
                 // infinity and nan are not valid float values
@@ -1564,7 +1564,7 @@ public class HGroup extends BaseCommand {
             try {
                 by = Long.parseLong(new String(byBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
         }
 
@@ -1632,16 +1632,16 @@ public class HGroup extends BaseCommand {
                 var doubleValue = cv.numberValue().doubleValue();
                 if (!Double.isFinite(doubleValue)) {
                     // infinity and nan are not valid float values
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
                 currentValue = BigDecimal.valueOf(doubleValue);
             } else if (cv.isCompressed()) {
-                return ErrorReply.NOT_FLOAT;
+                return ErrorReply.INVALID_FLOAT;
             } else {
                 try {
                     currentValue = BigDecimal.valueOf(Double.parseDouble(new String(cv.getCompressedData())));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.NOT_FLOAT;
+                    return ErrorReply.INVALID_FLOAT;
                 }
             }
         }
@@ -1692,7 +1692,7 @@ public class HGroup extends BaseCommand {
                 return new IntegerReply(by);
             }
         } else {
-            final var NOT_NUMBER_REPLY = isByFloat ? ErrorReply.NOT_FLOAT : ErrorReply.NOT_INTEGER;
+            final var NOT_NUMBER_REPLY = isByFloat ? ErrorReply.INVALID_FLOAT : ErrorReply.INVALID_INTEGER;
 
             double doubleValue = 0;
             long longValue = 0;
@@ -1991,7 +1991,7 @@ public class HGroup extends BaseCommand {
             try {
                 timeValue = Long.parseLong(new String(data[idx + 1]));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
             var computedExpireAt = computeFieldExpireAt(expOption, timeValue, System.currentTimeMillis());
             if (computedExpireAt < 0) {
@@ -2019,12 +2019,12 @@ public class HGroup extends BaseCommand {
         try {
             numFields = Integer.parseInt(new String(data[idx]));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         idx++;
 
         if (numFields <= 0) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         // the field count must match the number of arguments, the comparison is
@@ -2308,7 +2308,7 @@ public class HGroup extends BaseCommand {
         try {
             cursorLong = Long.parseLong(cursor);
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         String matchPattern = null;
@@ -2330,7 +2330,7 @@ public class HGroup extends BaseCommand {
                     try {
                         count = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     if (count <= 0) {
                         return ErrorReply.INVALID_INTEGER;

@@ -146,13 +146,13 @@ public class IGroup extends BaseCommand {
             // redis parses the delta with string2ll semantics, java-only literals like +5, 05, -0 are
             // rejected (bug 79.8)
             if (!RDBParser.isRedisIntegerString(data[2])) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
             long by;
             try {
                 by = Long.parseLong(new String(data[2]));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
 
             var dGroup = new DGroup(cmd, data, socket);
@@ -171,13 +171,13 @@ public class IGroup extends BaseCommand {
             // redis parses the delta with string2ld/strtold semantics: no surrounding whitespace,
             // no trailing java suffix like d/f, while +1.5, .5, 05, 1e3 stay accepted (bug 79.8)
             if (!isRedisFloatString(data[2])) {
-                return ErrorReply.NOT_FLOAT;
+                return ErrorReply.INVALID_FLOAT;
             }
             double by;
             try {
                 by = Double.parseDouble(new String(data[2]));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_FLOAT;
+                return ErrorReply.INVALID_FLOAT;
             }
 
             var dGroup = new DGroup(cmd, data, socket);
@@ -264,7 +264,7 @@ public class IGroup extends BaseCommand {
             try {
                 keyFieldIndex = Integer.parseInt(keyField);
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
 
             var array = valueFields.split(",");
@@ -274,7 +274,7 @@ public class IGroup extends BaseCommand {
                     valueFieldsIndexes[i] = Integer.parseInt(array[i]);
                 }
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
 
             // validate indexes before any write (bug 79.5), negative indexes are invalid for every row

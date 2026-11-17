@@ -641,13 +641,13 @@ httl
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hincrby a field a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         LocalPersist.instance.hashSaveMemberTogether = false
         reply = hGroup.execute('hincrbyfloat a field a')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = hGroup.execute('hincrby >key field 1')
@@ -696,7 +696,7 @@ httl
         inMemoryGetSet.put(slot, 'a', 0, cvRhh)
         reply = hGroup.execute('hincrbyfloat a field 1')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         // bug 78.1: split mode must create the hash field index, otherwise the
         // written field is invisible to every aggregate command
@@ -754,7 +754,7 @@ httl
         when: 'a delta out of the int64 range'
         reply = hGroup.execute('hincrby hashInt64 field 99999999999999999999')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         // bug 78.3: a non finite value must not escape as a raw exception
         when: 'HH mode, a delta that overflows to infinity'
@@ -779,7 +779,7 @@ httl
         hGroup.execute('hset hashNonFinite field Infinity')
         reply = hGroup.execute('hincrbyfloat hashNonFinite field 1')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when: 'split mode, a delta that overflows to infinity'
         LocalPersist.instance.hashSaveMemberTogether = false
@@ -794,7 +794,7 @@ httl
         hGroup.execute('hset hashNonFinite field Infinity')
         reply = hGroup.execute('hincrbyfloat hashNonFinite field 1')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         // bug 78.4: the HH layout must not silently wrap on overflow
         when: 'HH mode, the value overflows'
@@ -916,14 +916,14 @@ httl
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashFloat3', 'field'), 0, cvString)
         reply = hGroup.execute('hincrbyfloat hashFloat3 field 0.1')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when: 'split mode, the value is compressed'
         cvString.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         inMemoryGetSet.put(slot, RedisHashKeys.fieldKey('hashFloat3', 'field'), 0, cvString)
         reply = hGroup.execute('hincrbyfloat hashFloat3 field 0.1')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when: 'the value is a round number'
         LocalPersist.instance.hashSaveMemberTogether = true
@@ -1727,7 +1727,7 @@ httl
         // invalid integer
         reply = hGroup.execute('hscan a 0 match zzz count a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = hGroup.execute('hscan a 0 match zzz count -1')
@@ -1774,7 +1774,7 @@ httl
         when:
         reply = hGroup.execute('hscan a badcursor match field count 10')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         // A key holding another type must answer WRONGTYPE, not an empty scan.
@@ -1833,18 +1833,18 @@ httl
         when:
         def reply = hGroup.execute('hgetdel hashA FIELDS -1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = hGroup.execute('hgetdel hashA FIELDS abc field1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         // bug 78.12: the number of fields must be greater than 0
         when:
         reply = hGroup.execute('hgetdel hashA FIELDS 0')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = hGroup.execute('hgetdel hashA FIELDS 1 field extra')
@@ -1995,7 +1995,7 @@ httl
         when: 'test numFields negative'
         def reply = hGroup.execute('hgetex hashA FIELDS -1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test extra args after fields'
         reply = hGroup.execute('hgetex hashA FIELDS 1 field extra')
@@ -2010,13 +2010,13 @@ httl
         when: 'test numFields invalid integer'
         reply = hGroup.execute('hgetex hashA FIELDS abc')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         // bug 78.12: the number of fields must be greater than 0
         when:
         reply = hGroup.execute('hgetex hashA FIELDS 0')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         // bug 78.11: the expire time must be validated
         when:
@@ -2104,22 +2104,22 @@ httl
         when: 'test invalid EX value (non-integer)'
         reply = hGroup.execute('hgetex hashA EX abc FIELDS 1 field1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test invalid PX value (non-integer)'
         reply = hGroup.execute('hgetex hashA PX abc FIELDS 1 field1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test invalid EXAT value (non-integer)'
         reply = hGroup.execute('hgetex hashA EXAT abc FIELDS 1 field1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test invalid PXAT value (non-integer)'
         reply = hGroup.execute('hgetex hashA PXAT abc FIELDS 1 field1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test invalid expire option'
         reply = hGroup.execute('hgetex hashA XX 3600 FIELDS 1 field1')
@@ -2393,22 +2393,22 @@ httl
         when: 'test EX option invalid integer'
         reply = hGroup.execute('hsetex hashA EX abc FIELDS 1 field1 value1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test PX option invalid integer'
         reply = hGroup.execute('hsetex hashA PX abc FIELDS 1 field1 value1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test EXAT option invalid integer'
         reply = hGroup.execute('hsetex hashA EXAT abc FIELDS 1 field1 value1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test PXAT option invalid integer'
         reply = hGroup.execute('hsetex hashA PXAT abc FIELDS 1 field1 value1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test syntax error - missing fields keyword'
         reply = hGroup.execute('hsetex hashA EX 3600 1 field1 value1')
@@ -2418,12 +2418,12 @@ httl
         when: 'test syntax error - numFields not integer'
         reply = hGroup.execute('hsetex hashA FIELDS abc field1 value1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test syntax error - numFields negative'
         reply = hGroup.execute('hsetex hashA FIELDS -1 field1 value1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'test syntax error - field count mismatch'
         reply = hGroup.execute('hsetex hashA FIELDS 2 field1')
@@ -2882,7 +2882,7 @@ httl
         when:
         reply = hGroup.execute('httl a fields 3x field0 field1 field2')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = hGroup.execute('httl a fieldsx 3 field0 field1 field2')
@@ -3086,7 +3086,7 @@ httl
         when:
         reply = hGroup.execute('hexpire a 10x fields 3 field0 field1 field2')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = hGroup.execute('hexpire a 10 fieldx 3 field0 field1 field2')
@@ -3096,7 +3096,7 @@ httl
         when:
         reply = hGroup.execute('hexpire a 10 fields 3x field0 field1 field2')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = hGroup.execute('hexpire a 10 fields 3 field0 field1')
@@ -3473,7 +3473,7 @@ httl
         when:
         def reply = hGroup.execute('hincrby hashA field0 3')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         // Verify cached TTL was NOT cleared (operation failed)
         def keysCv = inMemoryGetSet.getBuf(slot, RedisHashKeys.keysKey('hashA'), 0, 0)

@@ -628,7 +628,7 @@ public class SGroup extends BaseCommand {
                         try {
                             count = Integer.parseInt(new String(data[i + 1]));
                         } catch (NumberFormatException e) {
-                            return ErrorReply.NOT_INTEGER;
+                            return ErrorReply.INVALID_INTEGER;
                         }
                         if (count <= 0) {
                             return ErrorReply.INVALID_INTEGER;
@@ -815,7 +815,7 @@ public class SGroup extends BaseCommand {
         try {
             port = Integer.parseInt(arg2);
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (port < 0 || port > 65535) {
             return ErrorReply.INVALID_INTEGER;
@@ -900,7 +900,7 @@ public class SGroup extends BaseCommand {
                 value = Long.parseLong(new String(dd[i + 1]));
             } catch (NumberFormatException e) {
                 // redis answers 'value is not an integer or out of range'
-                return ErrorReply.NOT_INTEGER_OR_OUT_OF_RANGE;
+                return ErrorReply.INVALID_INTEGER;
             }
             if (value <= 0) {
                 // redis answers "invalid expire time in '<cmd>' command"
@@ -1021,7 +1021,7 @@ public class SGroup extends BaseCommand {
         try {
             offset = Integer.parseInt(new String(offsetBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (offset < 0) {
             return ErrorReply.INVALID_INTEGER;
@@ -1082,7 +1082,7 @@ public class SGroup extends BaseCommand {
         try {
             offset = Integer.parseInt(new String(offsetBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
         if (offset < 0) {
             return ErrorReply.INVALID_INTEGER;
@@ -1539,7 +1539,7 @@ public class SGroup extends BaseCommand {
         try {
             numkeys = Integer.parseInt(new String(numkeysBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         if (numkeys < 1) {
@@ -1579,7 +1579,7 @@ public class SGroup extends BaseCommand {
             try {
                 limit = Integer.parseInt(new String(limitBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
 
             if (limit < 0) {
@@ -1791,7 +1791,7 @@ public class SGroup extends BaseCommand {
                         offset = Integer.parseInt(new String(data[i + 1]));
                         count = Integer.parseInt(new String(data[i + 2]));
                     } catch (NumberFormatException ignore) {
-                        return ErrorReply.NOT_INTEGER;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     i += 2;
                     continue;
@@ -2208,7 +2208,7 @@ public class SGroup extends BaseCommand {
             try {
                 count = Integer.parseInt(new String(countBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
 
             if (doPop && count < 0) {
@@ -2329,7 +2329,7 @@ public class SGroup extends BaseCommand {
         try {
             cursorLong = Long.parseLong(new String(cursorBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.NOT_INTEGER;
+            return ErrorReply.INVALID_INTEGER;
         }
 
         String matchPattern = null;
@@ -2350,7 +2350,7 @@ public class SGroup extends BaseCommand {
                     try {
                         count = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.NOT_INTEGER;
+                        return ErrorReply.INVALID_INTEGER;
                     }
                     if (count <= 0) {
                         return ErrorReply.INVALID_INTEGER;

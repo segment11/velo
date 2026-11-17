@@ -186,7 +186,7 @@ public class DGroup extends BaseCommand {
                 long by = Long.parseLong(new String(data[2]));
                 return decrBy(by, 0, false);
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_INTEGER;
+                return ErrorReply.INVALID_INTEGER;
             }
         }
 
@@ -199,7 +199,7 @@ public class DGroup extends BaseCommand {
             try {
                 by = Double.parseDouble(new String(data[2]));
             } catch (NumberFormatException e) {
-                return ErrorReply.NOT_FLOAT;
+                return ErrorReply.INVALID_FLOAT;
             }
 
             return decrBy(0, by, true);
@@ -367,7 +367,7 @@ public class DGroup extends BaseCommand {
             return ErrorReply.KEY_TOO_LONG;
         }
 
-        final var NOT_NUMBER_REPLY = isByFloat ? ErrorReply.NOT_FLOAT : ErrorReply.NOT_INTEGER;
+        final var NOT_NUMBER_REPLY = isByFloat ? ErrorReply.INVALID_FLOAT : ErrorReply.INVALID_INTEGER;
 
         long longValue = 0;
         double doubleValue = 0;
@@ -453,7 +453,7 @@ public class DGroup extends BaseCommand {
         if (isByFloat) {
             if (!Double.isFinite(byFloat) || !Double.isFinite(doubleValue)) {
                 // infinity and nan are not valid float values
-                return ErrorReply.NOT_FLOAT;
+                return ErrorReply.INVALID_FLOAT;
             }
             // like redis incrbyfloat, compute with the full decimal precision of the operands,
             // do not quantize to number.doubleScale (bug 79.1); the reply formatting strips trailing zeros

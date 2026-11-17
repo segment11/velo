@@ -140,13 +140,13 @@ class IGroupTest extends Specification {
         data3[2] = 'a'.bytes
         reply = iGroup.handle()
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         iGroup.cmd = 'incrbyfloat'
         reply = iGroup.handle()
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
     }
 
     def 'test incr'() {
@@ -188,7 +188,7 @@ class IGroupTest extends Specification {
         when: 'incrby with a not integer delta'
         reply = iGroup.execute('incrby a abc')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'incrby on a double value key'
         def cvDouble = new CompressedValue()
@@ -197,7 +197,7 @@ class IGroupTest extends Specification {
         inMemoryGetSet.put(slot, 'dbl', 0, cvDouble)
         reply = iGroup.execute('incrby dbl 1')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
         and: 'the double value is not changed'
         inMemoryGetSet.getBuf(slot, 'dbl', 0, 0L).cv().numberValue().doubleValue() == 1.5d
 
@@ -237,22 +237,22 @@ class IGroupTest extends Specification {
         when: 'java-only integer literals are rejected like redis string2ll'
         reply = iGroup.execute('incrby s1 +5')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = iGroup.execute('incrby s1 05')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = iGroup.execute('incrby s1 -0')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = iGroup.execute('incrby s1 1.0')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'redis canonical integers still work'
         reply = iGroup.execute('incrby s1 0')
@@ -320,7 +320,7 @@ class IGroupTest extends Specification {
         when: 'java-only float literals are rejected like redis string2ld'
         reply = iGroup.execute('incrbyfloat d1 1.5d')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         def dataSpace = new byte[3][]
@@ -331,7 +331,7 @@ class IGroupTest extends Specification {
         iGroup.slotWithKeyHashListParsed = _IGroup.parseSlots('incrbyfloat', dataSpace, iGroup.slotNumber)
         reply = iGroup.handle()
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when: 'strtold-shaped literals redis accepts must stay accepted'
         dataSpace[2] = '+1.5'.bytes
@@ -724,13 +724,13 @@ class IGroupTest extends Specification {
         reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.csv file_format=csv ' +
                 'key_field_index=a key_prefix=test_ value_fields_indexes=0,1,2')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = iGroup.execute('ingest dir=/tmp/velo-data/test-persist/ingest file_pattern=test.csv file_format=csv ' +
                 'key_field_index=0 key_prefix=test_ value_fields_indexes=0,1,a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         // data length not match

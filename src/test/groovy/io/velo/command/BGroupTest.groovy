@@ -280,7 +280,7 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('bitcount a b 5')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = bGroup.execute('bitcount a 5 30 bit x')
@@ -406,7 +406,7 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('bitpos a 1 _ _')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = bGroup.execute('bitpos a 1 _ _ _ _')
@@ -699,20 +699,20 @@ class BGroupTest extends Specification {
         inMemoryGetSet.remove(slot, 'b')
         reply = bGroup.execute('bf.insert b capacity nope items item0')
         then:
-        // bad capacity should return NOT_INTEGER
-        reply == ErrorReply.NOT_INTEGER
+        // bad capacity should return INVALID_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = bGroup.execute('bf.insert b error nope items item0')
         then:
-        // bad error should return NOT_FLOAT
-        reply == ErrorReply.NOT_FLOAT
+        // bad error should return INVALID_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = bGroup.execute('bf.insert b expansion nope items item0')
         then:
-        // bad expansion should return NOT_INTEGER
-        reply == ErrorReply.NOT_INTEGER
+        // bad expansion should return INVALID_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'zero capacity is rejected before reaching guava'
         inMemoryGetSet.remove(slot, 'c')
@@ -777,7 +777,7 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('bf.scandump a a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = bGroup.execute('bf.loadchunk a 1 xxx')
@@ -787,7 +787,7 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('bf.loadchunk a a xxx')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'chunk without any payload after the length prefix'
         reply = loadchunk(bGroup, declaredLength(64, new byte[0]))
@@ -885,14 +885,14 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('bf.reserve a nope 1000')
         then:
-        // bad fpp should return NOT_FLOAT
-        reply == ErrorReply.NOT_FLOAT
+        // bad fpp should return INVALID_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = bGroup.execute('bf.reserve a 0.01 nope')
         then:
-        // bad capacity should return NOT_INTEGER
-        reply == ErrorReply.NOT_INTEGER
+        // bad capacity should return INVALID_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'zero capacity is rejected before reaching guava'
         inMemoryGetSet.remove(slot, 'c')
@@ -1058,7 +1058,7 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('blpop a x')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         // negative timeout should be rejected
@@ -1444,7 +1444,7 @@ class BGroupTest extends Specification {
         when: 'timeout not number'
         reply = bGroup.execute('blmpop abc 1 mylist LEFT')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'negative timeout'
         reply = bGroup.execute('blmpop -1 1 mylist LEFT')
@@ -1454,7 +1454,7 @@ class BGroupTest extends Specification {
         when: 'numkeys not integer'
         reply = bGroup.execute('blmpop 0 abc 1 mylist LEFT')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'numkeys zero'
         reply = bGroup.execute('blmpop 1 0 mylist LEFT')
@@ -1469,7 +1469,7 @@ class BGroupTest extends Specification {
         when: 'count not integer'
         reply = bGroup.execute('blmpop 1 1 mylist LEFT COUNT abc')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'count zero rejected'
         reply = bGroup.execute('blmpop 1 1 mylist LEFT COUNT 0')

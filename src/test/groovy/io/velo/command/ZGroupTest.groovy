@@ -285,7 +285,7 @@ zunionstore
         when:
         reply = zGroup.execute('zadd a a member0 1 member1')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = zGroup.execute('zadd a 0 >key 1 member1')
@@ -526,12 +526,12 @@ zunionstore
         when:
         reply = zGroup.execute('zcount a a 3')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = zGroup.execute('zcount a 1 a')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = zGroup.execute('zlexcount a member1 [member4')
@@ -1085,7 +1085,7 @@ zunionstore
         zGroup.data = data5
         reply = zGroup.zdiff(false, false)
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         data5[1] = '1'.bytes
@@ -1136,7 +1136,7 @@ zunionstore
         zGroup.data = data7
         reply = zGroup.zdiff(true, false)
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         cleanup:
         eventloop.breakEventloop()
@@ -1184,7 +1184,7 @@ zunionstore
         when:
         reply = zGroup.execute('zincrby a a member0')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = zGroup.execute('zincrby >key 1 member0')
@@ -1354,7 +1354,7 @@ zunionstore
         when:
         reply = zGroup.execute('zintercard 2 a b limit a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = zGroup.execute('zintercard 2 a b limit -1')
@@ -1369,7 +1369,7 @@ zunionstore
         when:
         reply = zGroup.execute('zintercard a a b limit 0')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = zGroup.execute('zintercard 2 >key b limit 0')
@@ -1585,7 +1585,7 @@ zunionstore
         when:
         reply = zGroup.execute('zpopmax a a')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = zGroup.execute('zpopmax >key 1')
@@ -1691,7 +1691,7 @@ zunionstore
         when:
         reply = zGroup.execute('zrandmember a a withscores')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = zGroup.execute('zrandmember >key 0 withscores')
@@ -1838,12 +1838,12 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a [1.1 [1.a byscore byscore limit 0 0 byscore')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = zGroup.execute('zrange a [1.a [1.2 byscore byscore limit 0 0 byscore')
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         reply = zGroup.execute('zrange a -inf +inf byscore byscore limit 0 2 byscore')
@@ -2047,12 +2047,12 @@ zunionstore
         when:
         reply = zGroup.execute('zrange a (member1 member4 bylex rev limit a 2 bylex')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = zGroup.execute('zrange a (member1 member4 bylex rev limit 0 a bylex')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         reply = zGroup.execute('zrange a (member1 member4 bylex rev limit 0 0 withscores_')
@@ -2618,14 +2618,14 @@ zunionstore
         data4[2] = '[a'.bytes
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         data4[2] = '[1'.bytes
         data4[3] = '[a'.bytes
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
-        reply == ErrorReply.NOT_FLOAT
+        reply == ErrorReply.INVALID_FLOAT
 
         when:
         data4[2] = '-inf'.bytes
@@ -2670,14 +2670,14 @@ zunionstore
         data4[2] = 'a'.bytes
         reply = zGroup.zremrangebyscore(false, false, true)
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         data4[2] = '1'.bytes
         data4[3] = 'a'.bytes
         reply = zGroup.zremrangebyscore(false, false, true)
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when:
         data4[2] = '(member1'.bytes
@@ -2806,7 +2806,7 @@ zunionstore
         when: 'numkeys not integer'
         reply = zGroup.execute('zmpop abc myzset MIN')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'numkeys zero'
         reply = zGroup.execute('zmpop 0 myzset MIN')
@@ -2821,7 +2821,7 @@ zunionstore
         when: 'count not integer'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT abc')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: 'count zero rejected'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT 0')
@@ -3192,7 +3192,7 @@ zunionstore
         when: // error: cursor not a number
         reply = zGroup.execute('zscan a notanumber')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: // error: key too long
         reply = zGroup.execute('zscan >key 0')
@@ -3212,7 +3212,7 @@ zunionstore
         when: // error: count not a number
         reply = zGroup.execute('zscan a 0 count notanumber')
         then:
-        reply == ErrorReply.NOT_INTEGER
+        reply == ErrorReply.INVALID_INTEGER
 
         when: // error: count <= 0
         reply = zGroup.execute('zscan a 0 count -1')
