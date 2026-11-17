@@ -1830,6 +1830,12 @@ public class SGroup extends BaseCommand {
         }
         var isStore = dstKeyBytes != null;
 
+        if (dstKeyBytes != null && dstKeyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            // the STORE destination key must be validated like every other multi-key write
+            // path in this class (sdiffstore, smove), the key length invariant must hold
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
         if (count == 0) {
             // LIMIT offset 0 was given — redis returns an empty result; count is -1
             // when no LIMIT was parsed and never 0 otherwise
