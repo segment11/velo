@@ -604,6 +604,9 @@ public class ZGroup extends BaseCommand {
             System.arraycopy(data, 5, dd, 4, data.length - 5);
 
             var dstKeyBytes = data[1];
+            if (dstKeyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
             return zrange(dd, new String(dstKeyBytes));
         }
 
@@ -1274,6 +1277,9 @@ public class ZGroup extends BaseCommand {
         }
 
         var doStore = dstKeyBytes != null;
+        if (doStore && dstKeyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
         var dstSlotWithKeyHash = doStore ? slot(dstKeyBytes, slotNumber) : null;
 
         var numKeysBytes = dd[1];

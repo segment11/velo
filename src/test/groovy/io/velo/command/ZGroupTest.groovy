@@ -1476,6 +1476,12 @@ zunionstore
         then:
         reply == IntegerReply.REPLY_0
 
+        when:
+        // a too long destination key is rejected
+        reply = zGroup.execute('zunionstore >key 2 a b')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
         cleanup:
         eventloop.breakEventloop()
     }
@@ -2170,6 +2176,18 @@ zunionstore
         reply = zGroup.zrange(zGroup.data, dstKey)
         then:
         reply == IntegerReply.REPLY_0
+
+        when:
+        // a too long destination key is rejected
+        reply = zGroup.execute('zrangestore >key a 0 -1')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when:
+        reply = zGroup.execute('zrangestore dst a 0 -1')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 10
 
         when:
         reply = zGroup.execute('zrange a (4 (1 byscore rev limit 0 0 byscore')
