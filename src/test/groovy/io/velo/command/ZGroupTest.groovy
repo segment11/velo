@@ -668,6 +668,52 @@ zunionstore
         (reply as IntegerReply).integer == 4
 
         when:
+        // the - and + sentinels select all members
+        reply = zGroup.execute('zlexcount a - +')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 10
+
+        when:
+        reply = zGroup.execute('zlexcount a - [member4')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 5
+
+        when:
+        reply = zGroup.execute('zlexcount a [member4 +')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 6
+
+        when:
+        reply = zGroup.execute('zlexcount a + +')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        reply = zGroup.execute('zlexcount a [member4 -')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        // sentinel aware lex range order check
+        def lexRanges = [
+                ['-', '+', true],
+                ['-', '-', true],
+                ['-', 'member0', true],
+                ['+', '+', false],
+                ['+', 'member0', false],
+                ['member0', '+', true],
+                ['member0', '-', false],
+                ['member0', 'member1', true],
+                ['member0', 'member0', true],
+                ['member1', 'member0', false],
+        ]
+        then:
+        lexRanges.every { _ZGroup.isLexRangeBefore(it[0] as String, it[1] as String) == it[2] }
+
+        when:
         reply = zGroup.execute('zcount a 2 3')
         then:
         reply instanceof IntegerReply
@@ -2931,6 +2977,47 @@ zunionstore
         then:
         reply instanceof IntegerReply
         (reply as IntegerReply).integer == 4
+
+        when:
+        // the - and + sentinels select all members
+        data4[2] = '-'.bytes
+        data4[3] = '+'.bytes
+        // reset 10 members
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.zremrangebyscore(false, true, false)
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 10
+
+        when:
+        data4[2] = '-'.bytes
+        data4[3] = '[member4'.bytes
+        // reset 10 members
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.zremrangebyscore(false, true, false)
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 5
+
+        when:
+        // the + min sentinel selects nothing
+        data4[2] = '+'.bytes
+        data4[3] = '+'.bytes
+        // reset 10 members
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.zremrangebyscore(false, true, false)
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when:
+        // the - max sentinel selects nothing
+        data4[2] = '[member4'.bytes
+        data4[3] = '-'.bytes
+        // reset 10 members
+        inMemoryGetSet.put('a', cv)
+        reply = zGroup.zremrangebyscore(false, true, false)
+        then:
+        reply == IntegerReply.REPLY_0
 
         when:
         // remove again

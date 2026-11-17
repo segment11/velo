@@ -936,6 +936,27 @@ public class ZGroup extends BaseCommand {
 
     private final static String negInf = "-inf";
 
+    /**
+     * Whether the lex range is not empty, sentinel aware: '-' is the minimum member
+     * and '+' is the maximum member, any member sorts between them.
+     */
+    @VisibleForTesting
+    static boolean isLexRangeBefore(String minLex, String maxLex) {
+        if (RedisZSet.MEMBER_MIN.equals(minLex)) {
+            return true;
+        }
+        if (RedisZSet.MEMBER_MAX.equals(minLex)) {
+            return false;
+        }
+        if (RedisZSet.MEMBER_MAX.equals(maxLex)) {
+            return true;
+        }
+        if (RedisZSet.MEMBER_MIN.equals(maxLex)) {
+            return false;
+        }
+        return minLex.compareTo(maxLex) <= 0;
+    }
+
     private Reply zcount(boolean byLex) {
         if (data.length != 4) {
             return ErrorReply.FORMAT;
@@ -957,25 +978,35 @@ public class ZGroup extends BaseCommand {
         boolean maxInclusive = true;
 
         if (byLex) {
-            if (minBytes[0] != '(' && minBytes[0] != '[') {
-                return ErrorReply.SYNTAX;
+            if (minBytes[0] == '-') {
+                minLex = RedisZSet.MEMBER_MIN;
+            } else if (minBytes[0] == '+') {
+                minLex = RedisZSet.MEMBER_MAX;
+            } else {
+                if (minBytes[0] != '(' && minBytes[0] != '[') {
+                    return ErrorReply.SYNTAX;
+                }
+                minLex = minStr.substring(1);
+                if (minBytes[0] == '(') {
+                    minInclusive = false;
+                }
             }
-            if (maxBytes[0] != '(' && maxBytes[0] != '[') {
-                return ErrorReply.SYNTAX;
+            if (maxBytes[0] == '+') {
+                maxLex = RedisZSet.MEMBER_MAX;
+            } else if (maxBytes[0] == '-') {
+                maxLex = RedisZSet.MEMBER_MIN;
+            } else {
+                if (maxBytes[0] != '(' && maxBytes[0] != '[') {
+                    return ErrorReply.SYNTAX;
+                }
+                maxLex = maxStr.substring(1);
+                if (maxBytes[0] == '(') {
+                    maxInclusive = false;
+                }
             }
 
-            minLex = minStr.substring(1);
-            maxLex = maxStr.substring(1);
-
-            if (minLex.compareTo(maxLex) > 0) {
+            if (!isLexRangeBefore(minLex, maxLex)) {
                 return IntegerReply.REPLY_0;
-            }
-
-            if (minBytes[0] == '(') {
-                minInclusive = false;
-            }
-            if (maxBytes[0] == '(') {
-                maxInclusive = false;
             }
         }
 
@@ -2337,26 +2368,35 @@ public class ZGroup extends BaseCommand {
         boolean maxInclusive = true;
 
         if (byLex) {
-            if (minBytes[0] != '(' && minBytes[0] != '[') {
-                return ErrorReply.SYNTAX;
+            if (minBytes[0] == '-') {
+                minLex = RedisZSet.MEMBER_MIN;
+            } else if (minBytes[0] == '+') {
+                minLex = RedisZSet.MEMBER_MAX;
+            } else {
+                if (minBytes[0] != '(' && minBytes[0] != '[') {
+                    return ErrorReply.SYNTAX;
+                }
+                minLex = minStr.substring(1);
+                if (minBytes[0] == '(') {
+                    minInclusive = false;
+                }
             }
-            if (maxBytes[0] != '(' && maxBytes[0] != '[') {
-                return ErrorReply.SYNTAX;
+            if (maxBytes[0] == '+') {
+                maxLex = RedisZSet.MEMBER_MAX;
+            } else if (maxBytes[0] == '-') {
+                maxLex = RedisZSet.MEMBER_MIN;
+            } else {
+                if (maxBytes[0] != '(' && maxBytes[0] != '[') {
+                    return ErrorReply.SYNTAX;
+                }
+                maxLex = maxStr.substring(1);
+                if (maxBytes[0] == '(') {
+                    maxInclusive = false;
+                }
             }
 
-            minLex = minStr.substring(1);
-            maxLex = maxStr.substring(1);
-
-            int compareMinMax = minLex.compareTo(maxLex);
-            if (compareMinMax > 0) {
+            if (!isLexRangeBefore(minLex, maxLex)) {
                 return IntegerReply.REPLY_0;
-            }
-
-            if (minBytes[0] == '(') {
-                minInclusive = false;
-            }
-            if (maxBytes[0] == '(') {
-                maxInclusive = false;
             }
         } else {
             minLex = null;
@@ -2440,8 +2480,11 @@ public class ZGroup extends BaseCommand {
         while (it.hasNext()) {
             var sv = it.next();
             if (byLex) {
-                int compMin = sv.member().compareTo(minLex);
-                int compMax = sv.member().compareTo(maxLex);
+                // '-' sorts before every member and '+' after every member
+                boolean minIsSentinel = RedisZSet.MEMBER_MIN.equals(minLex);
+                boolean maxIsSentinel = RedisZSet.MEMBER_MAX.equals(maxLex);
+                int compMin = minIsSentinel ? 1 : sv.member().compareTo(minLex);
+                int compMax = maxIsSentinel ? -1 : sv.member().compareTo(maxLex);
                 if (compMin < 0 || (compMin == 0 && !minInclusive)) {
                     continue;
                 }
