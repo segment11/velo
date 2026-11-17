@@ -134,14 +134,40 @@ class WGroupTest extends Specification {
         }.result
 
         when:
+        // redis accepts numreplicas <= 0 and answers immediately with the current ack count
         reply = wGroup.execute('wait 0 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2L
 
         when:
+        // a third slave that has not caught up is not counted
+        def replPairAsMaster3 = ReplPairTest.mockAsMaster()
+        oneSlot.replPairs.add(replPairAsMaster3)
+        reply = wGroup.execute('wait -1 100')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2L
+
+        when:
+        // only a negative timeout errors, with the redis error text
+        reply = wGroup.execute('wait 1 -1')
+        then:
+        reply == new ErrorReply('timeout is negative')
+
+        when:
+        // timeout 0 means no deadline in redis, it must not error
         reply = wGroup.execute('wait 1 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply instanceof IntegerReply || reply instanceof AsyncReply
+        if (reply instanceof AsyncReply) {
+            def promise = (reply as AsyncReply).settablePromise
+            def deadline = System.currentTimeMillis() + 2000
+            while (!promise.isComplete() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10)
+            }
+            promise.result instanceof IntegerReply && (promise.result as IntegerReply).integer == 2L
+        }
 
         when:
         // over max timeout millis

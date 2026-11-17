@@ -4,7 +4,9 @@ import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.SocketInspector;
+import io.velo.persist.OneSlot;
 import io.velo.reply.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Set;
@@ -68,18 +70,20 @@ public class WGroup extends BaseCommand {
             return ErrorReply.FORMAT;
         }
 
-        int numReplicas;
-        int timeoutMillis;
+        long numReplicas;
+        long timeoutMillis;
         try {
-            numReplicas = Integer.parseInt(new String(data[1]));
-            timeoutMillis = Integer.parseInt(new String(data[2]));
+            numReplicas = Long.parseLong(new String(data[1]));
+            timeoutMillis = Long.parseLong(new String(data[2]));
         } catch (NumberFormatException e) {
             return ErrorReply.INVALID_INTEGER;
         }
 
-        if (numReplicas <= 0 || timeoutMillis <= 0) {
-            return ErrorReply.INVALID_INTEGER;
+        // redis only rejects a negative timeout, with this exact text; timeout 0 means no deadline
+        if (timeoutMillis < 0) {
+            return new ErrorReply("timeout is negative");
         }
+
         final int maxTimeoutMillis = 1000 * 60;
         if (timeoutMillis > maxTimeoutMillis) {
             return new ErrorReply("timeout should <= " + maxTimeoutMillis);
@@ -103,10 +107,15 @@ public class WGroup extends BaseCommand {
             return IntegerReply.REPLY_0;
         }
 
+        // redis answers immediately with the current ack count when numreplicas <= 0
+        if (numReplicas <= 0) {
+            return new IntegerReply(countCaughtUpSlaves(oneSlot, lastSetSeq));
+        }
+
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        oneSlot.delayRun(timeoutMillis, () -> {
+        oneSlot.delayRun((int) timeoutMillis, () -> {
             // check again
             var slaveReplPairList2 = oneSlot.getSlaveReplPairListSelfAsMaster();
             if (slaveReplPairList2.isEmpty()) {
@@ -129,5 +138,22 @@ public class WGroup extends BaseCommand {
         });
 
         return asyncReply;
+    }
+
+    /**
+     * Counts the slaves of the slot that acknowledged the given sequence number.
+     *
+     * @param oneSlot    the slot this node acts as master for
+     * @param lastSetSeq the sequence number to compare against
+     * @return the number of slaves whose catch-up seq is at least lastSetSeq
+     */
+    private static int countCaughtUpSlaves(@NotNull OneSlot oneSlot, long lastSetSeq) {
+        int count = 0;
+        for (var slaveReplPair : oneSlot.getSlaveReplPairListSelfAsMaster()) {
+            if (slaveReplPair.getSlaveCatchUpLastSeq() >= lastSetSeq) {
+                count++;
+            }
+        }
+        return count;
     }
 }
