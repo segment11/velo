@@ -1962,9 +1962,10 @@ public class SGroup extends BaseCommand {
 
             if (isStore) {
                 var dstSlotWithKeyHash = slot(dstKeyBytes, slotNumber);
-                var dstRhk = new RedisHashKeys();
+                // redis stores the sorted result as a list regardless of the source type
+                var dstRl = new RedisList();
                 for (var e : subList) {
-                    dstRhk.add(e);
+                    dstRl.addLast(e.getBytes());
                 }
 
                 var targetOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
@@ -1974,7 +1975,7 @@ public class SGroup extends BaseCommand {
                 var asyncReply = new AsyncReply(finalPromise);
 
                 var p = targetOneSlot.asyncRun(() -> {
-                    saveRedisSet(dstRhk, dstSlotWithKeyHash, this, dictMap);
+                    LGroup.saveRedisList(dstRl, dstSlotWithKeyHash, this, dictMap);
                 });
 
                 p.whenComplete((v, t) -> {
@@ -2036,10 +2037,10 @@ public class SGroup extends BaseCommand {
 
             if (isStore) {
                 var dstSlotWithKeyHash = slot(dstKeyBytes, slotNumber);
-                var dstRz = new RedisZSet();
+                // redis stores the sorted result as a list regardless of the source type
+                var dstRl = new RedisList();
                 for (var e : subList) {
-                    var sv = rz.get(e);
-                    dstRz.add(sv.score(), sv.member());
+                    dstRl.addLast(e.getBytes());
                 }
 
                 var targetOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
@@ -2049,7 +2050,7 @@ public class SGroup extends BaseCommand {
                 var asyncReply = new AsyncReply(finalPromise);
 
                 var p = targetOneSlot.asyncRun(() -> {
-                    ZGroup.saveRedisZSet(dstRz, dstSlotWithKeyHash, this, dictMap);
+                    LGroup.saveRedisList(dstRl, dstSlotWithKeyHash, this, dictMap);
                 });
 
                 p.whenComplete((v, t) -> {

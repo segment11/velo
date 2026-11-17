@@ -2207,6 +2207,13 @@ sunionstore
         }.result
 
         when:
+        // bug 86.7: redis stores the sorted result as a list regardless of the source type
+        def cvDstSortSet = inMemoryGetSet.getBuf(slot, 'dst', 0, 0).cv()
+        then:
+        cvDstSortSet.dictSeqOrSpType == CompressedValue.SP_TYPE_LIST
+        RedisList.decode(cvDstSortSet.compressedData).getList().size() == 10
+
+        when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
         cv.compressedData = rl.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -2218,6 +2225,11 @@ sunionstore
         }.result
 
         when:
+        def cvDstSortList = inMemoryGetSet.getBuf(slot, 'dst', 0, 0).cv()
+        then:
+        cvDstSortList.dictSeqOrSpType == CompressedValue.SP_TYPE_LIST
+
+        when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
         cv.compressedData = rz.encode()
         inMemoryGetSet.put(slot, 'a', 0, cv)
@@ -2227,6 +2239,12 @@ sunionstore
         ((AsyncReply) reply2).settablePromise.whenResult { result ->
             result instanceof IntegerReply && (result as IntegerReply).integer == 10
         }.result
+
+        when:
+        def cvDstSortZset = inMemoryGetSet.getBuf(slot, 'dst', 0, 0).cv()
+        then:
+        cvDstSortZset.dictSeqOrSpType == CompressedValue.SP_TYPE_LIST
+        RedisList.decode(cvDstSortZset.compressedData).getList().size() == 10
 
         when:
         cv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
