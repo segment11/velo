@@ -848,7 +848,7 @@ public class RGroup extends BaseCommand {
     private byte[] popFromList(SlotWithKeyHash srcSlotWithKeyHash, RedisList rlSrc, boolean srcLeft) {
         var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
         // save after remove, auto-delete empty list
-        if (rlSrc.size() == 0) {
+        if (rlSrc.isEmpty()) {
             removeDelay(srcSlotWithKeyHash);
         } else {
             set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
@@ -869,7 +869,7 @@ public class RGroup extends BaseCommand {
             return null;
         }
         var rlSrc = RedisList.decode(getValueBytesByCv(cvSrc, srcSlotWithKeyHash));
-        if (rlSrc.size() == 0) {
+        if (rlSrc.isEmpty()) {
             return null;
         }
         return popFromList(srcSlotWithKeyHash, rlSrc, srcLeft);

@@ -41,6 +41,11 @@ public class RedisList {
         return list.size();
     }
 
+    /** @return true if empty */
+    public boolean isEmpty() {
+        return list.isEmpty();
+    }
+
     /**
      * @param e the element to add at beginning
      */

@@ -38,6 +38,11 @@ public class RedisHH {
         return map.size();
     }
 
+    /** @return true if empty */
+    public boolean isEmpty() {
+        return map.isEmpty();
+    }
+
     /**
      * @param key   the key
      * @param value the value

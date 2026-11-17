@@ -508,7 +508,7 @@ public class HGroup extends BaseCommand {
         var keysKey = RedisHashKeys.keysKey(key);
         var slotWithKeyHash = slot(keysKey);
 
-        if (rhk.size() == 0) {
+        if (rhk.isEmpty()) {
             removeDelay(slotWithKeyHash);
             return;
         }
@@ -538,7 +538,7 @@ public class HGroup extends BaseCommand {
      * @param expireAt the absolute expire time in milliseconds, {@link CompressedValue#NO_EXPIRE} for no expire
      */
     void saveRedisHH(RedisHH rhh, SlotWithKeyHash slotWithKeyHash, long expireAt) {
-        if (rhh.size() == 0) {
+        if (rhh.isEmpty()) {
             removeDelay(slotWithKeyHash);
             return;
         }
@@ -2361,7 +2361,7 @@ public class HGroup extends BaseCommand {
 
         var key = slotWithKeyHash.rawKey();
         var rhk = getRedisHashKeys(key);
-        if (rhk == null || rhk.size() == 0) {
+        if (rhk == null || rhk.isEmpty()) {
             return MultiBulkReply.SCAN_EMPTY;
         }
 
@@ -2410,7 +2410,7 @@ public class HGroup extends BaseCommand {
     private Reply hscan2(long cursorLong, String matchPattern, int count, boolean noValues) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rhh = getRedisHH(slotWithKeyHash);
-        if (rhh == null || rhh.size() == 0) {
+        if (rhh == null || rhh.isEmpty()) {
             return MultiBulkReply.SCAN_EMPTY;
         }
 

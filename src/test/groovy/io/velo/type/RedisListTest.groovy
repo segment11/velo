@@ -242,4 +242,27 @@ class RedisListTest extends Specification {
         def e = thrown(IllegalStateException)
         e.message.contains('exceeds remaining buffer')
     }
+
+    def 'isEmpty'() {
+        given:
+        def rl = new RedisList()
+
+        when:
+        def emptyAtFirst = rl.isEmpty()
+        then:
+        emptyAtFirst
+
+        when:
+        rl.addFirst('a'.bytes)
+        def notEmptyAfterAdd = rl.isEmpty()
+        then:
+        !notEmptyAfterAdd
+
+        when:
+        rl.removeFirst()
+        def emptyAfterRemove = rl.isEmpty()
+        then:
+        emptyAfterRemove
+        rl.size() == 0
+    }
 }

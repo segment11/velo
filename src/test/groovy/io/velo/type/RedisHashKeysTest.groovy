@@ -421,4 +421,26 @@ class RedisHashKeysTest extends Specification {
         thrown(IllegalStateException)
     }
 
+    def 'isEmpty'() {
+        given:
+        def rhk = new RedisHashKeys()
+
+        when:
+        def emptyAtFirst = rhk.isEmpty()
+        then:
+        emptyAtFirst
+
+        when:
+        rhk.add('field')
+        def notEmptyAfterAdd = rhk.isEmpty()
+        then:
+        !notEmptyAfterAdd
+
+        when:
+        rhk.remove('field')
+        def emptyAfterRemove = rhk.isEmpty()
+        then:
+        emptyAfterRemove
+        rhk.size() == 0
+    }
 }

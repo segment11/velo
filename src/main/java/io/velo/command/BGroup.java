@@ -1003,7 +1003,7 @@ public class BGroup extends BaseCommand {
         var firstSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
 
         var rl = LGroup.getRedisList(firstSlotWithKeyHash, this);
-        if (rl == null || rl.size() == 0) {
+        if (rl == null || rl.isEmpty()) {
             // performance bad, get all other values
             if (keys.size() > 1) {
                 SettablePromise<Reply> finalPromise = new SettablePromise<>();
@@ -1098,7 +1098,7 @@ public class BGroup extends BaseCommand {
         var slotWithKeyHash = slotWithKeyHashListParsed.get(fromIndex);
         return localPersist.oneSlot(slotWithKeyHash.slot()).asyncCall(() -> {
             var rl = LGroup.getRedisList(slotWithKeyHash, this);
-            if (rl == null || rl.size() == 0) {
+            if (rl == null || rl.isEmpty()) {
                 return (Reply) null;
             }
 
@@ -1179,7 +1179,7 @@ public class BGroup extends BaseCommand {
         }
 
         var rl = LGroup.getRedisList(slotWithKeyHash, baseCommand);
-        if (rl == null || rl.size() == 0) {
+        if (rl == null || rl.isEmpty()) {
             return false;
         }
 
@@ -1277,7 +1277,7 @@ public class BGroup extends BaseCommand {
                 return ErrorReply.WRONG_TYPE;
             }
             var firstRl = LGroup.getRedisList(firstSlotWithKeyHash, this);
-            if (firstRl != null && firstRl.size() > 0) {
+            if (firstRl != null && !firstRl.isEmpty()) {
                 return popMpopReply(firstSlotWithKeyHash, data[3], firstRl, isLeft, count);
             }
         }
@@ -1353,7 +1353,7 @@ public class BGroup extends BaseCommand {
         var slotWithKeyHash = slotWithKeyHashListParsed.get(fromIndex);
         return localPersist.oneSlot(slotWithKeyHash.slot()).asyncCall(() -> {
             var rl = LGroup.getRedisList(slotWithKeyHash, this);
-            if (rl == null || rl.size() == 0) {
+            if (rl == null || rl.isEmpty()) {
                 return (Reply) null;
             }
 
@@ -1433,7 +1433,7 @@ public class BGroup extends BaseCommand {
         }
 
         var rl = LGroup.getRedisList(slotWithKeyHash, baseCommand);
-        if (rl == null || rl.size() == 0) {
+        if (rl == null || rl.isEmpty()) {
             return false;
         }
 

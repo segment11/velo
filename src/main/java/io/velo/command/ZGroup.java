@@ -1528,7 +1528,7 @@ public class ZGroup extends BaseCommand {
             for (int i = 1; i < list.size(); i++) {
                 var other = list.get(i);
                 var otherRz = getRedisZSet(other);
-                if (otherRz == null || otherRz.size() == 0) {
+                if (otherRz == null || otherRz.isEmpty()) {
                     return IntegerReply.REPLY_0;
                 }
 
@@ -1583,7 +1583,7 @@ public class ZGroup extends BaseCommand {
 
             outer:
             for (var otherRz : otherRzList) {
-                if (otherRz == null || otherRz.size() == 0) {
+                if (otherRz == null || otherRz.isEmpty()) {
                     finalPromise.set(IntegerReply.REPLY_0);
                     return;
                 }
@@ -2554,7 +2554,7 @@ public class ZGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rz = getRedisZSet(slotWithKeyHash);
-        if (rz == null || rz.size() == 0) {
+        if (rz == null || rz.isEmpty()) {
             return MultiBulkReply.SCAN_EMPTY;
         }
 

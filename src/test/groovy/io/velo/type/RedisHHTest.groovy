@@ -329,6 +329,29 @@ class RedisHHTest extends Specification {
         e.message.contains('exceeds Short.MAX_VALUE')
     }
 
+    def 'isEmpty'() {
+        given:
+        def rh = new RedisHH()
+
+        when:
+        def emptyAtFirst = rh.isEmpty()
+        then:
+        emptyAtFirst
+
+        when:
+        rh.put('name', 'zhangsan'.bytes)
+        def notEmptyAfterPut = rh.isEmpty()
+        then:
+        !notEmptyAfterPut
+
+        when:
+        rh.remove('name')
+        def emptyAfterRemove = rh.isEmpty()
+        then:
+        emptyAfterRemove
+        rh.size() == 0
+    }
+
     def 'decode an empty field name, an empty value and a corrupt length'() {
         given:
         def rh = new RedisHH()

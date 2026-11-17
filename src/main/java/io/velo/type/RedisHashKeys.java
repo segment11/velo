@@ -140,6 +140,11 @@ public class RedisHashKeys {
         return set.size();
     }
 
+    /** @return true if empty */
+    public boolean isEmpty() {
+        return set.isEmpty();
+    }
+
     /**
      * @param field the field name to check
      * @return true if contained

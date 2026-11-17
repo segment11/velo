@@ -425,7 +425,7 @@ public class LGroup extends BaseCommand {
      */
     static void saveRedisList(RedisList rl, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap,
                               long expireAt) {
-        if (rl.size() == 0) {
+        if (rl.isEmpty()) {
             baseCommand.removeDelay(slotWithKeyHash);
             return;
         }
@@ -592,7 +592,7 @@ public class LGroup extends BaseCommand {
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var rl = getRedisList(slotWithKeyHash);
-        if (rl == null || rl.size() == 0) {
+        if (rl == null || rl.isEmpty()) {
             if (isWithCount) {
                 if (isResp3) {
                     return NilReply.INSTANCE;
@@ -689,7 +689,7 @@ public class LGroup extends BaseCommand {
                 return ErrorReply.WRONG_TYPE;
             }
             var rl = getRedisList(slotWithKeyHash);
-            if (rl == null || rl.size() == 0) {
+            if (rl == null || rl.isEmpty()) {
                 continue;
             }
 
@@ -894,7 +894,7 @@ public class LGroup extends BaseCommand {
         if (afterPopValueBytesArray.length == 0) {
             // no need to add to list
             var rl = rlAlreadyGet != null ? rlAlreadyGet : getRedisList(slotWithKeyHash);
-            if (rl == null || rl.size() == 0) {
+            if (rl == null || rl.isEmpty()) {
                 return IntegerReply.REPLY_1;
             } else {
                 return new IntegerReply(rl.size() + 1);

@@ -1196,7 +1196,7 @@ public class SGroup extends BaseCommand {
      */
     static void saveRedisSet(RedisHashKeys rhk, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap,
                              boolean ignoreReadonly, long expireAt) {
-        if (rhk.size() == 0) {
+        if (rhk.isEmpty()) {
             baseCommand.removeDelay(slotWithKeyHash);
             return;
         }
@@ -1330,7 +1330,7 @@ public class SGroup extends BaseCommand {
                 return MultiBulkReply.EMPTY;
             }
         }
-        if (rhk.size() == 0) {
+        if (rhk.isEmpty()) {
             if (isInter) {
                 return MultiBulkReply.EMPTY;
             }
@@ -1440,7 +1440,7 @@ public class SGroup extends BaseCommand {
                     return IntegerReply.REPLY_0;
                 }
             }
-            if (rhk.size() == 0) {
+            if (rhk.isEmpty()) {
                 if (isInter) {
                     removeDelay(dstSlotWithKeyHash);
                     return IntegerReply.REPLY_0;
@@ -1501,7 +1501,7 @@ public class SGroup extends BaseCommand {
                     return;
                 }
             }
-            if (rhk.size() == 0) {
+            if (rhk.isEmpty()) {
                 if (isInter) {
                     removeDelay(dstSlotWithKeyHash);
                     finalPromise.set(IntegerReply.REPLY_0);
@@ -1592,7 +1592,7 @@ public class SGroup extends BaseCommand {
         if (rhk == null) {
             return IntegerReply.REPLY_0;
         }
-        if (rhk.size() == 0) {
+        if (rhk.isEmpty()) {
             return IntegerReply.REPLY_0;
         }
 
@@ -2221,7 +2221,7 @@ public class SGroup extends BaseCommand {
         if (rhk == null) {
             return hasCount ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
-        if (rhk.size() == 0) {
+        if (rhk.isEmpty()) {
             return hasCount ? MultiBulkReply.EMPTY : NilReply.INSTANCE;
         }
 
@@ -2298,7 +2298,7 @@ public class SGroup extends BaseCommand {
         if (rhk == null) {
             return IntegerReply.REPLY_0;
         }
-        if (rhk.size() == 0) {
+        if (rhk.isEmpty()) {
             return IntegerReply.REPLY_0;
         }
 
@@ -2374,7 +2374,7 @@ public class SGroup extends BaseCommand {
         }
 
         var rhk = getRedisSet(slotWithKeyHash);
-        if (rhk == null || rhk.size() == 0) {
+        if (rhk == null || rhk.isEmpty()) {
             return MultiBulkReply.SCAN_EMPTY;
         }
 

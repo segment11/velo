@@ -498,7 +498,7 @@ public class DGroup extends BaseCommand {
         } else if (cv.isSet()) {
             var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
             var rhk = RedisHashKeys.decode(valueBytes);
-            if (rhk.size() == 0) {
+            if (rhk.isEmpty()) {
                 return null;
             }
 
@@ -507,7 +507,7 @@ public class DGroup extends BaseCommand {
             if (isUseHH(slotWithKeyHash.rawKey())) {
                 var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
                 var rhh = RedisHH.decode(valueBytes);
-                if (rhh.size() == 0) {
+                if (rhh.isEmpty()) {
                     return null;
                 }
 
@@ -533,7 +533,7 @@ public class DGroup extends BaseCommand {
         } else if (cv.isList()) {
             var valueBytes = getValueBytesByCv(cv, slotWithKeyHash);
             var rl = RedisList.decode(valueBytes);
-            if (rl.size() == 0) {
+            if (rl.isEmpty()) {
                 return null;
             }
 
