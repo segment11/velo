@@ -537,10 +537,10 @@ class SocketInspectorTest extends Specification {
         inspector.filterSubscribeOnesByChannel('xxx', false) == []
 
         when:
-        // not subscribe yet
+        // not subscribe yet, the redis confirmation count is this client's remaining subscriptions
         def n2 = inspector.unsubscribe(channel2, false, socket)
         then:
-        n2 == 0
+        n2 == 1
 
         when:
         // in eventloop thread
@@ -550,9 +550,10 @@ class SocketInspectorTest extends Specification {
         inspector.subscribeSocketCount(channel2, false) == 1
 
         when:
+        // this client still holds channel2, so the redis confirmation count is 1
         n = inspector.unsubscribe(channel, false, socket)
         then:
-        n == 0
+        n == 1
 
         when:
         n = inspector.publish(channel, messageReply, (s, r) -> { })

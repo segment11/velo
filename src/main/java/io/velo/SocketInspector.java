@@ -18,6 +18,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -458,6 +459,13 @@ public class SocketInspector implements TcpSocket.Inspector {
     private final ConcurrentHashMap<ChannelAndIsPattern, ConcurrentHashMap<ITcpSocket, Eventloop>> subscribeByChannel = new ConcurrentHashMap<>();
 
     /**
+     * Map of sockets to their subscriptions. The reverse view of {@link #subscribeByChannel}, needed because
+     * the redis pubsub confirmation count is per client: how many channels (or patterns) that client still
+     * holds after the operation.
+     */
+    private final ConcurrentHashMap<ITcpSocket, Set<ChannelAndIsPattern>> subscriptionsBySocket = new ConcurrentHashMap<>();
+
+    /**
      * Returns a list of all subscribed channels.
      *
      * @return a list of all subscribed channels
@@ -559,6 +567,7 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         if (targetEventloop != null) {
             sockets.put(socket, targetEventloop);
+            subscriptionsBySocket.computeIfAbsent(socket, k -> ConcurrentHashMap.newKeySet()).add(one);
         }
         return sockets.size();
     }
@@ -569,13 +578,27 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @param channel   the channel to unsubscribe from
      * @param isPattern true if the channel is a pattern, false otherwise
      * @param socket    the socket to unsubscribe
-     * @return the number of sockets subscribed to the channel after unsubscription
+     * @return the number of subscriptions of the same type (channel or pattern) this client still holds
+     * after the unsubscription, like the redis confirmation count
      */
     public int unsubscribe(@NotNull String channel, boolean isPattern, ITcpSocket socket) {
         var one = new ChannelAndIsPattern(channel, isPattern);
         var sockets = subscribeByChannel.computeIfAbsent(one, k -> new ConcurrentHashMap<>());
         sockets.remove(socket);
-        return sockets.size();
+
+        var subscriptions = subscriptionsBySocket.get(socket);
+        if (subscriptions == null) {
+            return 0;
+        }
+
+        subscriptions.remove(one);
+        int remaining = 0;
+        for (var subscription : subscriptions) {
+            if (subscription.isPattern() == isPattern) {
+                remaining++;
+            }
+        }
+        return remaining;
     }
 
     /**
@@ -967,6 +990,7 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         // remove from subscribe by channel
         subscribeByChannel.forEach((channel, sockets) -> sockets.remove(socket));
+        subscriptionsBySocket.remove(socket);
 
         // remove from blocking list
         BlockingList.removeBySocket(socket);
@@ -991,6 +1015,7 @@ public class SocketInspector implements TcpSocket.Inspector {
     /** Clears all subscriptions, socket mappings, and resets the connection count to zero. */
     public void clearAll() {
         subscribeByChannel.clear();
+        subscriptionsBySocket.clear();
 
         socketMap.clear();
         connectionCount.set(0);
