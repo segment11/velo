@@ -9,6 +9,7 @@ import io.velo.reply.*;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -87,7 +88,9 @@ public class WGroup extends BaseCommand {
         var veloUserData = SocketInspector.createUserDataIfNotSet(socket);
         var lastSetSeq = veloUserData.getLastSetSeq();
         if (lastSetSeq == 0L) {
-            return IntegerReply.REPLY_0;
+            // redis waits on offset 0 for a client without writes, satisfied by every online replica;
+            // velo replicates per slot, so count the distinct replica endpoints of the slots this node masters
+            return new IntegerReply(countDistinctReplicas());
         }
 
         var oneSlot = localPersist.oneSlot(veloUserData.getLastSetSlot());
@@ -165,5 +168,21 @@ public class WGroup extends BaseCommand {
             }
         }
         return count;
+    }
+
+    /**
+     * Counts the distinct replicas of all the slots this node acts as master for, by remote endpoint.
+     * Used for a client without writes: like redis, every online replica already satisfies offset 0.
+     *
+     * @return the number of distinct replica endpoints
+     */
+    private int countDistinctReplicas() {
+        var endpoints = new HashSet<String>();
+        for (var oneSlot : localPersist.initializedOneSlots()) {
+            for (var replPair : oneSlot.getSlaveReplPairListSelfAsMaster()) {
+                endpoints.add(replPair.getHostAndPort());
+            }
+        }
+        return endpoints.size();
     }
 }

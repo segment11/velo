@@ -78,10 +78,13 @@ class WGroupTest extends Specification {
 
         when:
         def veloUserData = SocketInspector.createUserDataIfNotSet(socket)
-        // not set yet
-        def reply = wGroup.execute('wait 2 100')
+        // not set yet: redis counts every online replica for a client without writes (offset 0)
+        def replPairAsMaster0 = ReplPairTest.mockAsMaster()
+        oneSlot.replPairs.add(replPairAsMaster0)
+        def reply = wGroup.execute('wait 1 100')
         then:
-        reply == IntegerReply.REPLY_0
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1L
 
         when:
         // as master, no slaves: redis blocks until the timeout, then answers 0
