@@ -84,11 +84,11 @@ class WGroupTest extends Specification {
         reply == IntegerReply.REPLY_0
 
         when:
-        // as master, no slaves
+        // as master, no slaves: redis blocks until the timeout, then answers 0
         SocketInspector.updateLastSetSeq(socket, 1L, slot)
         reply = wGroup.execute('wait 2 100')
         then:
-        reply == IntegerReply.REPLY_0
+        reply instanceof AsyncReply
 
         when:
         // mock as slave, redis answers an explicit error instead of 0
@@ -125,20 +125,65 @@ class WGroupTest extends Specification {
         def replPairAsMaster2 = ReplPairTest.mockAsMaster()
         oneSlot.replPairs.add(replPairAsMaster2)
         replPairAsMaster2.slaveCatchUpLastSeq = 1L
+        // both slaves already caught up: redis answers immediately, without waiting the timeout
+        long beginMillis = System.currentTimeMillis()
         reply = wGroup.execute('wait 2 100')
-        Thread.sleep(200)
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 2L
+        System.currentTimeMillis() - beginMillis < 90
+
+        when:
+        // the third slave catches up at ~50ms: the poller wakes long before the 300ms timeout
+        def replPairAsMaster4 = ReplPairTest.mockAsMaster()
+        oneSlot.replPairs.add(replPairAsMaster4)
+        long beginMillis4 = System.currentTimeMillis()
+        reply = wGroup.execute('wait 3 300')
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result instanceof IntegerReply && (result as IntegerReply).integer == 2
-        }.result
+
+        when:
+        Thread.sleep(50)
+        replPairAsMaster4.slaveCatchUpLastSeq = 1L
+        def promise4 = (reply as AsyncReply).settablePromise
+        def deadlineMillis4 = System.currentTimeMillis() + 2000
+        while (!promise4.isComplete() && System.currentTimeMillis() < deadlineMillis4) {
+            Thread.sleep(10)
+        }
+        then:
+        promise4.isComplete()
+        promise4.getResult() instanceof IntegerReply
+        (promise4.getResult() as IntegerReply).integer == 3L
+        System.currentTimeMillis() - beginMillis4 < 290
+
+        when:
+        // timeout 0 has no deadline: the wait blocks until the replicas catch up
+        def replPairAsMaster5 = ReplPairTest.mockAsMaster()
+        oneSlot.replPairs.add(replPairAsMaster5)
+        reply = wGroup.execute('wait 4 0')
+        then:
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
+
+        when:
+        Thread.sleep(50)
+        replPairAsMaster5.slaveCatchUpLastSeq = 1L
+        def promise5 = (reply as AsyncReply).settablePromise
+        def deadlineMillis5 = System.currentTimeMillis() + 2000
+        while (!promise5.isComplete() && System.currentTimeMillis() < deadlineMillis5) {
+            Thread.sleep(10)
+        }
+        then:
+        promise5.isComplete()
+        promise5.getResult() instanceof IntegerReply
+        (promise5.getResult() as IntegerReply).integer == 4L
 
         when:
         // redis accepts numreplicas <= 0 and answers immediately with the current ack count
         reply = wGroup.execute('wait 0 0')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2L
+        (reply as IntegerReply).integer == 4L
 
         when:
         // a third slave that has not caught up is not counted
@@ -147,7 +192,7 @@ class WGroupTest extends Specification {
         reply = wGroup.execute('wait -1 100')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2L
+        (reply as IntegerReply).integer == 4L
 
         when:
         // only a negative timeout errors, with the redis error text
@@ -166,7 +211,7 @@ class WGroupTest extends Specification {
             while (!promise.isComplete() && System.currentTimeMillis() < deadline) {
                 Thread.sleep(10)
             }
-            promise.result instanceof IntegerReply && (promise.result as IntegerReply).integer == 2L
+            promise.getResult() instanceof IntegerReply && (promise.getResult() as IntegerReply).integer == 4L
         }
 
         when:
@@ -174,7 +219,7 @@ class WGroupTest extends Specification {
         reply = wGroup.execute('wait 0 60001')
         then:
         reply instanceof IntegerReply
-        (reply as IntegerReply).integer == 2L
+        (reply as IntegerReply).integer == 4L
 
         when:
         reply = wGroup.execute('wait 1 60001')

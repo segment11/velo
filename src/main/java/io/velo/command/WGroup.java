@@ -98,42 +98,56 @@ public class WGroup extends BaseCommand {
         }
 
         // as master
-        var slaveReplPairList = oneSlot.getSlaveReplPairListSelfAsMaster();
-        if (slaveReplPairList.isEmpty()) {
-            return IntegerReply.REPLY_0;
-        }
 
         // redis answers immediately with the current ack count when numreplicas <= 0
         if (numReplicas <= 0) {
             return new IntegerReply(countCaughtUpSlaves(oneSlot, lastSetSeq));
         }
 
+        // first try without blocking at all, like redis replication.c waitCommand
+        int firstTryCount = countCaughtUpSlaves(oneSlot, lastSetSeq);
+        if (firstTryCount >= numReplicas) {
+            return new IntegerReply(firstTryCount);
+        }
+
         SettablePromise<Reply> finalPromise = new SettablePromise<>();
         var asyncReply = new AsyncReply(finalPromise);
 
-        oneSlot.delayRun((int) timeoutMillis, () -> {
-            // check again
-            var slaveReplPairList2 = oneSlot.getSlaveReplPairListSelfAsMaster();
-            if (slaveReplPairList2.isEmpty()) {
-                finalPromise.set(IntegerReply.REPLY_0);
+        // poll until satisfied or the deadline; timeout 0 means no deadline, like redis
+        pollWaitForReplicas(oneSlot, finalPromise, lastSetSeq, numReplicas, timeoutMillis, System.currentTimeMillis());
+
+        return asyncReply;
+    }
+
+    /**
+     * Polls the slave catch-up state on the slot event loop until enough slaves acknowledged the sequence number,
+     * or until the deadline. A timeout of 0 never expires, like redis.
+     *
+     * @param oneSlot       the slot this node acts as master for
+     * @param finalPromise  the promise to settle with the ack count
+     * @param lastSetSeq    the sequence number to compare against
+     * @param numReplicas   the number of replicas the client waits for, always positive here
+     * @param timeoutMillis the timeout in milliseconds, 0 means no deadline
+     * @param beginMillis   the wall clock when the wait started
+     */
+    private static void pollWaitForReplicas(@NotNull OneSlot oneSlot, SettablePromise<Reply> finalPromise,
+                                            long lastSetSeq, long numReplicas, long timeoutMillis, long beginMillis) {
+        final int pollIntervalMillis = 10;
+        oneSlot.delayRun(pollIntervalMillis, () -> {
+            // re-read the slave list on every tick, the list may change while waiting
+            int count = countCaughtUpSlaves(oneSlot, lastSetSeq);
+            if (count >= numReplicas) {
+                finalPromise.set(new IntegerReply(count));
                 return;
             }
 
-            // check slaves catch up seq
-            int catchUpSlaveCount = 0;
-            for (var slaveReplPair : slaveReplPairList2) {
-                if (slaveReplPair.getSlaveCatchUpLastSeq() >= lastSetSeq) {
-                    catchUpSlaveCount++;
-                    if (catchUpSlaveCount == numReplicas) {
-                        break;
-                    }
-                }
+            if (timeoutMillis > 0 && System.currentTimeMillis() - beginMillis >= timeoutMillis) {
+                finalPromise.set(new IntegerReply(count));
+                return;
             }
 
-            finalPromise.set(new IntegerReply(catchUpSlaveCount));
+            pollWaitForReplicas(oneSlot, finalPromise, lastSetSeq, numReplicas, timeoutMillis, beginMillis);
         });
-
-        return asyncReply;
     }
 
     /**
