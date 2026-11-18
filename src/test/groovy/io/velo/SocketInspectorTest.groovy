@@ -556,6 +556,31 @@ class SocketInspectorTest extends Specification {
         n == 1
 
         when:
+        // the subscriptions of this client, by type: the no-argument unsubscribe operates on this list
+        def channelSubscriptions = inspector.subscriptionsOf(socket, false)
+        def patternSubscriptions = inspector.subscriptionsOf(socket, true)
+        then:
+        channelSubscriptions == [channel2]
+        patternSubscriptions == []
+
+        when:
+        // a socket that never subscribed and a null socket have no subscriptions
+        def freshSocketSubscriptions = inspector.subscriptionsOf(mockTcpSocket(), false)
+        def nullSocketSubscriptions = inspector.subscriptionsOf(null, false)
+        then:
+        freshSocketSubscriptions == []
+        nullSocketSubscriptions == []
+
+        when:
+        // a pattern subscription is listed for the pattern type only
+        inspector.subscribe('news.*', true, socket)
+        def channelSubscriptions2 = inspector.subscriptionsOf(socket, false)
+        def patternSubscriptions2 = inspector.subscriptionsOf(socket, true)
+        then:
+        channelSubscriptions2 == [channel2]
+        patternSubscriptions2 == ['news.*']
+
+        when:
         n = inspector.publish(channel, messageReply, (s, r) -> { })
         n2 = inspector.publish(channel2, messageReply, (s, r) -> {
             println 'async callback to write message to target socket'

@@ -64,17 +64,24 @@ public class UGroup extends BaseCommand {
 
     @VisibleForTesting
     Reply unsubscribe(boolean isPattern) {
-        if (data.length < 2) {
-            return ErrorReply.FORMAT;
-        }
-
-        var channels = new ArrayList<String>(data.length - 1);
-        for (int i = 1; i < data.length; i++) {
-            var channel = new String(data[i]);
-            channels.add(channel);
-        }
-
         var socketInInspector = localPersist.getSocketInspector();
+
+        var channels = new ArrayList<String>();
+        if (data.length < 2) {
+            // redis unsubscribes all the channels (or patterns) of this client
+            channels.addAll(socketInInspector.subscriptionsOf(socket, isPattern));
+            if (channels.isEmpty()) {
+                // subscribed to nothing: redis still replies, with a nil channel
+                return new MultiBulkReply(new Reply[]{
+                        new BulkReply(isPattern ? "punsubscribe" : "unsubscribe"),
+                        NilReply.INSTANCE,
+                        new IntegerReply(0)});
+            }
+        } else {
+            for (int i = 1; i < data.length; i++) {
+                channels.add(new String(data[i]));
+            }
+        }
 
         var replies = new Reply[channels.size() * 3];
         int j = 0;

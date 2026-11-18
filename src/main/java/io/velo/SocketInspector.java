@@ -602,6 +602,34 @@ public class SocketInspector implements TcpSocket.Inspector {
     }
 
     /**
+     * Returns the channels (or patterns) the socket is subscribed to, the list the redis no-argument
+     * UNSUBSCRIBE / PUNSUBSCRIBE operates on.
+     *
+     * @param socket    the client socket
+     * @param isPattern true for the pattern subscriptions, false for the channel ones
+     * @return the subscribed names, possibly empty
+     */
+    public @NotNull ArrayList<String> subscriptionsOf(ITcpSocket socket, boolean isPattern) {
+        var names = new ArrayList<String>();
+        // for unit test
+        if (socket == null) {
+            return names;
+        }
+
+        var subscriptions = subscriptionsBySocket.get(socket);
+        if (subscriptions == null) {
+            return names;
+        }
+
+        for (var subscription : subscriptions) {
+            if (subscription.isPattern() == isPattern) {
+                names.add(subscription.getChannel());
+            }
+        }
+        return names;
+    }
+
+    /**
      * Returns the number of sockets subscribed to a channel.
      *
      * @param channel   the channel to check
