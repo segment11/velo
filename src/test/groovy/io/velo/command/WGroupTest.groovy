@@ -91,12 +91,12 @@ class WGroupTest extends Specification {
         reply == IntegerReply.REPLY_0
 
         when:
-        // mock as slave
+        // mock as slave, redis answers an explicit error instead of 0
         def replPairAsSlave = ReplPairTest.mockAsSlave()
         oneSlot.replPairs.add(replPairAsSlave)
         reply = wGroup.execute('wait 2 100')
         then:
-        reply == IntegerReply.REPLY_0
+        reply == new ErrorReply('WAIT cannot be used with replica instances. Please also note that since Redis 4.0 if a replica is configured to be writable (which is not the default) writes to replicas are just local and are not propagated.')
 
         when:
         // mock as master

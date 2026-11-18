@@ -93,7 +93,8 @@ public class WGroup extends BaseCommand {
         var oneSlot = localPersist.oneSlot(veloUserData.getLastSetSlot());
         var isAsSlave = oneSlot.isAsSlave();
         if (isAsSlave) {
-            return IntegerReply.REPLY_0;
+            // the redis error, so a client can tell a replica from "0 replicas acked"
+            return new ErrorReply("WAIT cannot be used with replica instances. Please also note that since Redis 4.0 if a replica is configured to be writable (which is not the default) writes to replicas are just local and are not propagated.");
         }
 
         // as master
