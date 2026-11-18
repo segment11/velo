@@ -2904,14 +2904,22 @@ sunionstore
 
     def 'test subscribe'() {
         given:
-        def data4 = new byte[4][]
-        data4[1] = 'a'.bytes
-        data4[2] = 'b'.bytes
-        data4[3] = 'c'.bytes
+        def inspector = new SocketInspector()
+        LocalPersist.instance.socketInspector = inspector
+        def netWorkerEventloop = Eventloop.builder()
+                .withThreadName('sGroupTest-net-worker')
+                .withIdleInterval(Duration.ofMillis(50))
+                .build()
+        netWorkerEventloop.keepAlive(true)
+        Thread.start { netWorkerEventloop.run() }
+        Thread.sleep(200)
+        inspector.initByNetWorkerEventloopArray([netWorkerEventloop] as Eventloop[], [netWorkerEventloop] as Eventloop[])
 
+        and:
         def socket = SocketInspectorTest.mockTcpSocket()
+        def otherSocket = SocketInspectorTest.mockTcpSocket()
 
-        def sGroup = new SGroup('subscribe', data4, socket)
+        def sGroup = new SGroup('subscribe', null, socket)
         sGroup.from(BaseCommand.mockAGroup())
 
         and:
@@ -2919,11 +2927,30 @@ sunionstore
         aclUsers.initForTest()
 
         when:
-        LocalPersist.instance.socketInspector = new SocketInspector()
+        def data2 = new byte[3][]
+        data2[1] = 'a'.bytes
+        data2[2] = 'b'.bytes
+        sGroup.data = data2
         def reply = sGroup.subscribe(false)
         then:
-        reply instanceof MultiBulkReply
-        (reply as MultiBulkReply).replies.length == 3 * 3
+        // redis sends one 3-element frame per channel, not one flattened 3n-element array
+        reply instanceof MultiFrameReply
+        (reply as MultiFrameReply).frames.length == 2
+        // the count is this client's own subscription count after each subscribe
+        new String((reply as MultiFrameReply).buffer().asArray()) == '*3\r\n$9\r\nsubscribe\r\n$1\r\na\r\n:1\r\n*3\r\n$9\r\nsubscribe\r\n$1\r\nb\r\n:2\r\n'
+
+        when:
+        // another client subscribing a channel this client already holds still gets its own count
+        def data2o = new byte[2][]
+        data2o[1] = 'a'.bytes
+        def sGroupOther = new SGroup('subscribe', data2o, otherSocket)
+        sGroupOther.from(BaseCommand.mockAGroup())
+        def replyOther = sGroupOther.subscribe(false)
+        then:
+        // a single confirmation is one frame
+        replyOther instanceof MultiBulkReply
+        (replyOther as MultiBulkReply).replies.length == 3
+        ((replyOther as MultiBulkReply).replies[2] as IntegerReply).getInteger() == 1L
 
         when:
         aclUsers.upInsert('default') { u ->
@@ -2947,6 +2974,9 @@ sunionstore
         reply = sGroup.subscribe(false)
         then:
         reply == ErrorReply.FORMAT
+
+        cleanup:
+        netWorkerEventloop.breakEventloop()
     }
 
     def 'test slaveof'() {

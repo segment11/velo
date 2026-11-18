@@ -529,7 +529,8 @@ public class SocketInspector implements TcpSocket.Inspector {
      * @param channel   the channel to subscribe to
      * @param isPattern true if the channel is a pattern, false otherwise
      * @param socket    the socket to subscribe
-     * @return the number of sockets subscribed to the channel
+     * @return the number of subscriptions of the same type (channel or pattern) this client holds after
+     * the operation, like the redis confirmation count
      */
     public int subscribe(@NotNull String channel, boolean isPattern, ITcpSocket socket) {
         var one = new ChannelAndIsPattern(channel, isPattern);
@@ -567,7 +568,15 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         if (targetEventloop != null) {
             sockets.put(socket, targetEventloop);
-            subscriptionsBySocket.computeIfAbsent(socket, k -> ConcurrentHashMap.newKeySet()).add(one);
+            var subscriptions = subscriptionsBySocket.computeIfAbsent(socket, k -> ConcurrentHashMap.newKeySet());
+            subscriptions.add(one);
+            int count = 0;
+            for (var subscription : subscriptions) {
+                if (subscription.isPattern() == isPattern) {
+                    count++;
+                }
+            }
+            return count;
         }
         return sockets.size();
     }

@@ -2439,15 +2439,20 @@ public class SGroup extends BaseCommand {
 
         var socketInInspector = localPersist.getSocketInspector();
 
-        var replies = new Reply[channels.size() * 3];
-        int j = 0;
+        // redis replies one 3-element frame per channel, with this client's own subscription count
+        var triples = new ArrayList<Reply>(channels.size());
         for (var channel : channels) {
-            replies[j++] = new BulkReply(isPattern ? "psubscribe" : "subscribe");
-            replies[j++] = new BulkReply(channel);
-            var size = socketInInspector.subscribe(channel, isPattern, socket);
-            replies[j++] = new IntegerReply(size);
+            triples.add(new MultiBulkReply(new Reply[]{
+                    new BulkReply(isPattern ? "psubscribe" : "subscribe"),
+                    new BulkReply(channel),
+                    new IntegerReply(socketInInspector.subscribe(channel, isPattern, socket))}));
         }
 
-        return new MultiBulkReply(replies);
+        // a single confirmation is the frame itself
+        if (triples.size() == 1) {
+            return triples.getFirst();
+        }
+
+        return new MultiFrameReply(triples.toArray(new Reply[0]));
     }
 }
