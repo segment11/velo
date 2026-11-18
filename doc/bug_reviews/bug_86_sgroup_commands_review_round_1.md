@@ -1446,3 +1446,21 @@ commands) were updated; the compile + the per-class test runs are green.
 | 86.13 | SETRANGE unbounded offset → huge alloc / NegativeArraySizeException | Medium | Edge case / DoS | `CONFIRMED (reproduced)` | **fixed** (`6444c409`) |
 | 86.14 | SORT STORE dst key length not validated | Low | Edge case | `PARTIALLY CONFIRMED` | **fixed** (`0299805d`) — velo-internal invariant; no Redis parity claim |
 | 86.15 | *(new, agent 2)* SORT ... LIMIT offset 0 returns the whole collection | Medium | Protocol | `CONFIRMED (reproduced)` | **fixed** (`0af1a75e`) |
+
+## Follow-up F1 (agent 1, post re-review): SUBSCRIBE flattened frame and channel-socket count — FIXED
+
+**Origin:** filed during bug_89 round 1 (finding 89.3/89.4's sibling half) and confirmed live by both agents
+(bug_89 re-review table row `subscribe b` → redis `:2` / velo `:1`; bug_89 agent 1's e2e: `subscribe a b` →
+velo one `*6` flattened frame vs redis two `*3` frames). The round-1 non-findings line
+"subscribe() reply shape (3 fields per channel) correct" only holds for the single-channel case — it was
+re-examined and found wrong for N>1. Recorded here (not in bug_89) because `SGroup.subscribe()` is this
+report's class; fixed on the `review/ugroup_wgroup` branch reusing the machinery bug_89 added
+(`reply.MultiFrameReply` + the per-socket subscription view in `SocketInspector`).
+
+| Item | Evidence |
+|---|---|
+| Failing test first | RED `SGroupTest.'test subscribe'` `ConditionNotSatisfiedError at SGroupTest.groovy:2937` — `subscribe a b` answered one flattened `MultiBulkReply` instead of `MultiFrameReply`; the second client's single-channel count row (redis `:1`, old velo `:2` channel sockets) fails behind it |
+| Fix commit | `12c68b49` `fix: subscribe replies one resp frame per channel with the client's own subscription count` — `SGroup.subscribe()` builds one `MultiBulkReply` triple per channel (single → passthrough, multi → `MultiFrameReply`); `SocketInspector.subscribe()` now returns the client's own subscription count of the same type after the operation (redis `clientSubscriptionsCount`), mirroring `unsubscribe()` from bug 89.3 |
+| Focused tests | `SGroupTest`, `PGroupTest` (psubscribe single-pattern unchanged), `UGroupTest`, `WGroupTest`, `SocketInspectorTest`, `MultiFrameReplyTest`, `RESPReplyTest`, `CGroupTest` — all green in one enumerated run |
+| JaCoCo | `SocketInspector.subscribe()` changed lines fully covered incl. the type filter both branches; `SGroup.subscribe()` 2440-2458 fully covered incl. the keyword ternary (subscribe/psubscribe) and the single-frame passthrough; the uncovered 556-565 are the pre-existing eventloop-resolution fallback, untouched |
+| Live wire | rebuilt jar vs Redis 7.2.11: `subscribe a b` → `*3 …a :1` `*3 …b :2`; second client `sub a` → `:1`; `sub c` → `:2` (its own a+c) — **byte-identical to redis on every probe** (the re-review's exact `:2` vs `:1` case now matches) |

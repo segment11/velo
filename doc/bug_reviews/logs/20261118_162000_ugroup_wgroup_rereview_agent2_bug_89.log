@@ -1,0 +1,64 @@
+=== bug 89 stage 5 re-review log (agent 2) ===
+date: 2026-11-18 16:20:00 UTC (2026-11-18 16:20 +0800)
+repo: /home/kerry/ws/velo   branch: review/ugroup_wgroup   HEAD: a59c1bd6 (fix baseline 6cf5c303)
+redis live: 7.2.11, master :7798 with one online replica :7799, plus a replica-less master
+velo live: build/libs/velo-1.0.0.jar built from HEAD a59c1bd6, port 41998
+evidence: doc/bug_reviews/bug_89_ugroup_wgroup_commands_review_round_1.md -> "## Re-review (AI agent 2)"
+
+--- RED re-derivation (parent production code + the commit's own test file, in place, then restored) ---
+eee46598 (89.5) WGroupTest > test wait FAILED  ConditionNotSatisfiedError at WGroupTest.groovy:140   [Fix Log: 140  OK]
+65031dea (89.8) WGroupTest > test wait FAILED  ConditionNotSatisfiedError at WGroupTest.groovy:176   [Fix Log: 176  OK]
+87550181 (89.7) WGroupTest > test wait FAILED  SpockComparisonFailure    at WGroupTest.groovy:99    [Fix Log: 99   OK]
+11fc5087 (89.1) WGroupTest > test wait FAILED  ConditionNotSatisfiedError at WGroupTest.groovy:91    [Fix Log: 91   OK]
+352c5d50 (89.6) WGroupTest > test wait FAILED  ConditionNotSatisfiedError at WGroupTest.groovy:86    [Fix Log: 86   OK]
+490a627b (89.3) UGroupTest > test unsubscribe FAILED  SpockComparisonFailure at UGroupTest.groovy:81  [Fix Log: 81   OK]
+97440cc4 (89.2) UGroupTest > test handle FAILED  ConditionNotSatisfiedError at UGroupTest.groovy:48
+             UGroupTest > test unsubscribe FAILED ConditionNotSatisfiedError at UGroupTest.groovy:115 [Fix Log: 108  LINE DIFFERS]
+a59c1bd6 (89.4) UGroupTest > test unsubscribe FAILED ConditionNotSatisfiedError at UGroupTest.groovy:116 [Fix Log: 116  OK]
+4e8ec8b2      test-only commit, nothing to re-derive
+note: the Gradle Groovy worker intermittently dies with "Java heap space" -> the runs were retried (build flake)
+
+--- focused tests at HEAD a59c1bd6 ---
+io.velo.command.WGroupTest         tests= 4 fail=0 err=0
+io.velo.command.UGroupTest         tests= 3 fail=0 err=0
+io.velo.SocketInspectorTest        tests=12 fail=0 err=0
+io.velo.command.PGroupTest         tests=22 fail=0 err=0
+io.velo.command.SGroupTest         tests=29 fail=0 err=0
+io.velo.reply.MultiFrameReplyTest  tests= 2 fail=0 err=0
+io.velo.reply.RESPReplyTest        tests= 4 fail=0 err=0
+BUILD SUCCESSFUL
+
+--- JaCoCo at HEAD (scripts/jacoco_cover.py) ---
+io.velo.command.WGroup        60-188  lines 53/54 (1 partial: 147, the unreachable short-circuit combination)
+                               branches 12/13 branch lines fully covered
+io.velo.command.UGroup        55-102  lines 21/21, branches 8/8
+io.velo.reply.MultiFrameReply  1-68   lines 20/20, branches 3/3
+io.velo.SocketInspector       584-601 + 612-629  lines 29/29 covered
+                               (560/563/564 uncovered = the pre-existing slotWorkerEventloopArray fallback in subscribe())
+
+--- live wire differential: redis 7.2.11 (:7798 master, :7799 replica) vs velo HEAD (:41998, no replica) ---
+unsubscribe (no arg)      redis *3 $11 unsubscribe $-1 :0            velo *3 $11 unsubscribe $-1 :0            OK (89.2)
+unsubscribe a b           redis *3..a :1  *3..b :0                  velo *3..a :1  *3..b :0                  OK (89.4, two frames)
+A unsub x (B holds x)     redis *3 $11 unsubscribe $1 x :0           velo *3 $11 unsubscribe $1 x :0           OK (89.3)
+wait 0 0                  redis :0 (no replica) / :1 (1 replica)    velo :0                                   OK (89.5)
+wait 1 -1                 redis -ERR timeout is negative            velo -ERR timeout is negative            OK (89.5)
+wait -1 1000              redis :0                                 velo :0                                   OK (89.5)
+wait / wait 1             redis -ERR wrong number of arguments for 'wait' command
+                          velo  -ERR wrong number of arguments for 'wait' command                      OK (89.9 REFUTED)
+wait 2 2000 (with a write) redis blocks 2.10s -> :1                 velo blocks 2.01s -> :0                   OK (89.1)
+wait 1 0    (with a write) redis blocks forever                    velo blocks forever                      OK (89.5/89.1)
+wait 2 2000 (no write)     redis blocks 2.10s -> :1                 velo :0 immediately (0.00s)               DIVERGENCE -> Follow-up 1
+subscribe b (A holds a, B holds a)
+                          redis *3 $9 subscribe $1 b :2 (client count)
+                          velo  *3 $9 subscribe $1 b :1 (channel socket count)                          DIVERGENCE -> Residual Risk #1 (SGroup, bug_86 class)
+
+--- verdicts ---
+89.1 ACCEPTED (11fc5087)   89.2 ACCEPTED (97440cc4)   89.3 ACCEPTED (490a627b + 4e8ec8b2)
+89.4 ACCEPTED (a59c1bd6)   89.5 ACCEPTED (eee46598)   89.6 ACCEPTED (352c5d50)
+89.7 ACCEPTED (87550181)   89.8 ACCEPTED (65031dea)   89.9 REFUTED - no change needed
+
+--- follow-ups (non-blocking) ---
+1. a WAIT from a client that never wrote never blocks (velo answers the replica count synchronously, redis blocks until the deadline)
+2. the replica-role check is not first (redis checks server.masterhost before parsing the arguments)
+3. OneSlot.delayRun() silently drops the task when slotWorkerEventloop == null -> the poller deadline is never armed -> the client hangs forever
+4. countDistinctReplicas() counts configured replicas, not online ones (redis counts SLAVE_STATE_ONLINE only)

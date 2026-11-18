@@ -1,0 +1,71 @@
+Bug 89 fix-phase e2e differential — agent 1, 2026-11-18
+
+Setup: velo-1.0.0.jar built at reviewed-branch HEAD `a59c1bd6` (contains all 8 fix commits),
+started on port 7379 (`java -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.0.0.jar`).
+Oracle: live Redis 7.2.11 master on 7788 with one online replica on 7789 (state=online, caught up).
+WAIT counts legitimately differ when they report the topology (velo: 0 replicas, redis: 1 online replica);
+error texts, reply shapes and timings are the compared properties.
+
+=== 89.9 (no regression): wrong arity — both byte-identical ===
+velo  : wait | wait 1 | wait 1 2 3 -> ERR wrong number of arguments for 'wait' command
+redis : wait | wait 1 | wait 1 2 3 -> ERR wrong number of arguments for 'wait' command
+
+=== 89.5: numreplicas<=0 accepted, negative timeout rejected with the redis text ===
+velo  : wait 0 0   -> 0   (integer; was: ERR value is not an integer or out of range)
+redis : wait 0 0   -> 1
+velo  : wait -1 100 -> 0  (negative numreplicas accepted)
+redis : wait -1 100 -> 1
+velo  : wait 1 -1  -> ERR timeout is negative
+redis : wait 1 -1  -> ERR timeout is negative
+
+=== 89.8: no 60 s cap (was: ERR timeout should <= 60000) ===
+velo  : time wait 0 120000 -> 0      real 0m0.004s
+redis : time wait 1 120000 -> 1      real 0m0.002s
+
+=== 89.1: first-try vs block-until-deadline (SET + WAIT on one connection) ===
+redis (1 caught-up replica): set; wait 1 5000 -> OK, 1, real 0m0.002s   [first-try, immediate]
+velo  (0 replicas, unsatisfiable write client): set; wait 1 1000 -> OK, 0, real 0m1.016s
+       [blocks until the deadline exactly like redis would with no replicas;
+        the old code answered sync 0 instantly via the removed no-slaves early return]
+velo  : set; wait 0 5000 -> OK, 0, real 0m0.006s                        [numreplicas<=0 sync answer]
+
+=== 89.6: write-less client answers the replica count, synchronously ===
+velo  : time wait 1 1000 on a fresh connection (no prior write) -> 0, real 0m0.002s
+        [takes the distinct-replica-count path: sync, count 0 because no replicas are configured;
+         the redis oracle with its online replica answers 1 — see wait 0 0 above]
+
+=== 89.7: redis oracle on the replica ===
+redis : (port 7789) wait 1 100 ->
+  ERR WAIT cannot be used with replica instances. Please also note that since Redis 4.0 if a replica
+  is configured to be writable (which is not the default) writes to replicas are just local and are not propagated.
+velo  : unit-proven (WGroupTest 'test wait' as-slave row asserts the exact same text); no slave slot
+        is configured in this e2e instance, so the live velo half is not exercised here.
+
+=== 89.2 / 89.3 / 89.4: raw-wire pubsub differential (same RESP command sequences) ===
+
+REDIS-7.2 (7788):
+89.2 bare unsubscribe: b'*3\r\n$11\r\nunsubscribe\r\n$-1\r\n:0\r\n'
+subscribe a b        : b'*3\r\n$9\r\nsubscribe\r\n$1\r\na\r\n:1\r\n*3\r\n$9\r\nsubscribe\r\n$1\r\nb\r\n:2\r\n'
+89.3 unsub a         : b'*3\r\n$11\r\nunsubscribe\r\n$1\r\na\r\n:1\r\n'
+89.3 unsub b         : b'*3\r\n$11\r\nunsubscribe\r\n$1\r\nb\r\n:0\r\n'
+parity notsub        : b'*3\r\n$11\r\nunsubscribe\r\n$6\r\nnotsub\r\n:0\r\n'
+89.4 unsub x y       : b'*3\r\n$11\r\nunsubscribe\r\n$1\r\nx\r\n:1\r\n*3\r\n$11\r\nunsubscribe\r\n$1\r\ny\r\n:0\r\n'
+89.3 A unsub, B on   : b'*3\r\n$11\r\nunsubscribe\r\n$2\r\nch\r\n:0\r\n'
+
+VELO (7379):
+89.2 bare unsubscribe: b'*3\r\n$11\r\nunsubscribe\r\n$-1\r\n:0\r\n'            [identical; was an arity error]
+subscribe a b        : b'*6\r\n$9\r\nsubscribe\r\n$1\r\na\r\n:1\r\n$9\r\nsubscribe\r\n$1\r\nb\r\n:1\r\n'
+                       [KNOWN residual: the SGroup.subscribe half — one flattened *6 frame with the
+                        channel-socket counts instead of two *3 frames with the client's own counts.
+                        bug_86 class, deliberately not re-filed in round 1; machinery (MultiFrameReply +
+                        per-socket view) now exists for the follow-up. Only divergence in this sweep.]
+89.3 unsub a         : b'*3\r\n$11\r\nunsubscribe\r\n$1\r\na\r\n:1\r\n'        [identical: client still holds b]
+89.3 unsub b         : b'*3\r\n$11\r\nunsubscribe\r\n$1\r\nb\r\n:0\r\n'        [identical]
+parity notsub        : b'*3\r\n$11\r\nunsubscribe\r\n$6\r\nnotsub\r\n:0\r\n'   [identical: own count, still replies]
+89.4 unsub x y       : b'*3\r\n$11\r\nunsubscribe\r\n$1\r\nx\r\n:1\r\n*3\r\n$11\r\nunsubscribe\r\n$1\r\ny\r\n:0\r\n'
+                       [identical: two *3 frames; was one *6 frame]
+89.3 A unsub, B on   : b'*3\r\n$11\r\nunsubscribe\r\n$2\r\nch\r\n:0\r\n'       [identical: A's own remaining 0;
+                        pre-fix velo answered :1 — the other client's socket]
+
+Conclusion: every fixed behavior matches the live Redis 7.2 oracle on the wire (reply shape, counts,
+error texts, timing class). The only divergence is the recorded SGroup.subscribe residual.

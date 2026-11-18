@@ -1,0 +1,64 @@
+=== bug 89 agent 2 verification log ===
+date: 2026-11-17 21:45:00 UTC (2026-11-17 21:45 +0800)
+repo: /home/kerry/ws/velo   branch: review/ugroup_wgroup   HEAD: 6cf5c303f7e210e031f6c957a752c170d7c72ec2
+redis live: 7.2.11, master on :7788 with one online replica on :7789 (WAIT / UNSUBSCRIBE differential)
+upstream source: ~/ws/redis @ src/pubsub.c, src/replication.c, src/blocked.c, src/timeout.c, src/server.c, src/commands.def
+velo live: build/libs/velo-1.0.0.jar on :41999 (raw socket probe)
+
+--- temp spec (deleted after reproduction, source kept in the report Appendix A) ---
+src/test/groovy/io/velo/command/TempBug89ReviewTest.groovy
+(4 test methods; InMemoryGetSet bypass + BaseCommand.mockAGroup(), the same harness as
+ src/test/groovy/io/velo/command/WGroupTest.groovy)
+
+--- Spock temp spec stdout (./gradlew :test --tests "io.velo.command.TempBug89ReviewTest") ---
+89.1 settle elapsed millis = 4991                 # 'wait 1 5000' with an already caught up slave
+89.3 count = 1                                    # unsubscribe 'a' -> the channel socket count, redis: 0
+89.4 reply = [BulkReply, BulkReply, IntegerReply, BulkReply, BulkReply, IntegerReply]   # one *6 frame
+89.8 error = timeout should <= 60000              # 'wait 1 60001'
+4 tests completed, 0 failed                       # the spec documents the current (buggy) behaviour
+
+--- live redis 7.2.11 (master :7788, one online replica :7789) ---
+$ redis-cli -p 7788 wait 0 0                       -> 1
+$ time redis-cli -p 7788 wait 1 0                  -> 1        real 0m0.004s
+$ redis-cli -p 7788 set k v >/dev/null
+$ time redis-cli -p 7788 wait 1 5000               -> 1        real 0m0.002s   # answered immediately
+$ redis-cli -p 7788 wait 1 -1                      -> ERR timeout is negative
+$ redis-cli -p 7788 wait -1 1000                   -> 1
+$ redis-cli -p 7788 wait                           -> ERR wrong number of arguments for 'wait' command
+$ redis-cli -p 7788 wait 1                         -> ERR wrong number of arguments for 'wait' command
+$ redis-cli -p 7788 wait 1 2 3                     -> ERR wrong number of arguments for 'wait' command
+$ time redis-cli -p 7788 wait 1 120000             -> 1        real 0m0.001s   # no 60s cap
+$ redis-cli -p 7789 wait 1 100                     -> ERR WAIT cannot be used with replica instances. ...
+
+--- live redis 7.2.11 pubsub (raw socket, client A and client B) ---
+A: subscribe a      -> *3 $9 subscribe $1 a :1
+B: subscribe a      -> *3 $9 subscribe $1 a :1
+A: unsubscribe a    -> *3 $11 unsubscribe $1 a :0     # A's OWN remaining count = 0 (B is still there)
+A: unsubscribe a    -> *3 $11 unsubscribe $1 a :0     # not subscribed, still replies
+A: unsubscribe      -> *3 $11 unsubscribe $-1 :0      # bare unsubscribe unsubscribes all
+A: unsubscribe a b  -> *3 $11 unsubscribe $1 a :1  *3 $11 unsubscribe $1 b :0   # TWO *3 frames
+
+--- live velo :41999 (build/libs/velo-1.0.0.jar, raw socket) ---
+velo wait            -> -ERR wrong number of arguments for 'wait' command\r\n
+velo wait 1          -> -ERR wrong number of arguments for 'wait' command\r\n
+velo wait 1 2 3      -> -ERR wrong number of arguments for 'wait' command\r\n
+velo unsubscribe     -> -ERR wrong number of arguments for 'unsubscribe' command\r\n
+velo subscribe a b   -> *6\r\n$9\r\nsubscribe\r\n$1\r\na\r\n:1\r\n$9\r\nsubscribe\r\n$1\r\nb\r\n:1\r\n
+velo unsubscribe a b -> *6\r\n$11\r\nunsubscribe\r\n$1\r\na\r\n:0\r\n$11\r\nunsubscribe\r\n$1\r\nb\r\n:0\r\n
+velo wait 0 0        -> -ERR value is not an integer or out of range\r\n
+velo wait 1 0        -> -ERR value is not an integer or out of range\r\n
+velo wait 1 60001    -> -ERR timeout should <= 60000\r\n
+velo wait 1 -1       -> -ERR value is not an integer or out of range\r\n
+velo: A unsub a while B is still subscribed -> *3 $11 unsubscribe $1 a :1     # redis: :0
+
+--- key code reading (the 89.9 refutation) ---
+src/main/java/io/velo/MultiWorkerServer.java:611-615   if (reply == ErrorReply.FORMAT) reply = ErrorReply.WRONG_NUMBER(cmd);
+src/main/java/io/velo/MultiWorkerServer.java:674-678   same rewrite on the cross-worker path
+src/main/java/io/velo/MultiWorkerServer.java:702-704   same rewrite on the async path
+src/test/groovy/io/velo/command/TGroupTest.groovy:71   documents the convention
+src/main/java/io/velo/reply/ErrorReply.java:20-22      ErrorReply.WRONG_NUMBER -> "wrong number of arguments for '<cmd>' command" (no stray '*')
+
+--- verdicts ---
+89.1 CONFIRMED (reproduced)  89.2 CONFIRMED (reproduced, error text refined)  89.3 CONFIRMED (reproduced)
+89.4 CONFIRMED (reproduced)  89.5 CONFIRMED (reproduced)  89.6 CONFIRMED (reproduced)
+89.7 CONFIRMED (reproduced)  89.8 CONFIRMED (reproduced)  89.9 REFUTED
