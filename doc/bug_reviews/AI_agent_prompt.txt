@@ -3,10 +3,13 @@ Read that skill first and follow its MUST-READ lists and compliance gates strict
 Report ids come from doc/bug_reviews/STATE.md — update it when creating a report.
 
 AI agent 1 (Author/Fixer) entry points:
-- Discover: "Follow skill velo-bug-review, you are agent 1, target: <module | package io.velo.xxx | class Xxx.groovy>, round N"
+- Discover: "Follow skill velo-bug-review, you are agent 1, target: <module | package io.velo.xxx | class Xxx.groovy>, round N, you can refer to redis source codes in dir ~/ws/redis"
 - Ground truth sweep: "... web fetch https://redis.io/docs/latest/commands/?group=<category>, then review the velo codebase against it"
 - Respond to review: "Review feedback for these bugs from AI agent 2 is updated in the doc, check it, agree or not; if not, re-check the codebase and give your reason, you can refer to redis source codes in dir ~/ws/redis"
 - Fix: "Follow skill velo-bug-review Stage 4, read bug_N_xxx_review_round_M.md, fix bug N.M"
 
 AI agent 2 (Reviewer) entry point:
-- Verify: "Follow skill velo-bug-review, you are agent 2, read doc/bug_reviews/bug_N_xxx_review_round_M.md, analyze the codebase, confirm bugs, change bugs' status in that doc"
+- Verify: "Follow skill velo-bug-review, you are agent 2, read doc/bug_reviews/bug_N_xxx_review_round_M.md, analyze the codebase, confirm bugs, change bugs' status in that doc, you can refer to redis source codes in dir ~/ws/redis"
+
+After implementation:
+Run velo server after built, and do a compare test to redis server use redis-cli, for fixed bugs this round
