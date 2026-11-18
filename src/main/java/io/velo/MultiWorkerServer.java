@@ -1847,7 +1847,7 @@ public class MultiWorkerServer extends Launcher {
         @VisibleForTesting
         void resetInfoServer(Config config) {
             infoServerList.clear();
-            infoServerList.add(new Tuple2<>("version", "1.0.0"));
+            infoServerList.add(new Tuple2<>("version", ConfForGlobal.VELO_VERSION));
             infoServerList.add(new Tuple2<>("redis_mode", ConfForGlobal.clusterEnabled ? "cluster" : "standalone"));
 
             var platform = Platform.getNativePlatform();

@@ -1,6 +1,7 @@
 package io.velo.test.tools
 
 import com.segment.common.Conf
+import io.velo.ConfForGlobal
 import redis.clients.jedis.Jedis
 
 import java.util.concurrent.TimeUnit
@@ -12,7 +13,7 @@ class VeloServer {
     static final String jdkVersion
     static final String JAVA_BIN_PATH
     static String BUILD_LIBS_DIR_PATH = "build/libs"
-    static String JAR_FILE_PATH = "build/libs/velo-1.0.0.jar"
+    static String JAR_FILE_PATH = "build/libs/velo-${ConfForGlobal.VELO_VERSION}.jar"
 
     static {
         jdkVersion = System.getProperty('java.version')
@@ -31,11 +32,8 @@ class VeloServer {
         def c = Conf.instance
         c.resetWorkDir(true)
         JAVA_BIN_PATH = new File(System.getProperty('java.home'), 'bin/java').absolutePath
-        def buildGradleFilePath = c.projectPath('/build.gradle')
-        def veloVersion = new File(buildGradleFilePath).text.readLines().find { line -> line.startsWith('version =') }
-                .split('=')[1].trim().replaceAll("'", '')
         BUILD_LIBS_DIR_PATH = c.projectPath('/build/libs')
-        JAR_FILE_PATH = "${BUILD_LIBS_DIR_PATH}/velo-${veloVersion}.jar"
+        JAR_FILE_PATH = "${BUILD_LIBS_DIR_PATH}/velo-${ConfForGlobal.VELO_VERSION}.jar"
     }
 
     private final String name

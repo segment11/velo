@@ -12,7 +12,8 @@ KEEP_DATA=${KEEP_DATA:-false}
 RUN_MIGRATION=${RUN_MIGRATION:-true}
 RUN_FAILOVER=${RUN_FAILOVER:-true}
 JAVA_BIN=${JAVA_BIN:-java}
-VELO_JAR=${VELO_JAR:-"$VELO_DIR/build/libs/velo-1.0.0.jar"}
+VELO_VERSION=$(grep -oP 'VELO_VERSION\s*=\s*"\K[^"]+' "$VELO_DIR/src/main/java/io/velo/ConfForGlobal.java")
+VELO_JAR=${VELO_JAR:-"$VELO_DIR/build/libs/velo-${VELO_VERSION}.jar"}
 BASE_DIR=${BASE_DIR:-$(mktemp -d /tmp/velo-cluster-e2e.XXXXXX)}
 
 PIDS=()

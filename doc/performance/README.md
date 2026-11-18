@@ -27,7 +27,7 @@ kv.lru.maxSize=1000000
 
 Run velo:
 ```shell
-java -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.0.0.jar
+java -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.2.0.jar
 ```
 
 Then run set test:
@@ -83,7 +83,7 @@ isOnDynTrainDictForCompression=true
 
 Run velo:
 ```shell
-java -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.0.0.jar
+java -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.2.0.jar
 ```
 
 Train dict use first 1000 keys, Velo will train a zstd dictionary, it will take 10-20 ms:

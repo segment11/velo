@@ -1,5 +1,6 @@
 package io.velo.repl.cluster
 
+import io.velo.ConfForGlobal
 import io.velo.repl.support.ExtendProtocolCommand
 import redis.clients.jedis.Jedis
 import redis.clients.jedis.exceptions.JedisDataException
@@ -56,7 +57,7 @@ abstract class ClusterxBase extends Specification {
     }
 
     protected void startCluster() {
-        def jar = new File('build/libs/velo-1.0.0.jar')
+        def jar = new File("build/libs/velo-${ConfForGlobal.VELO_VERSION}.jar")
         assert jar.isFile(): 'Run ./gradlew jar first'
 
         baseDir = Files.createTempDirectory('velo-cluster-manual-groovy-').toFile()

@@ -1,8 +1,9 @@
 package io.velo;
 
+import java.util.HashMap;
+
 import io.velo.acl.AclUsers;
 import io.velo.acl.U;
-import java.util.HashMap;
 
 /**
  * Global configuration settings for the Velo application.
@@ -14,6 +15,14 @@ public class ConfForGlobal {
      */
     private ConfForGlobal() {
     }
+
+    /**
+     * The current Velo server version.
+     * <p>
+     * This is the single source of truth of the version: build.gradle reads it to name the jar
+     * ({@code velo-<version>.jar}) and the INFO command reports it as the {@code version} field.
+     */
+    public static final String VELO_VERSION = "1.2.0";
 
     /**
      * For snowflake ID generator.

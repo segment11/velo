@@ -6,7 +6,17 @@ plugins {
 }
 
 group = 'com.montplex'
-version = '1.0.0'
+
+// The version lives in ConfForGlobal.VELO_VERSION, it is the single source of truth.
+def veloVersion = { ->
+    def source = file('src/main/java/io/velo/ConfForGlobal.java').text
+    def matcher = (source =~ /VELO_VERSION\s*=\s*"([^"]+)"/)
+    if (!matcher.find()) {
+        throw new GradleException('VELO_VERSION not found in src/main/java/io/velo/ConfForGlobal.java')
+    }
+    matcher.group(1)
+}()
+version = veloVersion
 
 repositories {
     maven {
@@ -182,7 +192,7 @@ test.finalizedBy jacocoTestReport
 java \
 -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m \
 -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:17379 \
--jar velo-1.0.0.jar
+-jar velo-1.2.0.jar
  */
 
 jar {

@@ -37,7 +37,8 @@ KEEP_DATA="${KEEP_DATA:-false}"
 # ------------------------- paths ----------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VELO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-VELO_JAR="$VELO_DIR/build/libs/velo-1.0.0.jar"
+VELO_VERSION=$(grep -oP 'VELO_VERSION\s*=\s*"\K[^"]+' "$VELO_DIR/src/main/java/io/velo/ConfForGlobal.java")
+VELO_JAR="$VELO_DIR/build/libs/velo-${VELO_VERSION}.jar"
 REDIS_BIN="${REDIS_BIN:-$HOME/.proof/bin/redis-server}"
 REDIS_CLI="${REDIS_CLI:-$HOME/.proof/bin/redis-cli}"
 JAVA_BIN="${JAVA_BIN:-java}"

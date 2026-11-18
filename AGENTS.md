@@ -54,10 +54,10 @@ system written in Java with Groovy components.
 ./gradlew jacocoTestReport
 
 # Run after build
-cd build/libs && java -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.0.0.jar
+cd build/libs && java -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.2.0.jar
 
 # Run with memory limit
-java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.0.0.jar
+java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.2.0.jar
 ```
 
 ### Test Execution Notes

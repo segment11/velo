@@ -29,7 +29,19 @@ Details refer to https://github.com/segment11/velo/blob/main/doc/redis_command_s
 ### Run in docker
 
 ```shell
-docker run -d --name velo -p 7379:7379 -v $(pwd)/velo-data:/var/lib/velo registry.cn-guangzhou.aliyuncs.com/montplex/velo:1.0.0
+docker run -d --name velo -p 7379:7379 -v $(pwd)/velo-data:/var/lib/velo registry.cn-guangzhou.aliyuncs.com/montplex/velo:1.2.0
+```
+
+The image is multi-arch, it runs on both `linux/amd64` and `linux/arm64`.
+
+### Build the docker image
+
+Need `docker buildx` with a multi-arch builder (the image content is arch
+independent, the native libs ship both the x86_64 and the aarch64 variants).
+
+```shell
+./gradlew jar
+./scripts/docker/build_multiarch.sh --push
 ```
 
 ### Or build from source and run
@@ -62,7 +74,7 @@ kv.lru.maxSize=1000000
 
 ```shell
 cd build/libs
-java -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.0.0.jar
+java -Xmx1g -Xms1g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -jar velo-1.2.0.jar
 ```
 
 ### Test
