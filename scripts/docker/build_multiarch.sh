@@ -20,12 +20,14 @@ OUTPUT=${OUTPUT:-$VELO_DIR/build/velo-$VELO_VERSION-multiarch.oci.tar}
 
 PUSH=false
 LOAD=false
+PUSH_PER_ARCH=false
 
 usage() {
     sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     echo
     echo "Options:"
-    echo "  --push            push the image to the registry"
+    echo "  --push            push the image to the registry (one push of the whole manifest list)"
+    echo "  --push-per-arch   push every platform on its own, then create the manifest list"
     echo "  --load            load the image into the local docker daemon (single arch)"
     echo "  --image <name>    image repository, default $IMAGE"
     echo "  --tag <tag>       image tag, default $TAG"
@@ -36,6 +38,7 @@ usage() {
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --push) PUSH=true; shift ;;
+        --push-per-arch) PUSH_PER_ARCH=true; shift ;;
         --load) LOAD=true; shift ;;
         --image) IMAGE=$2; shift 2 ;;
         --tag) TAG=$2; shift 2 ;;
@@ -51,6 +54,24 @@ cd "$VELO_DIR"
 echo "==> building the jar (version $VELO_VERSION)"
 ./gradlew jar
 
+REGISTRY=${IMAGE%%/*}
+
+login() {
+    # `docker login` without --password-stdin prompts on stdin, it blocks forever
+    # when the script runs without a tty, so feed the password from the env.
+    if [[ -n "${DOCKER_PASSWORD:-}" ]]; then
+        printf '%s' "$DOCKER_PASSWORD" | docker login --username "${DOCKER_USERNAME:-}" --password-stdin "$REGISTRY"
+    elif [[ -t 0 ]]; then
+        docker login "$REGISTRY"
+    else
+        echo "==> no tty and DOCKER_PASSWORD is not set, using the stored credentials"
+    fi
+}
+
+if [[ "$PUSH" == true || "$PUSH_PER_ARCH" == true ]]; then
+    login
+fi
+
 echo "==> building the image for $PLATFORMS"
 BUILD_ARGS=(
     --builder "$BUILDER"
@@ -60,21 +81,43 @@ BUILD_ARGS=(
 )
 
 if [[ "$PUSH" == true ]]; then
+    # One single push of the whole manifest list. The image is ~400 MB per
+    # platform, so the upload takes a few minutes, the `pushing layers` step is
+    # the slow one (the `[auth]` step right above it finishes in 0.0s).
     BUILD_ARGS+=(--tag "$IMAGE:latest" --push)
+    docker buildx build "${BUILD_ARGS[@]}" "$VELO_DIR"
+    echo "==> pushed $IMAGE:$TAG and $IMAGE:latest"
+elif [[ "$PUSH_PER_ARCH" == true ]]; then
+    # Two steps: push every platform on its own, each push is independent and
+    # can be retried alone, then assemble the manifest list.
+    IFS=',' read -ra PLATFORM_LIST <<< "$PLATFORMS"
+    ARCH_REFS=()
+    for platform in "${PLATFORM_LIST[@]}"; do
+        arch=${platform##*/}
+        arch_ref="$IMAGE:$TAG-$arch"
+        echo "==> pushing $platform as $arch_ref"
+        docker buildx build \
+            --builder "$BUILDER" \
+            --platform "$platform" \
+            --build-arg "VELO_VERSION=$VELO_VERSION" \
+            --tag "$arch_ref" \
+            --push \
+            "$VELO_DIR"
+        ARCH_REFS+=("$arch_ref")
+    done
+    echo "==> creating the manifest list $IMAGE:$TAG"
+    docker buildx imagetools create --tag "$IMAGE:$TAG" "${ARCH_REFS[@]}"
+    docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE:$TAG"
+    echo "==> pushed $IMAGE:$TAG and $IMAGE:latest"
 elif [[ "$LOAD" == true ]]; then
     BUILD_ARGS+=(--load)
+    docker buildx build "${BUILD_ARGS[@]}" "$VELO_DIR"
+    echo "==> loaded $IMAGE:$TAG into the local docker daemon"
 else
     mkdir -p "$(dirname "$OUTPUT")"
     BUILD_ARGS+=(--output "type=oci,dest=$OUTPUT")
-fi
-
-docker buildx build "${BUILD_ARGS[@]}" "$VELO_DIR"
-
-if [[ "$PUSH" == true ]]; then
-    echo "==> pushed $IMAGE:$TAG and $IMAGE:latest"
-elif [[ "$LOAD" == true ]]; then
-    echo "==> loaded $IMAGE:$TAG into the local docker daemon"
-else
+    docker buildx build "${BUILD_ARGS[@]}" "$VELO_DIR"
     echo "==> wrote the multi-arch image to $OUTPUT"
-    echo "    load it with: docker buildx imagetools create -f $OUTPUT registry.cn-guangzhou.aliyuncs.com/montplex/velo:local"
+    echo "    publish it with --push or --push-per-arch"
 fi
+

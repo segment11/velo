@@ -13,7 +13,7 @@
 #     --build-arg VELO_VERSION=1.2.0 \
 #     -t registry.cn-guangzhou.aliyuncs.com/montplex/velo:1.2.0 --push .
 #
-ARG BASE_IMAGE=docker.1ms.run/eclipse-temurin:21-jdk-jammy
+ARG BASE_IMAGE=eclipse-temurin:21-jdk-jammy
 FROM ${BASE_IMAGE}
 
 ARG VELO_VERSION
