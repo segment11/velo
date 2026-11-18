@@ -10,6 +10,7 @@ import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.IntegerReply
 import io.velo.reply.MultiBulkReply
+import io.velo.reply.MultiFrameReply
 import io.velo.reply.NilReply
 import spock.lang.Specification
 
@@ -112,10 +113,11 @@ class UGroupTest extends Specification {
         uGroup.data = data1
         def reply4 = uGroup.unsubscribe(false)
         then:
-        reply4 instanceof MultiBulkReply
-        (reply4 as MultiBulkReply).replies.length == 6
-        ((reply4 as MultiBulkReply).replies[2] as IntegerReply).getInteger() == 1L
-        ((reply4 as MultiBulkReply).replies[5] as IntegerReply).getInteger() == 0L
+        reply4 instanceof MultiFrameReply
+        (reply4 as MultiFrameReply).frames.length == 2
+        ((reply4 as MultiFrameReply).frames[0] as MultiBulkReply).replies.length == 3
+        (((reply4 as MultiFrameReply).frames[0] as MultiBulkReply).replies[2] as IntegerReply).getInteger() == 1L
+        (((reply4 as MultiFrameReply).frames[1] as MultiBulkReply).replies[2] as IntegerReply).getInteger() == 0L
 
         when:
         // subscribed to nothing (of this type): redis still replies, with a nil channel
@@ -134,9 +136,21 @@ class UGroupTest extends Specification {
         uGroup.data = data3
         def reply3 = uGroup.unsubscribe(false)
         then:
-        (reply3 as MultiBulkReply).replies.length == 6
-        ((reply3 as MultiBulkReply).replies[2] as IntegerReply).getInteger() == 0L
-        ((reply3 as MultiBulkReply).replies[5] as IntegerReply).getInteger() == 0L
+        reply3 instanceof MultiFrameReply
+        (reply3 as MultiFrameReply).frames.length == 2
+        (((reply3 as MultiFrameReply).frames[0] as MultiBulkReply).replies[2] as IntegerReply).getInteger() == 0L
+        (((reply3 as MultiFrameReply).frames[1] as MultiBulkReply).replies[2] as IntegerReply).getInteger() == 0L
+
+        when:
+        // two channels: redis sends two *3 frames on the wire, not one *6 array
+        inspector.subscribe('b', false, socket)
+        inspector.subscribe('c', false, socket)
+        def reply8 = uGroup.unsubscribe(false)
+        then:
+        reply8 instanceof MultiFrameReply
+        (reply8 as MultiFrameReply).frames.length == 2
+        new String((reply8 as MultiFrameReply).buffer().asArray()) == '*3\r\n$11\r\nunsubscribe\r\n$1\r\nb\r\n:1\r\n' +
+                '*3\r\n$11\r\nunsubscribe\r\n$1\r\nc\r\n:0\r\n'
 
         when:
         // a socket that never subscribed gets the redis count 0

@@ -83,15 +83,20 @@ public class UGroup extends BaseCommand {
             }
         }
 
-        var replies = new Reply[channels.size() * 3];
-        int j = 0;
+        // redis replies one 3-element frame per channel, not one flattened 3N-element array
+        var triples = new ArrayList<Reply>(channels.size());
         for (var channel : channels) {
-            replies[j++] = new BulkReply(isPattern ? "punsubscribe" : "unsubscribe");
-            replies[j++] = new BulkReply(channel);
-            var size = socketInInspector.unsubscribe(channel, isPattern, socket);
-            replies[j++] = new IntegerReply(size);
+            triples.add(new MultiBulkReply(new Reply[]{
+                    new BulkReply(isPattern ? "punsubscribe" : "unsubscribe"),
+                    new BulkReply(channel),
+                    new IntegerReply(socketInInspector.unsubscribe(channel, isPattern, socket))}));
         }
 
-        return new MultiBulkReply(replies);
+        // a single confirmation is the frame itself
+        if (triples.size() == 1) {
+            return triples.getFirst();
+        }
+
+        return new MultiFrameReply(triples.toArray(new Reply[0]));
     }
 }
