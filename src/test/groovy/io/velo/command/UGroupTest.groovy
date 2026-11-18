@@ -90,6 +90,14 @@ class UGroupTest extends Specification {
         (reply2 as MultiBulkReply).replies[2].getInteger() == 2L
 
         when:
+        // a pattern subscription is not counted in the channel confirmation, redis counts per type
+        inspector.subscribe('news.*', true, socket)
+        uGroup.data = data2d
+        def reply2p = uGroup.unsubscribe(false)
+        then:
+        (reply2p as MultiBulkReply).replies[2].getInteger() == 2L
+
+        when:
         def data3 = new byte[3][]
         data3[1] = 'b'.bytes
         data3[2] = 'c'.bytes
