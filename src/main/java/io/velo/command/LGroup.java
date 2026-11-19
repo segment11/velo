@@ -310,6 +310,13 @@ public class LGroup extends BaseCommand {
             return ErrorReply.KEY_TOO_LONG;
         }
 
+        // redis checks the key type before parsing the index
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(slotWithKeyHash);
+        if (cv != null && !cv.isList()) {
+            return ErrorReply.WRONG_TYPE;
+        }
+
         int index;
         try {
             index = Integer.parseInt(new String(indexBytes));
@@ -320,7 +327,6 @@ public class LGroup extends BaseCommand {
             return ErrorReply.LIST_SIZE_TO_LONG;
         }
 
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
         if (encodedBytes == null) {
             // -1 or nil ? todo
@@ -550,10 +556,13 @@ public class LGroup extends BaseCommand {
             try {
                 timeoutSeconds = Double.parseDouble(new String(timeoutBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.INVALID_INTEGER;
+                return new ErrorReply("timeout is not a float or out of range");
             }
 
-            if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+            if (timeoutSeconds < 0) {
+                return new ErrorReply("timeout is negative");
+            }
+            if (!Double.isFinite(timeoutSeconds)) {
                 return new ErrorReply("timeout is not a float or out of range");
             }
 
@@ -638,10 +647,10 @@ public class LGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(data[1]));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("numkeys should be greater than 0");
         }
         if (numKeys <= 0) {
-            return ErrorReply.RANGE_OUT_OF_INDEX;
+            return new ErrorReply("numkeys should be greater than 0");
         }
         if (data.length < 2 + numKeys + 1) {
             return ErrorReply.FORMAT;
@@ -663,10 +672,10 @@ public class LGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(data[4 + numKeys]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return new ErrorReply("count should be greater than 0");
                 }
                 if (count <= 0) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return new ErrorReply("count should be greater than 0");
                 }
             } else {
                 return ErrorReply.SYNTAX;

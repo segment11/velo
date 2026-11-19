@@ -1054,10 +1054,13 @@ public class BGroup extends BaseCommand {
         try {
             timeoutSeconds = Double.parseDouble(new String(timeoutBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("timeout is not a float or out of range");
         }
 
-        if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+        if (timeoutSeconds < 0) {
+            return new ErrorReply("timeout is negative");
+        }
+        if (!Double.isFinite(timeoutSeconds)) {
             return new ErrorReply("timeout is not a float or out of range");
         }
 
@@ -1280,9 +1283,12 @@ public class BGroup extends BaseCommand {
         try {
             timeoutSeconds = Double.parseDouble(new String(data[1]));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("timeout is not a float or out of range");
         }
-        if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+        if (timeoutSeconds < 0) {
+            return new ErrorReply("timeout is negative");
+        }
+        if (!Double.isFinite(timeoutSeconds)) {
             return new ErrorReply("timeout is not a float or out of range");
         }
 
@@ -1290,10 +1296,10 @@ public class BGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(data[2]));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("numkeys should be greater than 0");
         }
         if (numKeys <= 0) {
-            return ErrorReply.RANGE_OUT_OF_INDEX;
+            return new ErrorReply("numkeys should be greater than 0");
         }
         if (data.length < 3 + numKeys + 1) {
             return ErrorReply.FORMAT;
@@ -1315,10 +1321,10 @@ public class BGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(data[5 + numKeys]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return new ErrorReply("count should be greater than 0");
                 }
                 if (count <= 0) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return new ErrorReply("count should be greater than 0");
                 }
             } else {
                 return ErrorReply.SYNTAX;
@@ -1538,10 +1544,13 @@ public class BGroup extends BaseCommand {
         try {
             timeoutSeconds = Double.parseDouble(new String(timeoutBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("timeout is not a float or out of range");
         }
 
-        if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+        if (timeoutSeconds < 0) {
+            return new ErrorReply("timeout is negative");
+        }
+        if (!Double.isFinite(timeoutSeconds)) {
             return new ErrorReply("timeout is not a float or out of range");
         }
 
@@ -1644,9 +1653,12 @@ public class BGroup extends BaseCommand {
         try {
             timeoutSeconds = Double.parseDouble(new String(data[1]));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("timeout is not a float or out of range");
         }
-        if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+        if (timeoutSeconds < 0) {
+            return new ErrorReply("timeout is negative");
+        }
+        if (!Double.isFinite(timeoutSeconds)) {
             return new ErrorReply("timeout is not a float or out of range");
         }
 
@@ -1654,10 +1666,10 @@ public class BGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(data[2]));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("numkeys should be greater than 0");
         }
         if (numKeys <= 0) {
-            return ErrorReply.RANGE_OUT_OF_INDEX;
+            return new ErrorReply("numkeys should be greater than 0");
         }
         if (data.length < 3 + numKeys + 1) {
             return ErrorReply.FORMAT;
@@ -1679,10 +1691,10 @@ public class BGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(data[5 + numKeys]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return new ErrorReply("count should be greater than 0");
                 }
                 if (count <= 0) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return new ErrorReply("count should be greater than 0");
                 }
             } else {
                 return ErrorReply.SYNTAX;

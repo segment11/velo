@@ -1010,7 +1010,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     min = Double.parseDouble(minStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_FLOAT;
+                    return new ErrorReply("min or max is not a float");
                 }
             }
 
@@ -1027,7 +1027,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     max = Double.parseDouble(maxStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_FLOAT;
+                    return new ErrorReply("min or max is not a float");
                 }
             }
 
@@ -1250,7 +1250,7 @@ public class ZGroup extends BaseCommand {
         }
 
         if (numKeys < 1) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("at least 1 input key is needed for '" + cmd + "' command");
         }
 
         if (dd.length < numKeys + 2) {
@@ -1512,7 +1512,7 @@ public class ZGroup extends BaseCommand {
         }
 
         if (numKeys < 1) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("at least 1 input key is needed for 'zintercard' command");
         }
 
         if (data.length < 2 + numKeys) {
@@ -1534,10 +1534,10 @@ public class ZGroup extends BaseCommand {
             try {
                 limit = Integer.parseInt(new String(limitBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.INVALID_INTEGER;
+                return new ErrorReply("LIMIT can't be negative");
             }
             if (limit < 0) {
-                return ErrorReply.INVALID_INTEGER;
+                return new ErrorReply("LIMIT can't be negative");
             }
         }
 
@@ -1708,10 +1708,10 @@ public class ZGroup extends BaseCommand {
             try {
                 count = Integer.parseInt(new String(countBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.INVALID_INTEGER;
+                return new ErrorReply("value is out of range, must be positive");
             }
             if (count < 0) {
-                return ErrorReply.INVALID_INTEGER;
+                return new ErrorReply("value is out of range, must be positive");
             }
             if (count == 0) {
                 return MultiBulkReply.EMPTY;
@@ -2001,7 +2001,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     min = Double.parseDouble(minStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_FLOAT;
+                    return new ErrorReply("min or max is not a float");
                 }
             }
 
@@ -2018,7 +2018,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     max = Double.parseDouble(maxStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_FLOAT;
+                    return new ErrorReply("min or max is not a float");
                 }
             }
 
@@ -2407,7 +2407,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     min = Double.parseDouble(minStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_FLOAT;
+                    return new ErrorReply("min or max is not a float");
                 }
             }
 
@@ -2424,7 +2424,7 @@ public class ZGroup extends BaseCommand {
                 try {
                     max = Double.parseDouble(maxStr.substring(beginIndex));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_FLOAT;
+                    return new ErrorReply("min or max is not a float");
                 }
             }
 
@@ -2571,7 +2571,13 @@ public class ZGroup extends BaseCommand {
         try {
             cursorLong = Long.parseLong(new String(cursorBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("invalid cursor");
+        }
+
+        // redis checks the key type before validating the options
+        var cvForType = getCvSpTypeOnly(slotWithKeyHashListParsed.getFirst());
+        if (cvForType != null && cvForType != CompressedValue.SP_TYPE_ZSET) {
+            return ErrorReply.WRONG_TYPE;
         }
 
         String matchPattern = null;
@@ -2657,10 +2663,10 @@ public class ZGroup extends BaseCommand {
         try {
             numKeys = Integer.parseInt(new String(data[1]));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("numkeys should be greater than 0");
         }
         if (numKeys <= 0) {
-            return ErrorReply.RANGE_OUT_OF_INDEX;
+            return new ErrorReply("numkeys should be greater than 0");
         }
         if (data.length < 2 + numKeys + 1) {
             return ErrorReply.FORMAT;
@@ -2682,10 +2688,10 @@ public class ZGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(data[4 + numKeys]));
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return new ErrorReply("count should be greater than 0");
                 }
                 if (count <= 0) {
-                    return ErrorReply.INVALID_INTEGER;
+                    return new ErrorReply("count should be greater than 0");
                 }
             } else {
                 return ErrorReply.SYNTAX;

@@ -119,17 +119,17 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('getbit a ' + 1024 * 1024)
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('bit offset is not an integer or out of range')
 
         when:
         reply = gGroup.execute('getbit a -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('bit offset is not an integer or out of range')
 
         when:
         reply = gGroup.execute('getbit a _')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('bit offset is not an integer or out of range')
 
         when:
         reply = gGroup.execute('getbit >key 0')
@@ -825,7 +825,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx byradius a km')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('need numeric radius')
 
         when:
         reply = gGroup.execute('geosearch xxx byradius 100 km bybox')
@@ -850,7 +850,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('geosearch xxx count -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('COUNT must be > 0')
 
         when:
         reply = gGroup.execute('geosearch xxx count a')
@@ -987,25 +987,25 @@ class GGroupTest extends Specification {
         // Bug 5: BYRADIUS zero should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius 0 km')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('radius cannot be negative')
 
         when:
         // Bug 5: BYRADIUS negative should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 byradius -1 km')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('radius cannot be negative')
 
         when:
         // Bug 5: BYBOX zero width should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 0 10 km')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('height or width cannot be negative')
 
         when:
         // Bug 5: BYBOX negative height should be rejected
         reply = gGroup.execute('geosearch xxx fromlonlat 15 37 bybox 10 -1 km')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('height or width cannot be negative')
 
         when:
         // read mode with a missing source key replies an empty array

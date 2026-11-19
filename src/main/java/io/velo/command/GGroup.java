@@ -247,17 +247,17 @@ public class GGroup extends BaseCommand {
         try {
             offset = Integer.parseInt(new String(offsetBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("bit offset is not an integer or out of range");
         }
         if (offset < 0) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("bit offset is not an integer or out of range");
         }
 
         // max offset limit, redis is 512MB
         // velo is 1MB
         final int MAX_OFFSET = 1024 * 1024;
         if (offset >= MAX_OFFSET) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("bit offset is not an integer or out of range");
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -801,7 +801,7 @@ public class GGroup extends BaseCommand {
                 try {
                     count = Integer.parseInt(new String(dd[i + 1]));
                     if (count <= 0) {
-                        return ErrorReply.INVALID_INTEGER;
+                        return new ErrorReply("COUNT must be > 0");
                     }
                     i++;
                 } catch (NumberFormatException e) {
@@ -872,11 +872,11 @@ public class GGroup extends BaseCommand {
                 try {
                     byRadius = Double.parseDouble(new String(dd[i + 1]));
                     if (byRadius <= 0 || Double.isInfinite(byRadius) || Double.isNaN(byRadius)) {
-                        return ErrorReply.INVALID_FLOAT;
+                        return new ErrorReply("radius cannot be negative");
                     }
                     i++;
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_FLOAT;
+                    return new ErrorReply("need numeric radius");
                 }
 
                 if (i + 1 >= dd.length) {
@@ -899,15 +899,19 @@ public class GGroup extends BaseCommand {
                 }
                 try {
                     byBoxWidth = Double.parseDouble(new String(dd[i + 1]));
-                    byBoxHeight = Double.parseDouble(new String(dd[i + 2]));
-                    if (byBoxWidth <= 0 || Double.isInfinite(byBoxWidth) || Double.isNaN(byBoxWidth) ||
-                        byBoxHeight <= 0 || Double.isInfinite(byBoxHeight) || Double.isNaN(byBoxHeight)) {
-                        return ErrorReply.INVALID_FLOAT;
-                    }
-                    i += 2;
                 } catch (NumberFormatException e) {
-                    return ErrorReply.INVALID_FLOAT;
+                    return new ErrorReply("need numeric width");
                 }
+                try {
+                    byBoxHeight = Double.parseDouble(new String(dd[i + 2]));
+                } catch (NumberFormatException e) {
+                    return new ErrorReply("need numeric height");
+                }
+                if (byBoxWidth <= 0 || Double.isInfinite(byBoxWidth) || Double.isNaN(byBoxWidth) ||
+                    byBoxHeight <= 0 || Double.isInfinite(byBoxHeight) || Double.isNaN(byBoxHeight)) {
+                    return new ErrorReply("height or width cannot be negative");
+                }
+                i += 2;
 
                 if (i + 1 >= dd.length) {
                     return ErrorReply.SYNTAX;

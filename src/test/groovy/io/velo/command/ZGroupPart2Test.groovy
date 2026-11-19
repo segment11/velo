@@ -274,12 +274,12 @@ class ZGroupPart2Test extends Specification {
         when:
         reply = zGroup.execute('zrange a [1.1 [1.a byscore byscore limit 0 0 byscore')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('min or max is not a float')
 
         when:
         reply = zGroup.execute('zrange a [1.a [1.2 byscore byscore limit 0 0 byscore')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('min or max is not a float')
 
         when:
         reply = zGroup.execute('zrange a -inf +inf byscore byscore limit 0 2 byscore')
@@ -1069,14 +1069,14 @@ class ZGroupPart2Test extends Specification {
         data4[2] = '[a'.bytes
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('min or max is not a float')
 
         when:
         data4[2] = '[1'.bytes
         data4[3] = '[a'.bytes
         reply = zGroup.zremrangebyscore(true, false, false)
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('min or max is not a float')
 
         when:
         data4[2] = '-inf'.bytes
@@ -1298,12 +1298,12 @@ class ZGroupPart2Test extends Specification {
         when: 'numkeys not integer'
         reply = zGroup.execute('zmpop abc myzset MIN')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when: 'numkeys zero'
         reply = zGroup.execute('zmpop 0 myzset MIN')
         then:
-        reply == ErrorReply.RANGE_OUT_OF_INDEX
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when: 'wrong direction'
         reply = zGroup.execute('zmpop 1 myzset UP')
@@ -1313,17 +1313,17 @@ class ZGroupPart2Test extends Specification {
         when: 'count not integer'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT abc')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'count zero rejected'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'count negative'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'syntax error - extra args'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT 1 extra')
@@ -1684,7 +1684,7 @@ class ZGroupPart2Test extends Specification {
         when: // error: cursor not a number
         reply = zGroup.execute('zscan a notanumber')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('invalid cursor')
 
         when: // error: key too long
         reply = zGroup.execute('zscan >key 0')

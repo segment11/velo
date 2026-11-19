@@ -2308,7 +2308,13 @@ public class HGroup extends BaseCommand {
         try {
             cursorLong = Long.parseLong(cursor);
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("invalid cursor");
+        }
+
+        // redis checks the key type before validating the options
+        var cvForType = getCvSpTypeOnly(slotWithKeyHashListParsed.getFirst());
+        if (cvForType != null && cvForType != CompressedValue.SP_TYPE_HASH && cvForType != CompressedValue.SP_TYPE_HH) {
+            return ErrorReply.WRONG_TYPE;
         }
 
         String matchPattern = null;
@@ -2333,7 +2339,7 @@ public class HGroup extends BaseCommand {
                         return ErrorReply.INVALID_INTEGER;
                     }
                     if (count <= 0) {
-                        return ErrorReply.INVALID_INTEGER;
+                        return ErrorReply.SYNTAX;
                     }
                     i++;
                 } else if ("novalues".equals(tmp)) {

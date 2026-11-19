@@ -406,14 +406,14 @@ class LGroupTest extends Specification {
         lGroup.data[5] = 'a'.bytes
         reply = lGroup.lmove(true)
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('timeout is not a float or out of range')
 
         when:
         // negative timeout should be rejected
         lGroup.data[5] = '-1'.bytes
         reply = lGroup.lmove(true)
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('timeout is negative')
 
         when:
         // NaN should be rejected
@@ -1316,12 +1316,12 @@ port ${tmpPort}
         when: 'numkeys not integer'
         reply = lGroup.execute('lmpop abc mylist LEFT')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when: 'numkeys zero'
         reply = lGroup.execute('lmpop 0 mylist LEFT')
         then:
-        reply == ErrorReply.RANGE_OUT_OF_INDEX
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when: 'wrong direction'
         reply = lGroup.execute('lmpop 1 mylist UP')
@@ -1331,17 +1331,17 @@ port ${tmpPort}
         when: 'count not integer'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT abc')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'count zero rejected'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT 0')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'count negative'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT -1')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'syntax error - extra args'
         reply = lGroup.execute('lmpop 1 mylist LEFT COUNT 1 extra')

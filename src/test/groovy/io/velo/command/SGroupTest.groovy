@@ -394,7 +394,7 @@ sunionstore
             data[1] = scanCursor.toLong().toString().bytes
         }
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         // bug 70.6: count 0 is not a positive integer, redis rejects it
@@ -403,7 +403,7 @@ sunionstore
             data[1] = scanCursor.toLong().toString().bytes
         }
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         // cursor arg is not an integer, redis replies 'invalid cursor'
@@ -883,27 +883,27 @@ sunionstore
         when:
         reply = sGroup.execute('setbit a 0 2')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('bit is not an integer or out of range')
 
         when:
         reply = sGroup.execute('setbit a 0 10')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('bit is not an integer or out of range')
 
         when:
         reply = sGroup.execute('setbit a ' + 1024 * 1024 + ' 1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('bit offset is not an integer or out of range')
 
         when:
         reply = sGroup.execute('setbit a -1 1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('bit offset is not an integer or out of range')
 
         when:
         reply = sGroup.execute('setbit a _ 1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('bit offset is not an integer or out of range')
 
         when:
         reply = sGroup.execute('setbit >key 0 10')
@@ -1026,7 +1026,7 @@ sunionstore
         when:
         reply = sGroup.execute('setrange a -1 value')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('offset is out of range')
 
         when:
         // bug 86.13: the resulting length must be bounded, a huge offset used to throw
@@ -1781,7 +1781,7 @@ sunionstore
         when:
         reply = sGroup.execute('sintercard 0 a')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when:
         reply = sGroup.execute('sintercard 2 a')
@@ -1797,7 +1797,7 @@ sunionstore
         when:
         reply = sGroup.execute('sintercard 2 a b limit -1')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply("LIMIT can't be negative")
 
         when:
         def cvC = Mock.prepareCompressedValueList(1)[0]
@@ -1881,7 +1881,7 @@ sunionstore
         when:
         reply = sGroup.execute('sintercard a a b limit 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when:
         reply = sGroup.execute('sintercard 1 a b limit 0')
@@ -1891,7 +1891,7 @@ sunionstore
         when:
         reply = sGroup.execute('sintercard 2 a b limit a')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply("LIMIT can't be negative")
 
         when:
         reply = sGroup.execute('sintercard 2 a b limit_x 0')
@@ -2762,7 +2762,7 @@ sunionstore
         when:
         reply = sGroup.execute('sscan a notanumber')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('invalid cursor')
 
         when:
         reply = sGroup.execute('sscan >key 0')
@@ -2792,7 +2792,7 @@ sunionstore
         when:
         reply = sGroup.execute('sscan a 0 count -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = sGroup.execute('sscan a 0 unknownoption')
@@ -2802,7 +2802,7 @@ sunionstore
         when:
         reply = sGroup.execute('sscan a 0 count 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         // A key holding another type must answer WRONGTYPE, not an empty scan

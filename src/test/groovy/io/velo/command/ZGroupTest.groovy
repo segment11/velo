@@ -779,12 +779,12 @@ zunionstore
         when:
         reply = zGroup.execute('zcount a a 3')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('min or max is not a float')
 
         when:
         reply = zGroup.execute('zcount a 1 a')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('min or max is not a float')
 
         when:
         reply = zGroup.execute('zlexcount a member1 [member4')
@@ -1686,12 +1686,12 @@ zunionstore
         when:
         reply = zGroup.execute('zintercard 2 a b limit a')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply("LIMIT can't be negative")
 
         when:
         reply = zGroup.execute('zintercard 2 a b limit -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply("LIMIT can't be negative")
 
         when:
         // a single key is a valid number of keys
@@ -1931,12 +1931,12 @@ zunionstore
         // a negative count is still an error
         reply = zGroup.execute('zpopmax a -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('value is out of range, must be positive')
 
         when:
         reply = zGroup.execute('zpopmax a a')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('value is out of range, must be positive')
 
         when:
         reply = zGroup.execute('zpopmax >key 1')

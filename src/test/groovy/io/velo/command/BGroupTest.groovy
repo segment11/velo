@@ -1107,13 +1107,13 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('blpop a x')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('timeout is not a float or out of range')
 
         when:
         // negative timeout should be rejected
         reply = bGroup.execute('blpop a -1')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('timeout is negative')
 
         when:
         // NaN should be rejected
@@ -1493,7 +1493,7 @@ class BGroupTest extends Specification {
         when: 'timeout not number'
         reply = bGroup.execute('blmpop abc 1 mylist LEFT')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('timeout is not a float or out of range')
 
         when: 'negative timeout'
         reply = bGroup.execute('blmpop -1 1 mylist LEFT')
@@ -1503,12 +1503,12 @@ class BGroupTest extends Specification {
         when: 'numkeys not integer'
         reply = bGroup.execute('blmpop 0 abc 1 mylist LEFT')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when: 'numkeys zero'
         reply = bGroup.execute('blmpop 1 0 mylist LEFT')
         then:
-        reply == ErrorReply.RANGE_OUT_OF_INDEX
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when: 'wrong direction'
         reply = bGroup.execute('blmpop 1 1 mylist UP')
@@ -1518,12 +1518,12 @@ class BGroupTest extends Specification {
         when: 'count not integer'
         reply = bGroup.execute('blmpop 1 1 mylist LEFT COUNT abc')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'count zero rejected'
         reply = bGroup.execute('blmpop 1 1 mylist LEFT COUNT 0')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'wrong type key returns WRONGTYPE'
         inMemoryGetSet.remove(slot, 'notlist')
@@ -1843,22 +1843,22 @@ class BGroupTest extends Specification {
         when: 'timeout not a number'
         reply = bGroup.execute('bzpopmin a x')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('timeout is not a float or out of range')
 
         when: 'negative timeout'
         reply = bGroup.execute('bzpopmin a -1')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('timeout is negative')
 
         when: 'NaN timeout'
         reply = bGroup.execute('bzpopmin a NaN')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('timeout is not a float or out of range')
 
         when: 'Infinity timeout'
         reply = bGroup.execute('bzpopmin a Infinity')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('timeout is not a float or out of range')
 
         when: 'key too long'
         reply = bGroup.execute('bzpopmin >key 1')
@@ -2140,22 +2140,22 @@ class BGroupTest extends Specification {
         when: 'timeout not number'
         reply = bGroup.execute('bzmpop abc 1 myzset MIN')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('timeout is not a float or out of range')
 
         when: 'negative timeout'
         reply = bGroup.execute('bzmpop -1 1 myzset MIN')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('timeout is negative')
 
         when: 'numkeys not integer'
         reply = bGroup.execute('bzmpop 1 abc myzset MIN')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when: 'numkeys zero'
         reply = bGroup.execute('bzmpop 1 0 myzset MIN')
         then:
-        reply == ErrorReply.RANGE_OUT_OF_INDEX
+        reply == new ErrorReply('numkeys should be greater than 0')
 
         when: 'numkeys greater than the provided keys'
         reply = bGroup.execute('bzmpop 1 2 myzset MIN')
@@ -2170,12 +2170,12 @@ class BGroupTest extends Specification {
         when: 'count not integer'
         reply = bGroup.execute('bzmpop 1 1 myzset MIN COUNT abc')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'count zero rejected'
         reply = bGroup.execute('bzmpop 1 1 myzset MIN COUNT 0')
         then:
-        reply instanceof ErrorReply
+        reply == new ErrorReply('count should be greater than 0')
 
         when: 'syntax error - extra args'
         reply = bGroup.execute('bzmpop 1 1 myzset MIN COUNT 1 extra')

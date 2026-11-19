@@ -631,7 +631,7 @@ public class SGroup extends BaseCommand {
                             return ErrorReply.INVALID_INTEGER;
                         }
                         if (count <= 0) {
-                            return ErrorReply.INVALID_INTEGER;
+                            return ErrorReply.SYNTAX;
                         }
                         i++;
                     }
@@ -1021,26 +1021,26 @@ public class SGroup extends BaseCommand {
         try {
             offset = Integer.parseInt(new String(offsetBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("bit offset is not an integer or out of range");
         }
         if (offset < 0) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("bit offset is not an integer or out of range");
         }
 
         // max offset limit, redis is 512MB
         // velo is 1MB
         final int MAX_OFFSET = 1024 * 1024;
         if (offset >= MAX_OFFSET) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("bit offset is not an integer or out of range");
         }
 
         var bit1or0Bytes = data[3];
         if (bit1or0Bytes.length != 1) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("bit is not an integer or out of range");
         }
         var isBit1 = bit1or0Bytes[0] == '1';
         if (!isBit1 && bit1or0Bytes[0] != '0') {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("bit is not an integer or out of range");
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -1085,7 +1085,7 @@ public class SGroup extends BaseCommand {
             return ErrorReply.INVALID_INTEGER;
         }
         if (offset < 0) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("offset is out of range");
         }
 
         // bound the resulting string before any allocation, redis caps the string at
@@ -1539,11 +1539,11 @@ public class SGroup extends BaseCommand {
         try {
             numkeys = Integer.parseInt(new String(numkeysBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("numkeys should be greater than 0");
         }
 
         if (numkeys < 1) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("numkeys should be greater than 0");
         }
 
         int remainingArgsForLimit = data.length - (numkeys + 2);
@@ -1579,11 +1579,11 @@ public class SGroup extends BaseCommand {
             try {
                 limit = Integer.parseInt(new String(limitBytes));
             } catch (NumberFormatException e) {
-                return ErrorReply.INVALID_INTEGER;
+                return new ErrorReply("LIMIT can't be negative");
             }
 
             if (limit < 0) {
-                return ErrorReply.SYNTAX;
+                return new ErrorReply("LIMIT can't be negative");
             }
         }
 
@@ -2329,7 +2329,13 @@ public class SGroup extends BaseCommand {
         try {
             cursorLong = Long.parseLong(new String(cursorBytes));
         } catch (NumberFormatException e) {
-            return ErrorReply.INVALID_INTEGER;
+            return new ErrorReply("invalid cursor");
+        }
+
+        // redis checks the key type before validating the options
+        var cvForType = getCvSpTypeOnly(slotWithKeyHashListParsed.getFirst());
+        if (cvForType != null && cvForType != CompressedValue.SP_TYPE_SET) {
+            return ErrorReply.WRONG_TYPE;
         }
 
         String matchPattern = null;
@@ -2353,7 +2359,7 @@ public class SGroup extends BaseCommand {
                         return ErrorReply.INVALID_INTEGER;
                     }
                     if (count <= 0) {
-                        return ErrorReply.INVALID_INTEGER;
+                        return ErrorReply.SYNTAX;
                     }
                     i++;
                 } else {

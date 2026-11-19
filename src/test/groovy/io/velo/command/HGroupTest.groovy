@@ -1732,18 +1732,18 @@ httl
         when:
         reply = hGroup.execute('hscan a 0 match zzz count -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         // Redis rejects COUNT 0, accepting it silently acted as COUNT 1 and corrupted the client cursor
         reply = hGroup.execute('hscan a 0 count 0')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         reply = hGroup.execute('hscan a 0 count 0 novalues')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == ErrorReply.SYNTAX
 
         when:
         // WITHVALUES is not a Redis HSCAN option, the default form already returns field/value pairs
@@ -1774,7 +1774,7 @@ httl
         when:
         reply = hGroup.execute('hscan a badcursor match field count 10')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('invalid cursor')
 
         when:
         // A key holding another type must answer WRONGTYPE, not an empty scan.
