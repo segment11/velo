@@ -1,5 +1,6 @@
 package io.velo.command
 
+import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.ConfForGlobal
 import io.velo.MultiWorkerServer
@@ -11,6 +12,7 @@ import io.velo.persist.LocalPersistTest
 import io.velo.repl.Binlog
 import io.velo.reply.AsyncReply
 import io.velo.reply.BulkReply
+import io.velo.reply.Reply
 import spock.lang.Specification
 
 import java.lang.management.MemoryUsage
@@ -127,6 +129,19 @@ class InfoCommandTest extends Specification {
         then:
         reply instanceof BulkReply
         (reply as BulkReply).asString().contains('connected_clients:')
+
+        when: 'a blocked sorted set client is counted'
+        BlockingZSet.clearBlockingZSetPromisesForAllKeys()
+        def zsetWaiter = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(new SettablePromise<Reply>(), null, true,
+                System.currentTimeMillis(), 0)
+        BlockingZSet.addOne('info-blocked-zset', zsetWaiter)
+        def zsetReply = infoCommand.execute('info clients')
+        then:
+        (zsetReply as BulkReply).asString().contains("blocked_clients:${BlockingList.blockingClientCount() + BlockingZSet.blockingClientCount()}")
+        (zsetReply as BulkReply).asString().contains("total_blocking_keys:${BlockingList.blockingKeyCount() + BlockingZSet.blockingKeyCount()}")
+
+        cleanup:
+        BlockingZSet.clearBlockingZSetPromisesForAllKeys()
     }
 
     def 'test memory'() {

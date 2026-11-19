@@ -16,7 +16,10 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * For blocking sorted set pop: BZPOPMIN / BZPOPMAX / BZMPOP.
@@ -48,6 +51,7 @@ public class BlockingZSet {
         private final List<BaseCommand.SlotWithKeyHash> registeredSlots;
 
         private final AtomicBoolean delivered = new AtomicBoolean();
+        private final AtomicInteger registrations = new AtomicInteger();
 
         /**
          * @param settablePromise promise
@@ -92,6 +96,22 @@ public class BlockingZSet {
          */
         public List<BaseCommand.SlotWithKeyHash> registeredSlots() {
             return registeredSlots;
+        }
+
+        /**
+         * Registers the waiter on one more key.
+         */
+        void registered() {
+            registrations.incrementAndGet();
+        }
+
+        /**
+         * Releases the waiter from one key.
+         *
+         * @return true when the waiter is not registered on any key any more
+         */
+        boolean unregistered() {
+            return registrations.decrementAndGet() <= 0;
         }
 
         /**
@@ -154,6 +174,12 @@ public class BlockingZSet {
      */
     @ThreadNeedLocal
     private static Inner[] inners;
+
+    /**
+     * All the blocked waiters, a multi key block registers the same waiter on every key and the
+     * blocked client count must count the clients, not the key registrations.
+     */
+    private static final Set<PromiseWithMinOrMaxAndCreatedTime> allWaiters = ConcurrentHashMap.newKeySet();
 
     static {
         inners = new Inner[1];
@@ -222,8 +248,7 @@ public class BlockingZSet {
 
         final HashMap<String, List<PromiseWithMinOrMaxAndCreatedTime>> blockingZSetPromisesByKey = new HashMap<>();
         // only the worker thread owning this Inner ever mutates them, plain int is enough
-        // they are diagnostics only (INFO and the prometheus gauge), a stale read is acceptable
-        private int clientCount;
+        // it is diagnostics only (INFO and the prometheus gauge), a stale read is acceptable
         private int keyCount;
 
         void addOne(String key, PromiseWithMinOrMaxAndCreatedTime one) {
@@ -232,7 +257,8 @@ public class BlockingZSet {
                 keyCount++;
             }
             list.add(one);
-            clientCount++;
+            one.registered();
+            allWaiters.add(one);
         }
 
         void removeOne(String key, PromiseWithMinOrMaxAndCreatedTime one) {
@@ -241,7 +267,11 @@ public class BlockingZSet {
                 return;
             }
             if (list.remove(one)) {
-                clientCount--;
+                // the waiter is registered on every key of a multi key block, it is only released
+                // when the last key is released
+                if (one.unregistered()) {
+                    allWaiters.remove(one);
+                }
                 if (list.isEmpty()) {
                     keyCount--;
                     // the key has no waiter left, do not keep an empty entry
@@ -277,11 +307,7 @@ public class BlockingZSet {
      * @return blocking client count
      */
     public static int blockingClientCount() {
-        var total = 0;
-        for (var inner : inners) {
-            total += inner.clientCount;
-        }
-        return total;
+        return allWaiters.size();
     }
 
     /**
@@ -390,14 +416,20 @@ public class BlockingZSet {
                 while (iter.hasNext()) {
                     var list = iter.next();
                     int before = list.size();
-                    list.removeIf(one -> one.socket == socket);
+                    list.removeIf(one -> {
+                        if (one.socket == socket) {
+                            one.unregistered();
+                            allWaiters.remove(one);
+                            return true;
+                        }
+                        return false;
+                    });
                     totalRemoved += before - list.size();
                     if (list.isEmpty()) {
                         iter.remove();
                     }
                 }
                 if (totalRemoved > 0) {
-                    inner.clientCount -= totalRemoved;
                     inner.keyCount = inner.blockingZSetPromisesByKey.size();
                 }
             });
@@ -408,8 +440,8 @@ public class BlockingZSet {
     static void clearBlockingZSetPromisesForAllKeys() {
         for (var inner : inners) {
             inner.blockingZSetPromisesByKey.clear();
-            inner.clientCount = 0;
             inner.keyCount = 0;
         }
+        allWaiters.clear();
     }
 }

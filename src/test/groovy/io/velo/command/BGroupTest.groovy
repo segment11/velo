@@ -2082,7 +2082,8 @@ class BGroupTest extends Specification {
         BlockingZSet.addOne('bzmulti-a', multiOne)
         BlockingZSet.addOne('bzmulti-b', multiOne)
         then:
-        BlockingZSet.blockingClientCount() == 2
+        // one client blocked on two keys, it counts once
+        BlockingZSet.blockingClientCount() == 1
         BlockingZSet.blockingKeyCount() == 2
 
         when: 'the first key is served, the waiter must be released from both keys'

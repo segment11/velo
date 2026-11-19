@@ -197,6 +197,28 @@ class BlockingZSetTest extends Specification {
         then:
         BlockingZSet.blockingClientCount() == 0
 
+        when: 'one waiter registered on two keys counts as one blocked client'
+        BlockingZSet.clearBlockingZSetPromisesForAllKeys()
+        def oneOnTwoKeys = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(new SettablePromise<Reply>(), null, true,
+                System.currentTimeMillis(), 0)
+        BlockingZSet.addOne('two-keys-a', oneOnTwoKeys)
+        BlockingZSet.addOne('two-keys-b', oneOnTwoKeys)
+        then:
+        BlockingZSet.blockingClientCount() == 1
+        BlockingZSet.blockingKeyCount() == 2
+
+        when: 'the waiter is released from one key, the client is still blocked on the other one'
+        BlockingZSet.removeOne('two-keys-a', oneOnTwoKeys)
+        then:
+        BlockingZSet.blockingClientCount() == 1
+        BlockingZSet.blockingKeyCount() == 1
+
+        when: 'the waiter is released from the last key'
+        BlockingZSet.removeOne('two-keys-b', oneOnTwoKeys)
+        then:
+        BlockingZSet.blockingClientCount() == 0
+        BlockingZSet.blockingKeyCount() == 0
+
         cleanup:
         BlockingZSet.clearBlockingZSetPromisesForAllKeys()
         localPersist.cleanUp()

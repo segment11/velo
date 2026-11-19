@@ -182,8 +182,8 @@ class InfoCommand extends BaseCommand {
 connected_clients:${socketInspector.connectedClientCount()}
 cluster_connections:0
 maxclients:${socketInspector.maxConnections}
-blocked_clients:${BlockingList.blockingClientCount()}
-total_blocking_keys:${BlockingList.blockingKeyCount()}
+blocked_clients:${BlockingList.blockingClientCount() + BlockingZSet.blockingClientCount()}
+total_blocking_keys:${BlockingList.blockingKeyCount() + BlockingZSet.blockingKeyCount()}
 """
         r.toString()
     }
