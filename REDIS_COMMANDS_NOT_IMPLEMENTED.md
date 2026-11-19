@@ -38,24 +38,19 @@ and the connection fast paths were collected and compared with the Redis 7.2.4 c
 
 ---
 
-### Connection (16 commands)
+### Connection (8 commands)
 
-**Note:** `AUTH`, `CLIENT` (with the `id`, `list`, `kill`, `getname`, `setname` subcommands), `HELLO`,
-`PING` and `QUIT` are implemented (`CGroup.java`, `HGroup.java`, `RequestHandler.java`,
-`MultiWorkerServer.java`). `SELECT` answers `NOT_SUPPORT` (`SGroup.java`), it is listed as missing.
+**Note:** `AUTH`, `CLIENT` (with the `id`, `list`, `kill`, `getname`, `setname`, `reply`, `setinfo`,
+`no-evict`, `no-touch` subcommands — the last two are accepted as no-op compatibility flags),
+`HELLO`, `PING` and `QUIT` are implemented (`CGroup.java`, `HGroup.java`, `RequestHandler.java`,
+`MultiWorkerServer.java`). The remaining `CLIENT` subcommands (`caching`, `getredir`, `tracking`,
+`trackinginfo`, `pause`, `unpause`, `unblock`) answer `NOT_SUPPORT` (`CGroup.java`), they are listed
+as missing. `SELECT` answers `NOT_SUPPORT` (`SGroup.java`), it is listed as missing.
 
 - **CACHING** - Instructs server whether to track keys in next request
 - **GETREDIR** - Returns client ID to which this connection's tracking notifications are redirected
-- **ID** - Returns unique client ID of this connection
-- **KILL** - Terminates open connections
-- **LIST** - Lists open connections
-- **NO-EVICT** - Sets client eviction mode of this connection
-- **NO-TOUCH** - Controls whether commands sent by this client affect LRU/LFU of accessed keys
 - **PAUSE** - Suspends commands processing
-- **REPLY** - Instructs server whether to reply to commands
 - **SELECT** - Changes selected database
-- **SETINFO** - Sets information specific to this client or connection
-- **SETNAME** - Sets connection name
 - **TRACKING** - Controls server-assisted client-side caching for this connection
 - **TRACKINGINFO** - Returns information about server-assisted client-side caching for this connection
 - **UNBLOCK** - Unblocks a client blocked by a blocking command from a different connection
@@ -146,14 +141,12 @@ Note: routing is `commandGroups[firstByte - 'a']` in `RequestHandler`, so all `b
 
 ---
 
-### Server (18 commands)
+### Server (16 commands)
 
 - **BGREWRITEAOF** - Asynchronously rewrites append-only file to disk
 - **COUNT** - Returns a count of commands
-- **DELUSER** - Deletes ACL users, and terminates their connections
 - **DOCS** - Returns documentary information about one, multiple or all commands
 - **DOCTOR** - Outputs a memory problems report
-- **DRYRUN** - Simulates execution of a command by a user, without executing command
 - **LOLWUT** - Displays computer art and Redis version
 - **MEMORY** - A container for memory diagnostics commands
 - **MODULE** - A container for module commands
@@ -287,8 +280,8 @@ served through `BlockingZSet.java`.
 | Pub/Sub | 23 | 20 | 87% |
 | Transactions | 5 | 0 | 0% |
 | Scripting | 12 | 2 | 17% |
-| Connection | 23 | 8 | 35% |
-| Server | 58 | 28 | 48% |
+| Connection | 23 | 16 | 70% |
+| Server | 58 | 26 | 45% |
 | Key Management | 31 | 29 | 94% |
 
 ### Major Gaps
@@ -305,13 +298,14 @@ served through `BlockingZSet.java`.
    - Lua scripting enables server-side logic execution
    - Functions provide reusable server-side logic storage
 
-4. **Connection Management** - Mostly missing (8/23 commands, 35% coverage)
+4. **Connection Management** - Mostly missing (16/23 commands, 70% coverage)
    - `AUTH`, `CLIENT`, `HELLO`, `PING` and `QUIT` are implemented
    - The client tracking commands (`TRACKING`, `TRACKINGINFO`, `GETREDIR`) and the connection
      state commands (`REPLY`, `CACHING`, `PAUSE`, `UNPAUSE`, `UNBLOCK`) are missing
 
-5. **Server Management** - Partial coverage (28/58 commands, 48% coverage)
+5. **Server Management** - Partial coverage (26/58 commands, 45% coverage)
    - Missing many server administration commands
+   - The ACL subcommands `DELUSER` and `DRYRUN` are implemented (`AGroup.java`)
    - MODULE, SLOWLOG, MEMORY commands partially or completely missing
 
 6. **Set Operations** - Complete coverage (24/24 commands, 100%)
