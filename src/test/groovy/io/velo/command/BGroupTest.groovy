@@ -465,12 +465,12 @@ class BGroupTest extends Specification {
         when:
         reply = bGroup.execute('bitpos a 2 0 -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('The bit argument must be 1 or 0.')
 
         when:
         reply = bGroup.execute('bitpos a 10 0 -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('The bit argument must be 1 or 0.')
 
         when:
         reply = bGroup.execute('bitpos >key 0')

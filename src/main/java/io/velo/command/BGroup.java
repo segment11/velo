@@ -459,13 +459,16 @@ public class BGroup extends BaseCommand {
         }
 
         var bit1or0Bytes = data[2];
-        if (bit1or0Bytes.length != 1) {
+        int bit;
+        try {
+            bit = Integer.parseInt(new String(bit1or0Bytes));
+        } catch (NumberFormatException e) {
             return ErrorReply.INVALID_INTEGER;
         }
-        var isBit1 = bit1or0Bytes[0] == '1';
-        if (!isBit1 && bit1or0Bytes[0] != '0') {
-            return ErrorReply.INVALID_INTEGER;
+        if (bit != 0 && bit != 1) {
+            return new ErrorReply("The bit argument must be 1 or 0.");
         }
+        boolean isBit1 = bit == 1;
 
         int start;
         int end;

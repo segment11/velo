@@ -75,9 +75,13 @@ public class WGroup extends BaseCommand {
         long timeoutMillis;
         try {
             numReplicas = Long.parseLong(new String(data[1]));
-            timeoutMillis = Long.parseLong(new String(data[2]));
         } catch (NumberFormatException e) {
             return ErrorReply.INVALID_INTEGER;
+        }
+        try {
+            timeoutMillis = Long.parseLong(new String(data[2]));
+        } catch (NumberFormatException e) {
+            return new ErrorReply("timeout is not an integer or out of range");
         }
 
         // redis only rejects a negative timeout, with this exact text; timeout 0 means no deadline

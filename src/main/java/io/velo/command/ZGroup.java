@@ -7,6 +7,7 @@ import io.activej.promise.SettablePromise;
 import io.velo.*;
 import io.velo.persist.KeyLoader;
 import io.velo.reply.*;
+import io.velo.type.RedisHashKeys;
 import io.velo.type.RedisZSet;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -672,6 +673,41 @@ public class ZGroup extends BaseCommand {
         return getRedisZSet(slotWithKeyHash, this);
     }
 
+    /**
+     * Loads the sorted set of the given key, a set is accepted as well and every member gets the
+     * score 1.0, same as redis for the zset family commands (ZUNION, ZINTER, ZDIFF and the store
+     * variants).
+     * <p>
+     * The compressed value is read once, the value bytes are taken from it, so the key is not read
+     * twice.
+     *
+     * @param slotWithKeyHash the slot and key hash to look up
+     * @param baseCommand     the base command providing storage access
+     * @return the decoded RedisZSet, or null if the key does not exist
+     */
+    static RedisZSet getRedisZSetOrSet(SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand) {
+        var cv = baseCommand.getCv(slotWithKeyHash);
+        if (cv == null) {
+            return null;
+        }
+        if (!cv.isZSet() && !cv.isSet()) {
+            // any other type is a wrong type error, same as redis
+            throw new TypeMismatchException("Expect sp type array=[-8192, -4096], but got sp type=" + cv.getDictSeqOrSpType());
+        }
+
+        var valueBytes = baseCommand.getValueBytesByCv(cv, slotWithKeyHash);
+        if (cv.isZSet()) {
+            return RedisZSet.decode(valueBytes);
+        }
+
+        var rhk = RedisHashKeys.decode(valueBytes);
+        var rz = new RedisZSet();
+        for (var member : rhk.getSet()) {
+            rz.add(1.0, member);
+        }
+        return rz;
+    }
+
     static void saveRedisZSet(RedisZSet rz, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
         saveRedisZSet(rz, slotWithKeyHash, baseCommand, dictMap, CompressedValue.NO_EXPIRE);
     }
@@ -751,10 +787,10 @@ public class ZGroup extends BaseCommand {
 
         // mutually exclusive options, same checks as redis zaddGenericCommand
         if (isNx && isXx) {
-            return ErrorReply.SYNTAX;
+            return new ErrorReply("XX and NX options at the same time are not compatible");
         }
         if ((isGt && isNx) || (isLt && isNx) || (isGt && isLt)) {
-            return ErrorReply.SYNTAX;
+            return new ErrorReply("GT, LT, and/or NX options at the same time are not compatible");
         }
 
         if (isIncr) {
@@ -1308,7 +1344,7 @@ public class ZGroup extends BaseCommand {
                         var weightBytes = dd[i + 1 + j];
                         var parsedWeight = parseScore(new String(weightBytes));
                         if (parsedWeight == null) {
-                            return ErrorReply.INVALID_FLOAT;
+                            return new ErrorReply("weight value is not a float");
                         }
                         weights[j] = parsedWeight;
                     }
@@ -1338,7 +1374,7 @@ public class ZGroup extends BaseCommand {
         }
 
         var first = list.getFirst();
-        var rz = getRedisZSet(first);
+        var rz = getRedisZSetOrSet(first, this);
         if (rz == null || rz.isEmpty()) {
             if (isInter) {
                 return doStore ? IntegerReply.REPLY_0 : MultiBulkReply.EMPTY;
@@ -1355,7 +1391,7 @@ public class ZGroup extends BaseCommand {
             ArrayList<RedisZSet> otherRzList = new ArrayList<>(list.size() - 1);
             for (int i = 1; i < list.size(); i++) {
                 var other = list.get(i);
-                var otherRz = getRedisZSet(other);
+                var otherRz = getRedisZSetOrSet(other, this);
                 otherRzList.add(otherRz);
             }
             var errorReply = operateZset(rz, otherRzList, isInter, isUnion,
@@ -1389,7 +1425,7 @@ public class ZGroup extends BaseCommand {
         for (int i = 1; i < list.size(); i++) {
             var other = list.get(i);
             var oneSlot = localPersist.oneSlot(other.slot());
-            var p = oneSlot.asyncCall(() -> getRedisZSet(other));
+            var p = oneSlot.asyncCall(() -> getRedisZSetOrSet(other, this));
             promises.add(p);
         }
 
@@ -1553,7 +1589,7 @@ public class ZGroup extends BaseCommand {
         }
 
         var first = list.getFirst();
-        var rz = getRedisZSet(first);
+        var rz = getRedisZSetOrSet(first, this);
         if (rz == null || rz.isEmpty()) {
             return IntegerReply.REPLY_0;
         }
@@ -1564,7 +1600,7 @@ public class ZGroup extends BaseCommand {
             outer:
             for (int i = 1; i < list.size(); i++) {
                 var other = list.get(i);
-                var otherRz = getRedisZSet(other);
+                var otherRz = getRedisZSetOrSet(other, this);
                 if (otherRz == null || otherRz.isEmpty()) {
                     return IntegerReply.REPLY_0;
                 }
@@ -1596,7 +1632,7 @@ public class ZGroup extends BaseCommand {
         for (int i = 1; i < list.size(); i++) {
             var other = list.get(i);
             var oneSlot = localPersist.oneSlot(other.slot());
-            var p = oneSlot.asyncCall(() -> getRedisZSet(other));
+            var p = oneSlot.asyncCall(() -> getRedisZSetOrSet(other, this));
             promises.add(p);
         }
 

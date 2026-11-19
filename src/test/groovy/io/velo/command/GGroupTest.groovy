@@ -237,7 +237,7 @@ class GGroupTest extends Specification {
         when:
         reply = gGroup.execute('getex a ex -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply("invalid expire time in 'getex' command")
 
         when:
         reply = gGroup.execute('getex a px 60000')
@@ -523,13 +523,13 @@ class GGroupTest extends Specification {
         // invalid longitude > 180
         reply = gGroup.execute('geoadd a 181.0 38.115556 m0')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply(String.format('invalid longitude,latitude pair %f,%f', 181.0d, 38.115556d))
 
         when:
         // invalid latitude > 85.05112877980659
         reply = gGroup.execute('geoadd a 15.0 90.0 m0')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply(String.format('invalid longitude,latitude pair %f,%f', 15.0d, 90.0d))
 
         when:
         // NaN passes every < > comparison, must be rejected explicitly
@@ -552,13 +552,13 @@ class GGroupTest extends Specification {
         // invalid longitude < -180
         reply = gGroup.execute('geoadd e -181.0 38.1 m0')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply(String.format('invalid longitude,latitude pair %f,%f', -181.0d, 38.1d))
 
         when:
         // invalid latitude < -85.05112877980659
         reply = gGroup.execute('geoadd f 13.36 -86.0 m0')
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply(String.format('invalid longitude,latitude pair %f,%f', 13.36d, -86.0d))
 
         when:
         reply = gGroup.execute('geoadd a nx 1.0 2.0')

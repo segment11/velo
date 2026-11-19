@@ -237,7 +237,7 @@ class WGroupTest extends Specification {
         when:
         reply = wGroup.execute('wait 0 a')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply('timeout is not an integer or out of range')
 
         cleanup:
         eventloop.breakEventloop()

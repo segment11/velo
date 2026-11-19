@@ -512,25 +512,25 @@ zunionstore
         // NX and XX are mutually exclusive
         reply = zGroup.execute('zadd a nx xx 2 member0')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == new ErrorReply('XX and NX options at the same time are not compatible')
 
         when:
         // GT and LT are mutually exclusive
         reply = zGroup.execute('zadd a gt lt 2 member0')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == new ErrorReply('GT, LT, and/or NX options at the same time are not compatible')
 
         when:
         // NX and GT are mutually exclusive
         reply = zGroup.execute('zadd a nx gt 2 member0')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == new ErrorReply('GT, LT, and/or NX options at the same time are not compatible')
 
         when:
         // NX and LT are mutually exclusive
         reply = zGroup.execute('zadd a nx lt 2 member0')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == new ErrorReply('GT, LT, and/or NX options at the same time are not compatible')
 
         when:
         // INCR with GT is a valid combination, the resulting score is vetoed here
@@ -609,7 +609,7 @@ zunionstore
         when:
         reply = zGroup.execute('zadd a ch nx lt')
         then:
-        reply == ErrorReply.SYNTAX
+        reply == new ErrorReply('GT, LT, and/or NX options at the same time are not compatible')
 
         when:
         rz.remove('member0')
@@ -1390,14 +1390,14 @@ zunionstore
         zGroup.data = data7
         reply = zGroup.zdiff(true, false)
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('weight value is not a float')
 
         when:
         // NaN is not a valid weight
         data7[6] = 'NaN'.bytes
         reply = zGroup.zdiff(true, false)
         then:
-        reply == ErrorReply.INVALID_FLOAT
+        reply == new ErrorReply('weight value is not a float')
 
         when:
         // the inf spellings are valid weights

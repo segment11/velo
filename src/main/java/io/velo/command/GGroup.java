@@ -322,7 +322,8 @@ public class GGroup extends BaseCommand {
                 return ErrorReply.INVALID_INTEGER;
             }
             if (x < 0) {
-                return ErrorReply.INVALID_INTEGER;
+                // redis rejects a negative ttl with the invalid expire time error
+                return invalidExpireTime();
             }
             if (x == 0) {
                 // redis rejects a zero ttl: EX/PX 0 would expire the key at once and
@@ -342,7 +343,7 @@ public class GGroup extends BaseCommand {
                 return ErrorReply.SYNTAX;
             }
         } else {
-            return ErrorReply.FORMAT;
+            return ErrorReply.SYNTAX;
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
@@ -593,10 +594,13 @@ public class GGroup extends BaseCommand {
                     var lat = Double.parseDouble(new String(data[i + 1]));
                     // NaN passes every < > comparison, reject it explicitly;
                     // infinite values are already caught by the bounds check
-                    if (Double.isNaN(lon) || Double.isNaN(lat) ||
-                        lon > RedisGeo.GEO_LONG_MAX || lon < RedisGeo.GEO_LONG_MIN ||
-                        lat > RedisGeo.GEO_LAT_MAX || lat < RedisGeo.GEO_LAT_MIN) {
+                    if (Double.isNaN(lon) || Double.isNaN(lat) || Double.isInfinite(lon) || Double.isInfinite(lat)) {
+                        // redis rejects nan and infinity while parsing the number
                         return ErrorReply.INVALID_FLOAT;
+                    }
+                    if (lon > RedisGeo.GEO_LONG_MAX || lon < RedisGeo.GEO_LONG_MIN ||
+                        lat > RedisGeo.GEO_LAT_MAX || lat < RedisGeo.GEO_LAT_MIN) {
+                        return new ErrorReply(String.format("invalid longitude,latitude pair %f,%f", lon, lat));
                     }
                     var member = new String(data[i + 2]);
                     itemList.add(new GeoItem(lon, lat, member));

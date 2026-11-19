@@ -763,10 +763,10 @@ public class LGroup extends BaseCommand {
                     try {
                         count = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.INVALID_INTEGER;
+                        return new ErrorReply("COUNT can't be negative");
                     }
                     if (count < 0) {
-                        return ErrorReply.INVALID_INTEGER;
+                        return new ErrorReply("COUNT can't be negative");
                     }
                     countProvided = true;
                     i++; // skip the option value
@@ -778,10 +778,10 @@ public class LGroup extends BaseCommand {
                     try {
                         maxlen = Integer.parseInt(new String(data[i + 1]));
                     } catch (NumberFormatException e) {
-                        return ErrorReply.INVALID_INTEGER;
+                        return new ErrorReply("MAXLEN can't be negative");
                     }
                     if (maxlen < 0) {
-                        return ErrorReply.INVALID_INTEGER;
+                        return new ErrorReply("MAXLEN can't be negative");
                     }
                     i++; // skip the option value
                 }

@@ -687,22 +687,22 @@ class LGroupTest extends Specification {
         when:
         reply = lGroup.execute('lpos a a count a')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply("COUNT can't be negative")
 
         when:
         reply = lGroup.execute('lpos a a maxlen a')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply("MAXLEN can't be negative")
 
         when:
         reply = lGroup.execute('lpos a a maxlen -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply("MAXLEN can't be negative")
 
         when:
         reply = lGroup.execute('lpos a a count -1')
         then:
-        reply == ErrorReply.INVALID_INTEGER
+        reply == new ErrorReply("COUNT can't be negative")
 
         when:
         reply = lGroup.execute('lpos >key a count -1')
