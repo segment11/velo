@@ -328,6 +328,43 @@ class BlockingListTest extends Specification {
         localPersist.cleanUp()
     }
 
+    def 'test a waiter registered on two keys is released from both'() {
+        given:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Thread.sleep(100)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
+
+        when: 'one waiter is registered on two keys'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def settablePromise = new SettablePromise<Reply>()
+        def slotA = BaseCommand.slot('two-keys-a', (short) 1)
+        def slotB = BaseCommand.slot('two-keys-b', (short) 1)
+        def oneOnTwoKeys = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(settablePromise, null, true,
+                System.currentTimeMillis(), null, 0, [slotA, slotB])
+        BlockingList.addOne('two-keys-a', oneOnTwoKeys)
+        BlockingList.addOne('two-keys-b', oneOnTwoKeys)
+        then:
+        // one client blocked on two keys, it counts once
+        BlockingList.blockingClientCount() == 1
+        BlockingList.blockingKeyCount() == 2
+
+        when: 'the first key is served, the waiter must be released from both keys'
+        def elementValueBytesArray = new byte[1][]
+        elementValueBytesArray[0] = 'a'.bytes
+        BlockingList.setReplyRPushIfBlockingListExist('two-keys-a', elementValueBytesArray)
+        then:
+        settablePromise.isComplete()
+        BlockingList.blockingClientCount() == 0
+        BlockingList.blockingKeyCount() == 0
+
+        cleanup:
+        BlockingList.clearBlockingListPromisesForAllKeys()
+    }
+
     def 'test blmpop wake-up returns nested array'() {
         given:
         def eventloopCurrent = Eventloop.builder()

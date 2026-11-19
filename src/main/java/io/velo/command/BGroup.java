@@ -1079,7 +1079,8 @@ public class BGroup extends BaseCommand {
                 SettablePromise<Reply> finalPromise = new SettablePromise<>();
                 var asyncReply = new AsyncReply(finalPromise);
 
-                var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
+                var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft,
+                        System.currentTimeMillis(), null, 0, slotWithKeyHashListParsed);
 
                 // each key is checked on the worker owning it, never blocking the current worker
                 // the continuation below runs on the worker of the last checked key, which is also the
@@ -1122,7 +1123,8 @@ public class BGroup extends BaseCommand {
             var asyncReply = new AsyncReply(finalPromise);
 
             var firstKey = keys.getFirst();
-            var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null);
+            var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft,
+                    System.currentTimeMillis(), null, 0, slotWithKeyHashListParsed);
             BlockingList.addOne(firstKey, one);
 
             if (!isBlockIndefinitely) {
@@ -1374,7 +1376,8 @@ public class BGroup extends BaseCommand {
                 return;
             }
 
-            var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft, System.currentTimeMillis(), null, popCount);
+            var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft,
+                    System.currentTimeMillis(), null, popCount, slotWithKeyHashListParsed);
             var waiter = one;
             // register the waiter on every key owning worker, so a push to any of them can wake it up
             addBlockingWaiter(keys, waiter);

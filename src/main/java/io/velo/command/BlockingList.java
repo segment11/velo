@@ -17,7 +17,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * For blocking list pop, move
@@ -54,8 +57,10 @@ public class BlockingList {
         private final long createdTime;
         private final DstKeyAndDstLeftWhenMove xx;
         private final int mpopCount;
+        private final List<BaseCommand.SlotWithKeyHash> registeredSlots;
 
         private final AtomicBoolean delivered = new AtomicBoolean();
+        private final AtomicInteger registrations = new AtomicInteger();
 
         /**
          * @param settablePromise promise
@@ -71,12 +76,33 @@ public class BlockingList {
                                                     long createdTime,
                                                     DstKeyAndDstLeftWhenMove xx,
                                                     int mpopCount) {
+            this(settablePromise, socket, isLeft, createdTime, xx, mpopCount, List.of());
+        }
+
+        /**
+         * @param settablePromise  promise
+         * @param socket           the client socket
+         * @param isLeft           is left or right
+         * @param createdTime      created time for timeout
+         * @param xx               parameter when do move
+         * @param mpopCount        number of elements to pop for BLMPOP, 0 means BLPOP/BRPOP (single-element reply)
+         * @param registeredSlots  the keys this waiter is registered on, a multi key block registers the
+         *                          same waiter on every key and serving one key must release all of them
+         */
+        public PromiseWithLeftOrRightAndCreatedTime(SettablePromise<Reply> settablePromise,
+                                                    ITcpSocket socket,
+                                                    boolean isLeft,
+                                                    long createdTime,
+                                                    DstKeyAndDstLeftWhenMove xx,
+                                                    int mpopCount,
+                                                    List<BaseCommand.SlotWithKeyHash> registeredSlots) {
             this.settablePromise = settablePromise;
             this.socket = socket;
             this.isLeft = isLeft;
             this.createdTime = createdTime;
             this.xx = xx;
             this.mpopCount = mpopCount;
+            this.registeredSlots = List.copyOf(registeredSlots);
         }
 
         /**
@@ -125,6 +151,29 @@ public class BlockingList {
         }
 
         /**
+         * @return the keys this waiter is registered on
+         */
+        public List<BaseCommand.SlotWithKeyHash> registeredSlots() {
+            return registeredSlots;
+        }
+
+        /**
+         * Registers the waiter on one more key.
+         */
+        void registered() {
+            registrations.incrementAndGet();
+        }
+
+        /**
+         * Releases the waiter from one key.
+         *
+         * @return true when the waiter is not registered on any key any more
+         */
+        boolean unregistered() {
+            return registrations.decrementAndGet() <= 0;
+        }
+
+        /**
          * @return the destination for the move variants, null for plain pops
          */
         public DstKeyAndDstLeftWhenMove xx() {
@@ -164,6 +213,12 @@ public class BlockingList {
     @ThreadNeedLocal
     private static Inner[] inners;
 
+    /**
+     * All the blocked waiters, a multi key block registers the same waiter on every key and the
+     * blocked client count must count the clients, not the key registrations.
+     */
+    private static final Set<PromiseWithLeftOrRightAndCreatedTime> allWaiters = ConcurrentHashMap.newKeySet();
+
     static {
         inners = new Inner[1];
         inners[0] = new Inner(Thread.currentThread().threadId());
@@ -185,6 +240,24 @@ public class BlockingList {
         }
 
         log.info("Blocking list init by slot worker eventloop array");
+    }
+
+    /**
+     * Returns the Inner instance associated with the current thread, or null when the thread is not
+     * a registered slot worker. An unregistered thread can not hold waiters, so a notification from
+     * it has nothing to do.
+     *
+     * @return the Inner instance, or null if no matching instance is found
+     */
+    private static Inner getInnerOrNull() {
+        var currentThreadId = Thread.currentThread().threadId();
+        for (var inner : inners) {
+            if (inner.expectThreadId == currentThreadId) {
+                return inner;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -214,7 +287,6 @@ public class BlockingList {
         final HashMap<String, List<PromiseWithLeftOrRightAndCreatedTime>> blockingListPromisesByKey = new HashMap<>();
         // only the worker thread owning this Inner ever mutates them, plain int is enough
         // they are diagnostics only (INFO and the prometheus gauge), a stale read is acceptable
-        private int clientCount;
         private int keyCount;
 
         void addOne(String key, PromiseWithLeftOrRightAndCreatedTime one) {
@@ -223,7 +295,20 @@ public class BlockingList {
                 keyCount++;
             }
             list.add(one);
-            clientCount++;
+            one.registered();
+            allWaiters.add(one);
+        }
+
+        /**
+         * Releases one registration of the waiter, the waiter leaves the blocked clients when it is
+         * not registered on any key any more.
+         *
+         * @param one the promise wrap
+         */
+        void releaseRegistration(PromiseWithLeftOrRightAndCreatedTime one) {
+            if (one.unregistered()) {
+                allWaiters.remove(one);
+            }
         }
 
         void removeOne(String key, PromiseWithLeftOrRightAndCreatedTime one) {
@@ -232,9 +317,13 @@ public class BlockingList {
                 return;
             }
             if (list.remove(one)) {
-                clientCount--;
+                // the waiter is registered on every key of a multi key block, it is only released
+                // when the last key is released
+                releaseRegistration(one);
                 if (list.isEmpty()) {
                     keyCount--;
+                    // the key has no waiter left, do not keep an empty entry
+                    blockingListPromisesByKey.remove(key);
                 }
             }
         }
@@ -266,11 +355,7 @@ public class BlockingList {
      * @return blocking client count
      */
     public static int blockingClientCount() {
-        var total = 0;
-        for (var inner : inners) {
-            total += inner.clientCount;
-        }
-        return total;
+        return allWaiters.size();
     }
 
     /**
@@ -333,6 +418,7 @@ public class BlockingList {
             if (promise.settablePromise.isComplete()) {
                 it.remove();
                 removedCount++;
+                inner.releaseRegistration(promise);
                 continue;
             }
 
@@ -340,6 +426,7 @@ public class BlockingList {
             if (!promise.tryMarkDelivered()) {
                 it.remove();
                 removedCount++;
+                inner.releaseRegistration(promise);
                 continue;
             }
 
@@ -391,6 +478,10 @@ public class BlockingList {
                 }
                 it.remove();
                 removedCount++;
+                // the serving key registration is released here, a multi key block registers the
+                // waiter on every key, release all of them
+                inner.releaseRegistration(promise);
+                removeEverywhere(promise);
             } else {
                 var index = fromLeftToRight.length - 1 - rightI;
                 if (index < 0) {
@@ -441,13 +532,18 @@ public class BlockingList {
                 }
                 it.remove();
                 removedCount++;
+                // the serving key registration is released here, a multi key block registers the
+                // waiter on every key, release all of them
+                inner.releaseRegistration(promise);
+                removeEverywhere(promise);
             }
         }
 
         if (removedCount > 0) {
-            inner.clientCount -= removedCount;
             if (list.isEmpty()) {
                 inner.keyCount--;
+                // the key has no waiter left, do not keep an empty entry
+                inner.blockingListPromisesByKey.remove(key);
             }
         }
 
@@ -495,7 +591,8 @@ public class BlockingList {
             inner.keyCount++;
         }
         list.add(one);
-        inner.clientCount++;
+        one.registered();
+        allWaiters.add(one);
         return one;
     }
 
@@ -512,10 +609,36 @@ public class BlockingList {
             return;
         }
         if (list.remove(one)) {
-            inner.clientCount--;
+            if (one.unregistered()) {
+                allWaiters.remove(one);
+            }
             if (list.isEmpty()) {
                 inner.keyCount--;
+                // the key has no waiter left, do not keep an empty entry
+                inner.blockingListPromisesByKey.remove(key);
             }
+        }
+    }
+
+    /**
+     * Removes the waiter from every key it was registered on. A multi key block registers the same
+     * waiter on every key, serving one of them must release all of them, else the waiter stays in
+     * the other keys and the blocked client count keeps growing.
+     *
+     * @param one the promise wrap
+     */
+    public static void removeEverywhere(PromiseWithLeftOrRightAndCreatedTime one) {
+        for (var slotWithKeyHash : one.registeredSlots()) {
+            var slot = slotWithKeyHash.slot();
+            if (!localPersist.isOneSlotInitialized(slot)) {
+                continue;
+            }
+            localPersist.oneSlot(slot).asyncExecute(() -> {
+                var inner = getInnerOrNull();
+                if (inner != null) {
+                    inner.removeOne(slotWithKeyHash.rawKey(), one);
+                }
+            });
         }
     }
 
@@ -533,14 +656,20 @@ public class BlockingList {
                 while (iter.hasNext()) {
                     var list = iter.next();
                     int before = list.size();
-                    list.removeIf(one -> one.socket == socket);
+                    list.removeIf(one -> {
+                        if (one.socket == socket) {
+                            one.unregistered();
+                            allWaiters.remove(one);
+                            return true;
+                        }
+                        return false;
+                    });
                     totalRemoved += before - list.size();
                     if (list.isEmpty()) {
                         iter.remove();
                     }
                 }
                 if (totalRemoved > 0) {
-                    inner.clientCount -= totalRemoved;
                     inner.keyCount = inner.blockingListPromisesByKey.size();
                 }
             });
@@ -551,8 +680,8 @@ public class BlockingList {
     static void clearBlockingListPromisesForAllKeys() {
         for (var inner : inners) {
             inner.blockingListPromisesByKey.clear();
-            inner.clientCount = 0;
             inner.keyCount = 0;
         }
+        allWaiters.clear();
     }
 }
