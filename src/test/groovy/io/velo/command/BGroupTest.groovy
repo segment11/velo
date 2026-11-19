@@ -14,6 +14,7 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.OneSlot
 import io.velo.reply.*
 import io.velo.type.RedisBF
 import io.velo.type.RedisList
@@ -26,6 +27,7 @@ import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class BGroupTest extends Specification {
     def _BGroup = new BGroup(null, null, null)
@@ -1884,6 +1886,34 @@ class BGroupTest extends Specification {
         protocolReplies.poll(5, TimeUnit.SECONDS) ==
                 '-WRONGTYPE Operation against a key holding the wrong kind of value\r\n'
 
+        when: 'first key is non-empty, blmpop reads it only once'
+        def firstKeyReads = new AtomicInteger()
+        def countingStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-read-list') {
+                    firstKeyReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def singleReadGroup = new BGroup(null, null, null)
+        singleReadGroup.byPassGetSet = countingStore
+        singleReadGroup.from(BaseCommand.mockAGroup())
+        def singleReadRl = new RedisList()
+        singleReadRl.addLast('v1'.bytes)
+        singleReadRl.addLast('v2'.bytes)
+        def singleReadCv = Mock.prepareCompressedValueList(1)[0]
+        singleReadCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        singleReadCv.compressedData = singleReadRl.encode()
+        countingStore.put(slot, 'single-read-list', 0, singleReadCv)
+        def singleReadReply = singleReadGroup.execute('blmpop 1 1 single-read-list left count 1')
+        then:
+        singleReadReply instanceof MultiBulkReply
+        ((singleReadReply as MultiBulkReply).replies[0] as BulkReply).asString() == 'single-read-list'
+        (((singleReadReply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'v1'
+        firstKeyReads.get() == 1
+
         cleanup:
         BlockingList.clearBlockingListPromisesForAllKeys()
         BlockingList.initBySlotWorkerEventloopArray([Eventloop.builder().withCurrentThread().build()] as Eventloop[])
@@ -2194,6 +2224,33 @@ class BGroupTest extends Specification {
         multiPromise.isComplete()
         BlockingZSet.blockingClientCount() == 0
         BlockingZSet.blockingKeyCount() == 0
+
+        when: 'first key is non-empty, bzpopmin reads it only once'
+        def bzpopReads = new AtomicInteger()
+        def bzpopStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-read-zset') {
+                    bzpopReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def bzpopGroup = new BGroup(null, null, null)
+        bzpopGroup.byPassGetSet = bzpopStore
+        bzpopGroup.from(BaseCommand.mockAGroup())
+        def bzpopRz = new RedisZSet()
+        bzpopRz.add(1.0, 'm1')
+        def bzpopCv = Mock.prepareCompressedValueList(1)[0]
+        bzpopCv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        bzpopCv.compressedData = bzpopRz.encode()
+        bzpopStore.put(slot, 'single-read-zset', 0, bzpopCv)
+        def bzpopReply = bzpopGroup.execute('bzpopmin single-read-zset 1')
+        then:
+        bzpopReply instanceof MultiBulkReply
+        ((bzpopReply as MultiBulkReply).replies[0] as BulkReply).asString() == 'single-read-zset'
+        ((bzpopReply as MultiBulkReply).replies[1] as BulkReply).asString() == 'm1'
+        bzpopReads.get() == 1
     }
 
     def 'test bzpopmax'() {
@@ -2500,6 +2557,34 @@ class BGroupTest extends Specification {
         def mpopRaceResult = mpopPromiseForRace.getResult() as MultiBulkReply
         (mpopRaceResult.replies[0] as BulkReply).asString() == 'zmpoprace'
         memberPairs(mpopRaceResult.replies[1]) == [['first', '1'], ['second', '2']]
+
+        when: 'first key is non-empty, bzmpop reads it only once'
+        def bzmpopReads = new AtomicInteger()
+        def bzmpopStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-read-bzmpop') {
+                    bzmpopReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def bzmpopGroup = new BGroup(null, null, null)
+        bzmpopGroup.byPassGetSet = bzmpopStore
+        bzmpopGroup.from(BaseCommand.mockAGroup())
+        def bzmpopRz = new RedisZSet()
+        bzmpopRz.add(1.0, 'm1')
+        bzmpopRz.add(2.0, 'm2')
+        def bzmpopCv = Mock.prepareCompressedValueList(1)[0]
+        bzmpopCv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        bzmpopCv.compressedData = bzmpopRz.encode()
+        bzmpopStore.put(slot, 'single-read-bzmpop', 0, bzmpopCv)
+        def bzmpopReply = bzmpopGroup.execute('bzmpop 1 1 single-read-bzmpop MIN COUNT 1')
+        then:
+        bzmpopReply instanceof MultiBulkReply
+        ((bzmpopReply as MultiBulkReply).replies[0] as BulkReply).asString() == 'single-read-bzmpop'
+        memberPairs((bzmpopReply as MultiBulkReply).replies[1]) == [['m1', '1']]
+        bzmpopReads.get() == 1
     }
 
 }

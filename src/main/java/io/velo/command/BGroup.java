@@ -1380,8 +1380,8 @@ public class BGroup extends BaseCommand {
             if (!firstCv.isList()) {
                 return ErrorReply.WRONG_TYPE;
             }
-            var firstRl = LGroup.getRedisList(firstSlotWithKeyHash, this);
-            if (firstRl != null && !firstRl.isEmpty()) {
+            var firstRl = RedisList.decode(getValueBytesByCv(firstCv, firstSlotWithKeyHash));
+            if (!firstRl.isEmpty()) {
                 return popMpopReply(firstSlotWithKeyHash, data[3], firstRl, isLeft, count);
             }
         }
@@ -1606,8 +1606,8 @@ public class BGroup extends BaseCommand {
             if (!firstCv.isZSet()) {
                 return ErrorReply.WRONG_TYPE;
             }
-            var firstRz = ZGroup.getRedisZSet(firstSlotWithKeyHash, this);
-            if (firstRz != null && !firstRz.isEmpty()) {
+            var firstRz = RedisZSet.decode(getValueBytesByCv(firstCv, firstSlotWithKeyHash));
+            if (!firstRz.isEmpty()) {
                 return popZSetOneReply(this, dictMap, firstSlotWithKeyHash, firstKeyBytes, firstRz, isMin);
             }
         }
@@ -1764,8 +1764,8 @@ public class BGroup extends BaseCommand {
             if (!firstCv.isZSet()) {
                 return ErrorReply.WRONG_TYPE;
             }
-            var firstRz = ZGroup.getRedisZSet(firstSlotWithKeyHash, this);
-            if (firstRz != null && !firstRz.isEmpty()) {
+            var firstRz = RedisZSet.decode(getValueBytesByCv(firstCv, firstSlotWithKeyHash));
+            if (!firstRz.isEmpty()) {
                 return popZSetValuesReply(this, dictMap, firstSlotWithKeyHash, data[3], firstRz, isMin, count);
             }
         }
