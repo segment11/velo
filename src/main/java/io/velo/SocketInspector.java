@@ -5,6 +5,7 @@ import io.activej.eventloop.Eventloop;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.velo.command.BlockingList;
+import io.velo.command.BlockingZSet;
 import io.velo.command.XGroup;
 import io.velo.reply.Reply;
 import org.jetbrains.annotations.NotNull;
@@ -1031,6 +1032,9 @@ public class SocketInspector implements TcpSocket.Inspector {
 
         // remove from blocking list
         BlockingList.removeBySocket(socket);
+
+        // remove from blocking zset
+        BlockingZSet.removeBySocket(socket);
 
         // Self-protection only, same shape as onRead/onWrite above. Every TcpSocket close path
         // runs on the socket's own reactor (closeEx calls checkInReactorThread unconditionally),

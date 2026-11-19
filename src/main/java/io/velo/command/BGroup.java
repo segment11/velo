@@ -15,6 +15,7 @@ import io.velo.DictMap;
 import io.velo.TypeMismatchException;
 import io.velo.type.RedisBF;
 import io.velo.type.RedisList;
+import io.velo.type.RedisZSet;
 import io.velo.type.RedisBitSet;
 
 import java.nio.ByteBuffer;
@@ -92,6 +93,30 @@ public class BGroup extends BaseCommand {
                 "list",
                 "Pop an element from a list, push it to another list and return it; or block until one is available.",
                 "2.2.0", "O(1)"));
+        CommandRegistry.register(new CommandEntry(
+                "bzmpop", -5,
+                Set.of("write", "blocking", "movablekeys"),
+                0, 0, 0,
+                Set.of("@write", "@sortedset", "@slow", "@blocking"),
+                "sorted_set",
+                "Blocking variant of ZMPOP.",
+                "7.0.0", "O(K)+O(M*log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "bzpopmax", -3,
+                Set.of("write", "fast", "blocking"),
+                1, -2, 1,
+                Set.of("@write", "@sortedset", "@fast", "@blocking"),
+                "sorted_set",
+                "Remove and return the member with the highest score, or block until one is available.",
+                "5.0.0", "O(log(N))"));
+        CommandRegistry.register(new CommandEntry(
+                "bzpopmin", -3,
+                Set.of("write", "fast", "blocking"),
+                1, -2, 1,
+                Set.of("@write", "@sortedset", "@fast", "@blocking"),
+                "sorted_set",
+                "Remove and return the member with the lowest score, or block until one is available.",
+                "5.0.0", "O(log(N))"));
         CommandRegistry.register(new CommandEntry(
                 "bf.add", -3,
                 Set.of("write", "denyoom"),
@@ -247,6 +272,37 @@ public class BGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("bzmpop".equals(cmd)) {
+            if (data.length < 5) {
+                return slotWithKeyHashList;
+            }
+            int numKeys;
+            try {
+                numKeys = Integer.parseInt(new String(data[2]));
+            } catch (NumberFormatException e) {
+                return slotWithKeyHashList;
+            }
+            if (numKeys <= 0 || data.length < 3 + numKeys + 1) {
+                return slotWithKeyHashList;
+            }
+            for (int i = 0; i < numKeys; i++) {
+                slotWithKeyHashList.add(slot(data[3 + i], slotNumber));
+            }
+            return slotWithKeyHashList;
+        }
+
+        if ("bzpopmax".equals(cmd) || "bzpopmin".equals(cmd)) {
+            if (data.length < 3) {
+                return slotWithKeyHashList;
+            }
+
+            // eg. bzpopmin key1 key2 timeout
+            for (int i = 1; i < data.length - 1; i++) {
+                slotWithKeyHashList.add(slot(data[i], slotNumber));
+            }
+            return slotWithKeyHashList;
+        }
+
         return slotWithKeyHashList;
     }
 
@@ -310,6 +366,14 @@ public class BGroup extends BaseCommand {
             var lGroup = new LGroup(null, dd, socket);
             lGroup.from(this);
             return lGroup.lmove(true);
+        }
+
+        if ("bzmpop".equals(cmd)) {
+            return bzmpop();
+        }
+
+        if ("bzpopmax".equals(cmd) || "bzpopmin".equals(cmd)) {
+            return bzpop("bzpopmin".equals(cmd));
         }
 
         return ErrorReply.UNKNOWN_COMMAND(cmd);
@@ -1444,6 +1508,461 @@ public class BGroup extends BaseCommand {
 
         BlockingList.removeOne(Wal.keyString(keyBytes), one);
         one.settablePromise().set(popMpopReply(baseCommand, dictMap, slotWithKeyHash, keyBytes, rl, isLeft, count));
+        return true;
+    }
+
+    /**
+     * BZPOPMIN key [key ...] timeout / BZPOPMAX key [key ...] timeout.
+     * Pops one member from the first non-empty sorted set, blocks until one is available or the
+     * timeout expires. The timeout in seconds comes last, 0 means block indefinitely.
+     *
+     * @param isMin pop the lowest scored member when true, the highest one otherwise
+     * @return the reply: nil on timeout, or a [key, member, score] array
+     */
+    private Reply bzpop(boolean isMin) {
+        if (data.length < 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        ArrayList<String> keys = new ArrayList<>();
+        for (int i = 1; i < data.length - 1; i++) {
+            var keyBytes = data[i];
+            if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            keys.add(Wal.keyString(keyBytes));
+        }
+
+        var timeoutBytes = data[data.length - 1];
+        double timeoutSeconds;
+        try {
+            timeoutSeconds = Double.parseDouble(new String(timeoutBytes));
+        } catch (NumberFormatException e) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+
+        if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+            return new ErrorReply("timeout is not a float or out of range");
+        }
+
+        boolean isBlockIndefinitely = timeoutSeconds == 0.0;
+
+        var firstKeyBytes = data[1];
+        var firstSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+
+        // the first key is owned by the worker running this command, check it inline
+        var firstCv = getCv(firstSlotWithKeyHash);
+        if (firstCv != null) {
+            if (!firstCv.isZSet()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+            var firstRz = ZGroup.getRedisZSet(firstSlotWithKeyHash, this);
+            if (firstRz != null && !firstRz.isEmpty()) {
+                return popZSetOneReply(this, dictMap, firstSlotWithKeyHash, firstKeyBytes, firstRz, isMin);
+            }
+        }
+
+        if (keys.size() > 1) {
+            // performance bad, get all other values
+            SettablePromise<Reply> finalPromise = new SettablePromise<>();
+            var asyncReply = new AsyncReply(finalPromise);
+
+            var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin, System.currentTimeMillis(), 0);
+
+            // each key is checked on the worker owning it, never blocking the current worker
+            // the continuation below runs on the worker of the last checked key, which is also the
+            // reactor used to schedule the timeout, the reply itself is sent back through the promise
+            popOtherKeyZAsync(1, keys, isMin).whenComplete((r, e) -> {
+                if (e != null) {
+                    log.error("{} error={}", isMin ? "bzpopmin" : "bzpopmax", e.getMessage());
+                    finalPromise.setException(Utils.wrapException(isMin ? "bzpopmin" : "bzpopmax", e));
+                    return;
+                }
+
+                if (r != null) {
+                    finalPromise.set(r);
+                    return;
+                }
+
+                // register the waiter on every key owning worker, so a member added to any of them can wake it up
+                addZSetBlockingWaiter(keys, one);
+                // close the check then register window, a member may land between both steps
+                recheckBlockingZSet(keys, one);
+
+                if (!isBlockIndefinitely) {
+                    long timeoutMillis = (long) (timeoutSeconds * 1000);
+                    var reactor = Reactor.getCurrentReactor();
+                    reactor.delay(timeoutMillis, () -> {
+                        // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
+                        if (one.tryMarkDelivered()) {
+                            finalPromise.set(NilReply.INSTANCE);
+                            removeZSetBlockingWaiter(keys, one);
+                        }
+                    });
+                }
+            });
+
+            return asyncReply;
+        }
+
+        // only one key
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        var firstKey = keys.getFirst();
+        var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin, System.currentTimeMillis(), 0);
+        BlockingZSet.addOne(firstKey, one);
+
+        if (!isBlockIndefinitely) {
+            long timeoutMillis = (long) (timeoutSeconds * 1000);
+            var reactor = Reactor.getCurrentReactor();
+            reactor.delay(timeoutMillis, () -> {
+                // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
+                if (one.tryMarkDelivered()) {
+                    finalPromise.set(NilReply.INSTANCE);
+                    BlockingZSet.removeOne(firstKey, one);
+                }
+            });
+        }
+
+        return asyncReply;
+    }
+
+    /**
+     * BZMPOP timeout numkeys key [key ...] MIN|MAX [COUNT count].
+     * Pops up to count members from the first non-empty sorted set, blocks until one is available
+     * or the timeout expires. The timeout in seconds comes first, 0 means block indefinitely.
+     *
+     * @return the reply: nil on timeout, or a [key, [[member, score], ...]] array
+     */
+    private Reply bzmpop() {
+        if (data.length < 5) {
+            return ErrorReply.FORMAT;
+        }
+
+        double timeoutSeconds;
+        try {
+            timeoutSeconds = Double.parseDouble(new String(data[1]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+        if (timeoutSeconds < 0 || !Double.isFinite(timeoutSeconds)) {
+            return new ErrorReply("timeout is not a float or out of range");
+        }
+
+        int numKeys;
+        try {
+            numKeys = Integer.parseInt(new String(data[2]));
+        } catch (NumberFormatException e) {
+            return ErrorReply.INVALID_INTEGER;
+        }
+        if (numKeys <= 0) {
+            return ErrorReply.RANGE_OUT_OF_INDEX;
+        }
+        if (data.length < 3 + numKeys + 1) {
+            return ErrorReply.FORMAT;
+        }
+
+        boolean isMin;
+        var direction = new String(data[3 + numKeys]).toLowerCase();
+        if ("min".equals(direction)) {
+            isMin = true;
+        } else if ("max".equals(direction)) {
+            isMin = false;
+        } else {
+            return ErrorReply.SYNTAX;
+        }
+
+        int count = 1;
+        if (data.length > 4 + numKeys) {
+            if (data.length == 4 + numKeys + 2 && "count".equalsIgnoreCase(new String(data[4 + numKeys]))) {
+                try {
+                    count = Integer.parseInt(new String(data[5 + numKeys]));
+                } catch (NumberFormatException e) {
+                    return ErrorReply.INVALID_INTEGER;
+                }
+                if (count <= 0) {
+                    return ErrorReply.INVALID_INTEGER;
+                }
+            } else {
+                return ErrorReply.SYNTAX;
+            }
+        }
+
+        ArrayList<String> keys = new ArrayList<>();
+        for (int i = 0; i < numKeys; i++) {
+            if (data[3 + i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+            keys.add(Wal.keyString(data[3 + i]));
+        }
+
+        // the first key is owned by the worker running this command, check it inline
+        var firstSlotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var firstCv = getCv(firstSlotWithKeyHash);
+        if (firstCv != null) {
+            if (!firstCv.isZSet()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+            var firstRz = ZGroup.getRedisZSet(firstSlotWithKeyHash, this);
+            if (firstRz != null && !firstRz.isEmpty()) {
+                return popZSetValuesReply(this, dictMap, firstSlotWithKeyHash, data[3], firstRz, isMin, count);
+            }
+        }
+
+        // all sorted sets empty or missing — block
+        final boolean isBlockIndefinitely = timeoutSeconds == 0.0;
+        final int popCount = count;
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        // the remaining keys are checked on the worker owning them, without blocking this one
+        popOtherKeyZMpopAsync(1, keys, isMin, popCount).whenComplete((r, e) -> {
+            if (e != null) {
+                finalPromise.setException(Utils.wrapException("bzmpop", e));
+                return;
+            }
+
+            if (r != null) {
+                finalPromise.set(r);
+                return;
+            }
+
+            var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin, System.currentTimeMillis(), popCount);
+            var waiter = one;
+            // register the waiter on every key owning worker, so a member added to any of them can wake it up
+            addZSetBlockingWaiter(keys, waiter);
+            // close the check then register window, a member may land between both steps
+            recheckBlockingZSet(keys, waiter);
+
+            if (!isBlockIndefinitely) {
+                long timeoutMillis = (long) (timeoutSeconds * 1000);
+                var reactor = Reactor.getCurrentReactor();
+                reactor.delay(timeoutMillis, () -> {
+                    // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
+                    if (one.tryMarkDelivered()) {
+                        finalPromise.set(NilReply.INSTANCE);
+                        removeZSetBlockingWaiter(keys, one);
+                    }
+                });
+            }
+        });
+
+        if (finalPromise.isComplete()) {
+            var exception = finalPromise.getException();
+            if (exception != null) {
+                return exception instanceof TypeMismatchException ? ErrorReply.WRONG_TYPE :
+                        new ErrorReply(exception.getMessage());
+            }
+            // all the keys are owned by this worker, the reply is already known
+            return finalPromise.getResult();
+        }
+
+        return asyncReply;
+    }
+
+    /**
+     * Pop one member from the first non-empty sorted set, starting at {@code fromIndex}.
+     * Every key is read and written on the worker owning it, chained without blocking the current worker,
+     * so the first key with a member wins and the following keys are never touched.
+     *
+     * @param fromIndex index of the first key to check
+     * @param keys      all blocking keys
+     * @param isMin     pop the lowest scored member when true, the highest one otherwise
+     * @return promise of the reply, null when all the checked keys are empty
+     */
+    private Promise<Reply> popOtherKeyZAsync(int fromIndex, ArrayList<String> keys, boolean isMin) {
+        if (fromIndex >= keys.size()) {
+            return Promise.of(null);
+        }
+
+        var keyBytes = Wal.keyBytes(keys.get(fromIndex));
+        var slotWithKeyHash = slotWithKeyHashListParsed.get(fromIndex);
+        return localPersist.oneSlot(slotWithKeyHash.slot()).asyncCall(() -> {
+            var rz = ZGroup.getRedisZSet(slotWithKeyHash, this);
+            if (rz == null || rz.isEmpty()) {
+                return (Reply) null;
+            }
+
+            return popZSetOneReply(this, dictMap, slotWithKeyHash, keyBytes, rz, isMin);
+        }).then(reply -> reply != null ? Promise.of(reply) : popOtherKeyZAsync(fromIndex + 1, keys, isMin));
+    }
+
+    /**
+     * Pop up to {@code count} members from the first non-empty sorted set, starting at {@code fromIndex}.
+     * Every key is read and written on the worker owning it, chained without blocking the current worker.
+     *
+     * @param fromIndex index of the first key to check
+     * @param keys      all blocking keys
+     * @param isMin     pop from the low end when true, from the high end otherwise
+     * @param count     maximum number of members to pop
+     * @return promise of the reply, null when all the checked keys are empty
+     */
+    private Promise<Reply> popOtherKeyZMpopAsync(int fromIndex, ArrayList<String> keys, boolean isMin, int count) {
+        if (fromIndex >= keys.size()) {
+            return Promise.of(null);
+        }
+
+        var keyBytes = Wal.keyBytes(keys.get(fromIndex));
+        var slotWithKeyHash = slotWithKeyHashListParsed.get(fromIndex);
+        return localPersist.oneSlot(slotWithKeyHash.slot()).asyncCall(() -> {
+            var rz = ZGroup.getRedisZSet(slotWithKeyHash, this);
+            if (rz == null || rz.isEmpty()) {
+                return (Reply) null;
+            }
+
+            return popZSetValuesReply(this, dictMap, slotWithKeyHash, keyBytes, rz, isMin, count);
+        }).then(reply -> reply != null ? Promise.of(reply) : popOtherKeyZMpopAsync(fromIndex + 1, keys, isMin, count));
+    }
+
+    /**
+     * Pop one member from a sorted set and build the BZPOPMIN/BZPOPMAX reply: [key, member, score].
+     *
+     * @param baseCommand     the base command owning the storage access
+     * @param dictMap         dictionary map used when the sorted set is saved back
+     * @param slotWithKeyHash slot and key hash of the popped key
+     * @param keyBytes        the popped key
+     * @param rz              the sorted set to pop from
+     * @param isMin           pop the lowest scored member when true, the highest one otherwise
+     * @return the BZPOPMIN/BZPOPMAX reply
+     */
+    private static Reply popZSetOneReply(BaseCommand baseCommand, DictMap dictMap,
+                                         BaseCommand.SlotWithKeyHash slotWithKeyHash, byte[] keyBytes,
+                                         RedisZSet rz, boolean isMin) {
+        var sv = isMin ? rz.pollFirst() : rz.pollLast();
+        ZGroup.saveRedisZSet(rz, slotWithKeyHash, baseCommand, dictMap);
+
+        var replies = new Reply[3];
+        replies[0] = new BulkReply(keyBytes);
+        replies[1] = new BulkReply(sv.member());
+        replies[2] = new BulkReply(sv.score());
+        return new MultiBulkReply(replies);
+    }
+
+    /**
+     * Pop up to {@code count} members from a sorted set and build the BZMPOP reply:
+     * [key, [[member, score], ...]].
+     *
+     * @param baseCommand     the base command owning the storage access
+     * @param dictMap         dictionary map used when the sorted set is saved back
+     * @param slotWithKeyHash slot and key hash of the popped key
+     * @param keyBytes        the popped key
+     * @param rz              the sorted set to pop from
+     * @param isMin           pop from the low end when true, from the high end otherwise
+     * @param count           maximum number of members to pop
+     * @return the BZMPOP reply
+     */
+    private static Reply popZSetValuesReply(BaseCommand baseCommand, DictMap dictMap,
+                                            BaseCommand.SlotWithKeyHash slotWithKeyHash, byte[] keyBytes,
+                                            RedisZSet rz, boolean isMin, int count) {
+        int min = Math.min(count, rz.size());
+        var valueReplies = new Reply[min * 2];
+        for (int j = 0; j < min; j++) {
+            var sv = isMin ? rz.pollFirst() : rz.pollLast();
+            valueReplies[j * 2] = new BulkReply(sv.member());
+            valueReplies[j * 2 + 1] = new BulkReply(sv.score());
+        }
+        ZGroup.saveRedisZSet(rz, slotWithKeyHash, baseCommand, dictMap);
+
+        var arr = new Reply[]{new BulkReply(keyBytes), new MultiBulkReply(valueReplies)};
+        return new MultiBulkReply(arr);
+    }
+
+    /**
+     * Register one blocking sorted set promise on the worker owning each key.
+     *
+     * @param keys the blocking keys
+     * @param one  the promise wrapper
+     */
+    private void addZSetBlockingWaiter(ArrayList<String> keys, BlockingZSet.PromiseWithMinOrMaxAndCreatedTime one) {
+        for (int i = 0; i < keys.size(); i++) {
+            var key = keys.get(i);
+            var slot = slotWithKeyHashListParsed.get(i).slot();
+            localPersist.oneSlot(slot).asyncExecute(() -> BlockingZSet.addOne(key, one));
+        }
+    }
+
+    /**
+     * Remove one blocking sorted set promise from the worker owning each key.
+     *
+     * @param keys the blocking keys
+     * @param one  the promise wrapper
+     */
+    private void removeZSetBlockingWaiter(ArrayList<String> keys, BlockingZSet.PromiseWithMinOrMaxAndCreatedTime one) {
+        for (int i = 0; i < keys.size(); i++) {
+            var key = keys.get(i);
+            var slot = slotWithKeyHashListParsed.get(i).slot();
+            localPersist.oneSlot(slot).asyncExecute(() -> BlockingZSet.removeOne(key, one));
+        }
+    }
+
+    /**
+     * Complete the blocking reply when a member landed between the emptiness check and the waiter
+     * registration, the sorted set is re-read on its owning worker.
+     *
+     * @param keys the blocking keys
+     * @param one  the promise wrapper
+     */
+    private void recheckBlockingZSet(ArrayList<String> keys, BlockingZSet.PromiseWithMinOrMaxAndCreatedTime one) {
+        for (int i = 0; i < keys.size(); i++) {
+            var keyBytes = Wal.keyBytes(keys.get(i));
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            localPersist.oneSlot(slotWithKeyHash.slot()).asyncExecute(() -> {
+                completeIfZSetNotEmpty(slotWithKeyHash, keyBytes, this, dictMap, one);
+            });
+        }
+    }
+
+    /**
+     * Complete a pending blocking sorted set reply when the sorted set is not empty,
+     * used to close the window between the emptiness check and the waiter registration and to wake
+     * waiters after a save.
+     *
+     * @param slotWithKeyHash slot and key hash of the blocking key
+     * @param keyBytes        the blocking key
+     * @param baseCommand     the command owning the storage access
+     * @param dictMap         dictionary map used when the sorted set is saved back
+     * @param one             the promise wrapper
+     * @return true when the promise was completed
+     */
+    @VisibleForTesting
+    static boolean completeIfZSetNotEmpty(BaseCommand.SlotWithKeyHash slotWithKeyHash, byte[] keyBytes,
+                                           BaseCommand baseCommand, DictMap dictMap,
+                                           BlockingZSet.PromiseWithMinOrMaxAndCreatedTime one) {
+        if (one.settablePromise().isComplete()) {
+            return false;
+        }
+
+        RedisZSet rz;
+        try {
+            rz = ZGroup.getRedisZSet(slotWithKeyHash, baseCommand);
+        } catch (TypeMismatchException e) {
+            // the key changed to another type while waiting, fail the blocked client instead of hanging
+            if (!one.tryMarkDelivered()) {
+                return false;
+            }
+            BlockingZSet.removeOne(Wal.keyString(keyBytes), one);
+            one.settablePromise().set(ErrorReply.WRONG_TYPE);
+            return true;
+        }
+        if (rz == null || rz.isEmpty()) {
+            return false;
+        }
+
+        // one-shot delivery arbiter: only the winner may pop, save and complete
+        if (!one.tryMarkDelivered()) {
+            // a waiter that lost the race consumes no member, drop it as stale
+            BlockingZSet.removeOne(Wal.keyString(keyBytes), one);
+            return false;
+        }
+
+        BlockingZSet.removeOne(Wal.keyString(keyBytes), one);
+        if (one.mpopCount() > 0) {
+            one.settablePromise().set(popZSetValuesReply(baseCommand, dictMap, slotWithKeyHash, keyBytes, rz, one.isMin(), one.mpopCount()));
+        } else {
+            one.settablePromise().set(popZSetOneReply(baseCommand, dictMap, slotWithKeyHash, keyBytes, rz, one.isMin()));
+        }
         return true;
     }
 }

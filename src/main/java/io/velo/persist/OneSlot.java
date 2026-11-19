@@ -12,6 +12,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.velo.*;
 import io.velo.command.BlockingList;
+import io.velo.command.BlockingZSet;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.metric.SimpleGauge;
 import io.velo.monitor.BigKeyTopK;
@@ -2971,7 +2972,8 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
             var socketInspector = MultiWorkerServer.STATIC_GLOBAL_V.socketInspector;
             map.put("global_connected_client_count", new SimpleGauge.ValueWithLabelValues((double) socketInspector.connectedClientCount(), labelValues));
             map.put("global_subscribe_client_count", new SimpleGauge.ValueWithLabelValues((double) socketInspector.subscribeClientCount(), labelValues));
-            map.put("global_blocking_client_count", new SimpleGauge.ValueWithLabelValues((double) BlockingList.blockingClientCount(), labelValues));
+            map.put("global_blocking_client_count", new SimpleGauge.ValueWithLabelValues(
+                    (double) (BlockingList.blockingClientCount() + BlockingZSet.blockingClientCount()), labelValues));
 
             // net in / out bytes
             map.put("global_net_in_bytes", new SimpleGauge.ValueWithLabelValues((double) socketInspector.netInBytesLength(), labelValues));

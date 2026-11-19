@@ -14,6 +14,7 @@ import io.velo.persist.Mock
 import io.velo.reply.*
 import io.velo.type.RedisBF
 import io.velo.type.RedisList
+import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 import java.nio.ByteBuffer
@@ -78,6 +79,54 @@ class BGroupTest extends Specification {
         _BGroup.parseSlots('blpop', data4, slotNumber).size() == 2
         _BGroup.parseSlots('brpop', data4, slotNumber).size() == 2
         _BGroup.parseSlots('blmove', data6, slotNumber).size() == 2
+    }
+
+    def 'test parse slot - blocking sorted set pops'() {
+        given:
+        int slotNumber = 128
+        def data1 = new byte[1][]
+
+        when: 'bzpopmin/bzpopmax: last arg is the timeout, all previous args are keys'
+        def dataBzPop = new byte[3][]
+        dataBzPop[1] = 'a'.bytes
+        dataBzPop[2] = '1.0'.bytes
+        def dataBzPopMulti = new byte[4][]
+        dataBzPopMulti[1] = 'a'.bytes
+        dataBzPopMulti[2] = 'b'.bytes
+        dataBzPopMulti[3] = '1.0'.bytes
+        then:
+        _BGroup.parseSlots('bzpopmax', dataBzPop, slotNumber).size() == 1
+        _BGroup.parseSlots('bzpopmin', dataBzPop, slotNumber).size() == 1
+        _BGroup.parseSlots('bzpopmax', dataBzPopMulti, slotNumber).size() == 2
+        _BGroup.parseSlots('bzpopmin', dataBzPopMulti, slotNumber).size() == 2
+        // too few args, no slot is parsed
+        _BGroup.parseSlots('bzpopmin', data1, slotNumber).size() == 0
+
+        when: 'bzmpop: timeout + numkeys + keys + direction'
+        def dataBzMpop = new byte[5][]
+        dataBzMpop[1] = '1.0'.bytes
+        dataBzMpop[2] = '1'.bytes
+        dataBzMpop[3] = 'a'.bytes
+        dataBzMpop[4] = 'min'.bytes
+        then:
+        _BGroup.parseSlots('bzmpop', dataBzMpop, slotNumber).size() == 1
+        // too few args
+        _BGroup.parseSlots('bzmpop', data1, slotNumber).size() == 0
+
+        when: 'invalid numkeys, no slot is parsed'
+        dataBzMpop[2] = 'x'.bytes
+        then:
+        _BGroup.parseSlots('bzmpop', dataBzMpop, slotNumber).size() == 0
+
+        when: 'numkeys zero, no slot is parsed'
+        dataBzMpop[2] = '0'.bytes
+        then:
+        _BGroup.parseSlots('bzmpop', dataBzMpop, slotNumber).size() == 0
+
+        when: 'numkeys greater than the provided keys, no slot is parsed'
+        dataBzMpop[2] = '2'.bytes
+        then:
+        _BGroup.parseSlots('bzmpop', dataBzMpop, slotNumber).size() == 0
     }
 
     def 'test handle - format errors'() {
@@ -1773,4 +1822,557 @@ class BGroupTest extends Specification {
         }
         localPersist.cleanUp()
     }
+
+    def 'test bzpopmin'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when: 'format error - too few args'
+        def reply = bGroup.execute('bzpopmin')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'timeout not a number'
+        reply = bGroup.execute('bzpopmin a x')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when: 'negative timeout'
+        reply = bGroup.execute('bzpopmin a -1')
+        then:
+        reply instanceof ErrorReply
+
+        when: 'NaN timeout'
+        reply = bGroup.execute('bzpopmin a NaN')
+        then:
+        reply instanceof ErrorReply
+
+        when: 'Infinity timeout'
+        reply = bGroup.execute('bzpopmin a Infinity')
+        then:
+        reply instanceof ErrorReply
+
+        when: 'key too long'
+        reply = bGroup.execute('bzpopmin >key 1')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'wrong type key returns WRONGTYPE'
+        inMemoryGetSet.remove(slot, 'notzset')
+        def cvWrong = new CompressedValue()
+        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvWrong.compressedData = 'hello'.bytes
+        inMemoryGetSet.put(slot, 'notzset', 0, cvWrong)
+        reply = bGroup.execute('bzpopmin notzset 1')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+        inMemoryGetSet.remove(slot, 'notzset')
+
+        when: 'immediate pop from a non-empty zset returns the lowest score'
+        inMemoryGetSet.remove(slot, 'myzset')
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        rz.add(1.0, 'one')
+        rz.add(2.0, 'two')
+        rz.add(3.0, 'three')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put(slot, 'myzset', 0, cv)
+        reply = bGroup.execute('bzpopmin myzset 1')
+        def mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        mb.replies.length == 3
+        (mb.replies[0] as BulkReply).asString() == 'myzset'
+        (mb.replies[1] as BulkReply).asString() == 'one'
+        (mb.replies[2] as BulkReply).asString() == '1'
+
+        when: 'a missing key blocks indefinitely'
+        inMemoryGetSet.remove(slot, 'a')
+        reply = bGroup.execute('bzpopmin a 0')
+        then:
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
+
+        when: 'an existing but empty zset still blocks'
+        def cvEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvEmpty.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        cvEmpty.compressedData = new RedisZSet().encode()
+        inMemoryGetSet.put(slot, 'emptyzset', 0, cvEmpty)
+        reply = bGroup.execute('bzpopmin emptyzset 0')
+        then:
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
+        inMemoryGetSet.remove(slot, 'emptyzset')
+
+        when: 'a blocked client is woken by zadd'
+        inMemoryGetSet.remove(slot, 'bzpopmin-wake')
+        reply = bGroup.execute('bzpopmin bzpopmin-wake 0')
+        def zGroupForWake = new ZGroup(null, null, null)
+        zGroupForWake.byPassGetSet = inMemoryGetSet
+        zGroupForWake.from(BaseCommand.mockAGroup())
+        zGroupForWake.execute('zadd bzpopmin-wake 5.5 hello')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.isComplete()
+        def wakeup = (reply as AsyncReply).settablePromise.getResult() as MultiBulkReply
+        wakeup.replies.length == 3
+        (wakeup.replies[0] as BulkReply).asString() == 'bzpopmin-wake'
+        (wakeup.replies[1] as BulkReply).asString() == 'hello'
+        (wakeup.replies[2] as BulkReply).asString() == '5.5'
+
+        when: 'all keys empty — block with timeout'
+        inMemoryGetSet.remove(slot, 'x')
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        reply = bGroup.execute('bzpopmin x 1')
+        Thread.sleep(2000)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when: 'first key missing, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvB = Mock.prepareCompressedValueList(1)[0]
+        cvB.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzB = new RedisZSet()
+        rzB.add(1.0, 'min-b')
+        rzB.add(2.0, 'max-b')
+        cvB.compressedData = rzB.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvB)
+        reply = bGroup.execute('bzpopmin a b 1')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result instanceof MultiBulkReply &&
+                    ((result as MultiBulkReply).replies[0] as BulkReply).asString() == 'b' &&
+                    ((result as MultiBulkReply).replies[1] as BulkReply).asString() == 'min-b' &&
+                    ((result as MultiBulkReply).replies[2] as BulkReply).asString() == '1'
+        }.result
+
+        when: 'all keys empty in the multi key form, the timeout replies nil'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        reply = bGroup.execute('bzpopmin a b 1')
+        Thread.sleep(2000)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when: 'a later key holds another type, the multi key check fails and the error is forwarded'
+        inMemoryGetSet.remove(slot, 'wtypea')
+        def cvWrongTypeKey = Mock.prepareCompressedValueList(1)[0]
+        cvWrongTypeKey.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvWrongTypeKey.compressedData = 'not-a-zset'.bytes
+        inMemoryGetSet.put(slot, 'wtypeb', 0, cvWrongTypeKey)
+        reply = bGroup.execute('bzpopmin wtypea wtypeb 0')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getException() instanceof TypeMismatchException
+        inMemoryGetSet.remove(slot, 'wtypeb')
+
+        when: 'a zadd lands between the check and the registration, the re-check completes the reply'
+        def promiseForRace = new SettablePromise<Reply>()
+        def oneForRace = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(promiseForRace, null, true, System.currentTimeMillis(), 0)
+        BlockingZSet.addOne('zrace', oneForRace)
+        def completedWhenEmpty = BGroup.completeIfZSetNotEmpty(BaseCommand.slot('zrace', 1), 'zrace'.bytes, bGroup, bGroup.dictMap, oneForRace)
+        then:
+        !completedWhenEmpty
+        !promiseForRace.isComplete()
+
+        when:
+        def cvRace = Mock.prepareCompressedValueList(1)[0]
+        cvRace.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzRace = new RedisZSet()
+        rzRace.add(1.5, 'pushed-in-window')
+        cvRace.compressedData = rzRace.encode()
+        inMemoryGetSet.put(slot, 'zrace', 0, cvRace)
+        BlockingZSet.addOne('zrace', oneForRace)
+        def completedWhenNotEmpty = BGroup.completeIfZSetNotEmpty(BaseCommand.slot('zrace', 1), 'zrace'.bytes, bGroup, bGroup.dictMap, oneForRace)
+        then:
+        completedWhenNotEmpty
+        promiseForRace.isComplete()
+        def raceResult = promiseForRace.getResult() as MultiBulkReply
+        (raceResult.replies[1] as BulkReply).asString() == 'pushed-in-window'
+        (raceResult.replies[2] as BulkReply).asString() == '1.5'
+
+        when: 'an already completed promise is left alone'
+        def completedTwice = BGroup.completeIfZSetNotEmpty(BaseCommand.slot('zrace', 1), 'zrace'.bytes, bGroup, bGroup.dictMap, oneForRace)
+        then:
+        !completedTwice
+
+        when: 'a waiter that lost the delivery race never pops the zset'
+        def cvCas = Mock.prepareCompressedValueList(1)[0]
+        cvCas.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzCas = new RedisZSet()
+        rzCas.add(1.0, 'must-survive')
+        cvCas.compressedData = rzCas.encode()
+        inMemoryGetSet.put(slot, 'zcas', 0, cvCas)
+        def lostPromise = new SettablePromise<Reply>()
+        def lostOne = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(lostPromise, null, true, System.currentTimeMillis(), 0)
+        lostOne.tryMarkDelivered()
+        def lostCompleted = BGroup.completeIfZSetNotEmpty(BaseCommand.slot('zcas', 1), 'zcas'.bytes, bGroup, bGroup.dictMap, lostOne)
+        then:
+        !lostCompleted
+        !lostPromise.isComplete()
+
+        when: 'a fresh waiter still gets the member the loser never popped'
+        def winPromise = new SettablePromise<Reply>()
+        def winOne = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(winPromise, null, true, System.currentTimeMillis(), 0)
+        def winCompleted = BGroup.completeIfZSetNotEmpty(BaseCommand.slot('zcas', 1), 'zcas'.bytes, bGroup, bGroup.dictMap, winOne)
+        then:
+        winCompleted
+        winPromise.isComplete()
+        ((winPromise.getResult() as MultiBulkReply).replies[1] as BulkReply).asString() == 'must-survive'
+
+        when: 'the key changed to another type while waiting, the waiter gets WRONGTYPE'
+        def cvWType = Mock.prepareCompressedValueList(1)[0]
+        cvWType.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvWType.compressedData = 'not-a-zset'.bytes
+        inMemoryGetSet.put(slot, 'zwtype', 0, cvWType)
+        def promiseForWType = new SettablePromise<Reply>()
+        def oneForWType = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(promiseForWType, null, true, System.currentTimeMillis(), 0)
+        BlockingZSet.addOne('zwtype', oneForWType)
+        def completedWType = BGroup.completeIfZSetNotEmpty(BaseCommand.slot('zwtype', 1), 'zwtype'.bytes, bGroup, bGroup.dictMap, oneForWType)
+        then:
+        completedWType
+        promiseForWType.getResult() == ErrorReply.WRONG_TYPE
+
+        when: 'the delivery arbiter is one-shot'
+        def casOne = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(new SettablePromise<Reply>(), null, true, System.currentTimeMillis(), 0)
+        casOne.tryMarkDelivered()
+        then:
+        !casOne.tryMarkDelivered()
+    }
+
+    def 'test bzpopmax'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when: 'immediate pop from a non-empty zset returns the highest score'
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        rz.add(1.0, 'one')
+        rz.add(2.0, 'two')
+        rz.add(3.0, 'three')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put(slot, 'myzset', 0, cv)
+        def reply = bGroup.execute('bzpopmax myzset 1')
+        def mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        mb.replies.length == 3
+        (mb.replies[0] as BulkReply).asString() == 'myzset'
+        (mb.replies[1] as BulkReply).asString() == 'three'
+        (mb.replies[2] as BulkReply).asString() == '3'
+
+        when: 'the next highest score is returned on the next call'
+        reply = bGroup.execute('bzpopmax myzset 1')
+        mb = reply as MultiBulkReply
+        then:
+        (mb.replies[1] as BulkReply).asString() == 'two'
+
+        when: 'a blocked client is woken by zadd and receives the highest of the added members'
+        inMemoryGetSet.remove(slot, 'bzpopmax-wake')
+        reply = bGroup.execute('bzpopmax bzpopmax-wake 0')
+        def zGroupForWakeMax = new ZGroup(null, null, null)
+        zGroupForWakeMax.byPassGetSet = inMemoryGetSet
+        zGroupForWakeMax.from(BaseCommand.mockAGroup())
+        zGroupForWakeMax.execute('zadd bzpopmax-wake 3.0 c 9.9 z')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.isComplete()
+        def wakeup = (reply as AsyncReply).settablePromise.getResult() as MultiBulkReply
+        (wakeup.replies[1] as BulkReply).asString() == 'z'
+        (wakeup.replies[2] as BulkReply).asString() == '9.9'
+
+        when: 'the member the waiter did not pop stays in the zset'
+        def rzLeft = ZGroup.getRedisZSet(BaseCommand.slot('bzpopmax-wake', 1), bGroup)
+        then:
+        rzLeft != null
+        rzLeft.size() == 1
+        rzLeft.contains('c')
+    }
+
+    def 'test bzmpop'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+
+        when: 'format error - too few args'
+        def reply = bGroup.execute('bzmpop')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'timeout not number'
+        reply = bGroup.execute('bzmpop abc 1 myzset MIN')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when: 'negative timeout'
+        reply = bGroup.execute('bzmpop -1 1 myzset MIN')
+        then:
+        reply instanceof ErrorReply
+
+        when: 'numkeys not integer'
+        reply = bGroup.execute('bzmpop 1 abc myzset MIN')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when: 'numkeys zero'
+        reply = bGroup.execute('bzmpop 1 0 myzset MIN')
+        then:
+        reply == ErrorReply.RANGE_OUT_OF_INDEX
+
+        when: 'numkeys greater than the provided keys'
+        reply = bGroup.execute('bzmpop 1 2 myzset MIN')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'wrong direction'
+        reply = bGroup.execute('bzmpop 1 1 myzset UP')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'count not integer'
+        reply = bGroup.execute('bzmpop 1 1 myzset MIN COUNT abc')
+        then:
+        reply == ErrorReply.INVALID_INTEGER
+
+        when: 'count zero rejected'
+        reply = bGroup.execute('bzmpop 1 1 myzset MIN COUNT 0')
+        then:
+        reply instanceof ErrorReply
+
+        when: 'syntax error - extra args'
+        reply = bGroup.execute('bzmpop 1 1 myzset MIN COUNT 1 extra')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'key too long'
+        reply = bGroup.execute('bzmpop 1 1 >key MIN')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'wrong type key returns WRONGTYPE'
+        inMemoryGetSet.remove(slot, 'notzset')
+        def cvWrong = new CompressedValue()
+        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvWrong.compressedData = 'hello'.bytes
+        inMemoryGetSet.put(slot, 'notzset', 0, cvWrong)
+        reply = bGroup.execute('bzmpop 1 1 notzset MIN')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+        inMemoryGetSet.remove(slot, 'notzset')
+
+        when: 'immediate pop from a non-empty zset, MIN with default count'
+        inMemoryGetSet.remove(slot, 'myzset')
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rz = new RedisZSet()
+        rz.add(1.0, 'one')
+        rz.add(2.0, 'two')
+        rz.add(3.0, 'three')
+        cv.compressedData = rz.encode()
+        inMemoryGetSet.put(slot, 'myzset', 0, cv)
+        reply = bGroup.execute('bzmpop 1 1 myzset MIN')
+        def mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        mb.replies.length == 2
+        (mb.replies[0] as BulkReply).asString() == 'myzset'
+        def valuesReply = mb.replies[1] as MultiBulkReply
+        valuesReply.replies.length == 2
+        (valuesReply.replies[0] as BulkReply).asString() == 'one'
+        (valuesReply.replies[1] as BulkReply).asString() == '1'
+
+        when: 'MAX direction pops the highest score'
+        reply = bGroup.execute('bzmpop 1 1 myzset MAX')
+        mb = reply as MultiBulkReply
+        then:
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'three'
+
+        when: 'COUNT 2 pops at most two members, only one is left'
+        reply = bGroup.execute('bzmpop 1 1 myzset MIN COUNT 2')
+        mb = reply as MultiBulkReply
+        then:
+        (mb.replies[0] as BulkReply).asString() == 'myzset'
+        (mb.replies[1] as MultiBulkReply).replies.length == 2
+        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'two'
+        ((mb.replies[1] as MultiBulkReply).replies[1] as BulkReply).asString() == '2'
+
+        when: 'all keys empty — block with timeout'
+        inMemoryGetSet.remove(slot, 'x')
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        reply = bGroup.execute('bzmpop 1 1 x MIN')
+        Thread.sleep(2000)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when: 'all keys empty in the multi key form, the timeout replies nil'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        reply = bGroup.execute('bzmpop 1 2 a b MIN')
+        Thread.sleep(2000)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.whenResult { result ->
+            result == NilReply.INSTANCE
+        }.result
+
+        when: 'a multi key BZMPOP with timeout 0 stays pending'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        reply = bGroup.execute('bzmpop 0 2 a b MAX')
+        then:
+        reply instanceof AsyncReply
+        !(reply as AsyncReply).settablePromise.isComplete()
+
+        when: 'a blocked BZMPOP is woken by zadd and pops up to COUNT members'
+        inMemoryGetSet.remove(slot, 'bzmpop-wake')
+        reply = bGroup.execute('bzmpop 0 1 bzmpop-wake MIN COUNT 2')
+        def zGroupForWakeMpop = new ZGroup(null, null, null)
+        zGroupForWakeMpop.byPassGetSet = inMemoryGetSet
+        zGroupForWakeMpop.from(BaseCommand.mockAGroup())
+        zGroupForWakeMpop.execute('zadd bzmpop-wake 1.0 a 2.0 b')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.isComplete()
+        def wakeup = (reply as AsyncReply).settablePromise.getResult() as MultiBulkReply
+        (wakeup.replies[0] as BulkReply).asString() == 'bzmpop-wake'
+        def wakeupValues = wakeup.replies[1] as MultiBulkReply
+        wakeupValues.replies.length == 4
+        (wakeupValues.replies[0] as BulkReply).asString() == 'a'
+        (wakeupValues.replies[1] as BulkReply).asString() == '1'
+        (wakeupValues.replies[2] as BulkReply).asString() == 'b'
+        (wakeupValues.replies[3] as BulkReply).asString() == '2'
+
+        when: 'first key missing, second key has data'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvB = Mock.prepareCompressedValueList(1)[0]
+        cvB.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzB = new RedisZSet()
+        rzB.add(1.0, 'x')
+        cvB.compressedData = rzB.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvB)
+        reply = bGroup.execute('bzmpop 1 2 a b MIN COUNT 3')
+        mb = reply as MultiBulkReply
+        then:
+        reply instanceof MultiBulkReply
+        (mb.replies[0] as BulkReply).asString() == 'b'
+        (mb.replies[1] as MultiBulkReply).replies.length == 2
+
+        when: 'first key holds an existing but empty zset, the second key is used'
+        inMemoryGetSet.remove(slot, 'b')
+        def cvFirstEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvFirstEmpty.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        cvFirstEmpty.compressedData = new RedisZSet().encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvFirstEmpty)
+        def cvSecondHas = Mock.prepareCompressedValueList(1)[0]
+        cvSecondHas.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzSecondHas = new RedisZSet()
+        rzSecondHas.add(4.0, 'from-second')
+        cvSecondHas.compressedData = rzSecondHas.encode()
+        inMemoryGetSet.put(slot, 'b', 0, cvSecondHas)
+        reply = bGroup.execute('bzmpop 1 2 a b MIN')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'b'
+        (((reply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'from-second'
+
+        when: 'second key holds another type, WRONGTYPE is returned'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.remove(slot, 'b')
+        def cvWrongType = Mock.prepareCompressedValueList(1)[0]
+        cvWrongType.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        cvWrongType.compressedData = 'notazset'.bytes
+        inMemoryGetSet.put(slot, 'b', 0, cvWrongType)
+        reply = bGroup.execute('bzmpop 1 2 a b MIN')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+        inMemoryGetSet.remove(slot, 'b')
+
+        when: 'a key payload that cannot be decoded is reported as an error reply'
+        def cvCorrupt = Mock.prepareCompressedValueList(1)[0]
+        cvCorrupt.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        cvCorrupt.compressedData = 'corrupted-zset-payload'.bytes
+        inMemoryGetSet.put(slot, 'b', 0, cvCorrupt)
+        reply = bGroup.execute('bzmpop 1 2 a b MIN')
+        then:
+        reply instanceof ErrorReply
+        inMemoryGetSet.remove(slot, 'b')
+
+        when: 'a push lands between the check and the registration, the re-check completes the BZMPOP reply'
+        def mpopPromiseForRace = new SettablePromise<Reply>()
+        def mpopOneForRace = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(mpopPromiseForRace, null, true, System.currentTimeMillis(), 2)
+        BlockingZSet.addOne('zmpoprace', mpopOneForRace)
+        def mpopNotCompletedWhenEmpty = BGroup.completeIfZSetNotEmpty(BaseCommand.slot('zmpoprace', 1), 'zmpoprace'.bytes, bGroup, bGroup.dictMap, mpopOneForRace)
+        then:
+        !mpopNotCompletedWhenEmpty
+        !mpopPromiseForRace.isComplete()
+
+        when:
+        def cvMpopRace = Mock.prepareCompressedValueList(1)[0]
+        cvMpopRace.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzMpopRace = new RedisZSet()
+        rzMpopRace.add(1.0, 'first')
+        rzMpopRace.add(2.0, 'second')
+        rzMpopRace.add(3.0, 'third')
+        cvMpopRace.compressedData = rzMpopRace.encode()
+        inMemoryGetSet.put(slot, 'zmpoprace', 0, cvMpopRace)
+        BlockingZSet.addOne('zmpoprace', mpopOneForRace)
+        def mpopCompletedWhenNotEmpty = BGroup.completeIfZSetNotEmpty(BaseCommand.slot('zmpoprace', 1), 'zmpoprace'.bytes, bGroup, bGroup.dictMap, mpopOneForRace)
+        then:
+        mpopCompletedWhenNotEmpty
+        mpopPromiseForRace.isComplete()
+        def mpopRaceResult = mpopPromiseForRace.getResult() as MultiBulkReply
+        (mpopRaceResult.replies[0] as BulkReply).asString() == 'zmpoprace'
+        def mpopRaceValues = mpopRaceResult.replies[1] as MultiBulkReply
+        mpopRaceValues.replies.length == 4
+        (mpopRaceValues.replies[0] as BulkReply).asString() == 'first'
+        (mpopRaceValues.replies[2] as BulkReply).asString() == 'second'
+    }
+
 }

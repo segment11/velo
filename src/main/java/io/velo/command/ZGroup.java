@@ -24,30 +24,6 @@ import java.util.Set;
 public class ZGroup extends BaseCommand {
     static {
         CommandRegistry.register(new CommandEntry(
-                "bzmpop", -5,
-                Set.of("write", "blocking", "movablekeys"),
-                0, 0, 0,
-                Set.of("@write", "@sortedset", "@slow", "@blocking"),
-                "sorted_set",
-                "Blocking variant of ZMPOP.",
-                "7.0.0", "O(K)+O(M*log(N))"));
-        CommandRegistry.register(new CommandEntry(
-                "bzpopmax", -3,
-                Set.of("write", "fast", "blocking"),
-                1, -2, 1,
-                Set.of("@write", "@sortedset", "@fast", "@blocking"),
-                "sorted_set",
-                "Remove and return the member with the highest score, or block until one is available.",
-                "5.0.0", "O(log(N))"));
-        CommandRegistry.register(new CommandEntry(
-                "bzpopmin", -3,
-                Set.of("write", "fast", "blocking"),
-                1, -2, 1,
-                Set.of("@write", "@sortedset", "@fast", "@blocking"),
-                "sorted_set",
-                "Remove and return the member with the lowest score, or block until one is available.",
-                "5.0.0", "O(log(N))"));
-        CommandRegistry.register(new CommandEntry(
                 "zadd", -4,
                 Set.of("write", "denyoom", "fast"),
                 1, 1, 1,
@@ -326,33 +302,6 @@ public class ZGroup extends BaseCommand {
     public ArrayList<SlotWithKeyHash> parseSlots(String cmd, byte[][] data, int slotNumber) {
         ArrayList<SlotWithKeyHash> slotWithKeyHashList = new ArrayList<>();
 
-        if ("bzmpop".equals(cmd)) {
-            if (data.length < 5) {
-                return slotWithKeyHashList;
-            }
-            int numKeys;
-            try {
-                numKeys = Integer.parseInt(new String(data[2]));
-            } catch (NumberFormatException e) {
-                return slotWithKeyHashList;
-            }
-            if (numKeys <= 0 || data.length < 3 + numKeys + 1) {
-                return slotWithKeyHashList;
-            }
-            for (int i = 0; i < numKeys; i++) {
-                slotWithKeyHashList.add(slot(data[3 + i], slotNumber));
-            }
-            return slotWithKeyHashList;
-        }
-
-        if ("bzpopmax".equals(cmd) || "bzpopmin".equals(cmd)) {
-            if (data.length < 2) {
-                return slotWithKeyHashList;
-            }
-            slotWithKeyHashList.add(slot(data[1], slotNumber));
-            return slotWithKeyHashList;
-        }
-
         if ("zadd".equals(cmd) || "zcard".equals(cmd) || "zcount".equals(cmd)
                 || "zincrby".equals(cmd)
                 || "zlexcount".equals(cmd) || "zmscore".equals(cmd)
@@ -489,10 +438,6 @@ public class ZGroup extends BaseCommand {
     public Reply handle() {
         // sorted set group
         // like set group in SGroup
-        if ("bzmpop".equals(cmd) || "bzpopmax".equals(cmd) || "bzpopmin".equals(cmd)) {
-            return ErrorReply.NOT_SUPPORT;
-        }
-
         if ("zadd".equals(cmd)) {
             return zadd();
         }
@@ -707,13 +652,24 @@ public class ZGroup extends BaseCommand {
         return ErrorReply.UNKNOWN_COMMAND(cmd);
     }
 
-    private RedisZSet getRedisZSet(SlotWithKeyHash slotWithKeyHash) {
-        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_ZSET);
+    /**
+     * Loads and decodes the {@link RedisZSet} stored for the given key.
+     *
+     * @param slotWithKeyHash the slot and key hash to look up
+     * @param baseCommand     the base command providing storage access
+     * @return the decoded RedisZSet, or null if the key does not exist
+     */
+    static RedisZSet getRedisZSet(SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand) {
+        var encodedBytes = baseCommand.get(slotWithKeyHash, false, CompressedValue.SP_TYPE_ZSET);
         if (encodedBytes == null) {
             return null;
         }
 
         return RedisZSet.decode(encodedBytes);
+    }
+
+    private RedisZSet getRedisZSet(SlotWithKeyHash slotWithKeyHash) {
+        return getRedisZSet(slotWithKeyHash, this);
     }
 
     static void saveRedisZSet(RedisZSet rz, SlotWithKeyHash slotWithKeyHash, BaseCommand baseCommand, DictMap dictMap) {
@@ -736,6 +692,9 @@ public class ZGroup extends BaseCommand {
             preferDict = Dict.SELF_ZSTD_DICT;
         }
         baseCommand.set(rz.encode(preferDict), slotWithKeyHash, CompressedValue.SP_TYPE_ZSET, expireAt);
+
+        // wake the blocking sorted set clients waiting on this key, no-op when nobody waits
+        BlockingZSet.onZSetSaved(slotWithKeyHash, baseCommand, dictMap);
     }
 
     private void saveRedisZSet(RedisZSet rz, SlotWithKeyHash slotWithKeyHash) {
