@@ -1781,6 +1781,42 @@ class ZGroupPart2Test extends Specification {
         reply = zGroup.execute('zscan a 0 unknownoption')
         then:
         reply == ErrorReply.SYNTAX
+
+        when: // zscan reads the key only once for existing, missing, and wrong-type keys
+        def zscanReads = new AtomicInteger()
+        def countingStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-zscan' || key == 'missing-zscan' || key == 'wrong-zscan') {
+                    zscanReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def countingGroup = new ZGroup(null, null, null)
+        countingGroup.byPassGetSet = countingStore
+        countingGroup.from(BaseCommand.mockAGroup())
+        countingStore.put(slot, 'single-zscan', 0, cv)
+        def existingReply = countingGroup.execute('zscan single-zscan 0 count 10')
+        int existingReads = zscanReads.get()
+        zscanReads.set(0)
+        def missingReply = countingGroup.execute('zscan missing-zscan 0')
+        int missingReads = zscanReads.get()
+        zscanReads.set(0)
+        def wrongCv = Mock.prepareCompressedValueList(1)[0]
+        wrongCv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        wrongCv.compressedData = 'notazset'.bytes
+        countingStore.put(slot, 'wrong-zscan', 0, wrongCv)
+        def wrongTypeReply = countingGroup.execute('zscan wrong-zscan 0 badopt')
+        int wrongTypeReads = zscanReads.get()
+        then:
+        existingReply instanceof MultiBulkReply
+        (((existingReply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'x'
+        existingReads == 1
+        missingReply == MultiBulkReply.SCAN_EMPTY
+        missingReads == 1
+        wrongTypeReply == ErrorReply.WRONG_TYPE
+        wrongTypeReads == 1
     }
 
     def 'test getRedisZSetOrSet'() {

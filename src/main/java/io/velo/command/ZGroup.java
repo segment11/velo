@@ -2650,8 +2650,9 @@ public class ZGroup extends BaseCommand {
         }
 
         // redis checks the key type before validating the options
-        var cvForType = getCvSpTypeOnly(slotWithKeyHashListParsed.getFirst());
-        if (cvForType != null && cvForType != CompressedValue.SP_TYPE_ZSET) {
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var cv = getCv(slotWithKeyHash);
+        if (cv != null && !cv.isZSet()) {
             return ErrorReply.WRONG_TYPE;
         }
 
@@ -2685,9 +2686,12 @@ public class ZGroup extends BaseCommand {
             }
         }
 
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rz = getRedisZSet(slotWithKeyHash);
-        if (rz == null || rz.isEmpty()) {
+        if (cv == null) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+
+        var rz = RedisZSet.decode(getValueBytesByCv(cv, slotWithKeyHash));
+        if (rz.isEmpty()) {
             return MultiBulkReply.SCAN_EMPTY;
         }
 
