@@ -1,12 +1,15 @@
 package io.velo.command
 
 import io.activej.eventloop.Eventloop
+import io.activej.bytebuf.ByteBuf
+import io.activej.promise.Promise
+import io.velo.MultiWorkerServer
+import io.velo.decode.Request
 import com.github.luben.zstd.Zstd
 import com.github.luben.zstd.ZstdOutputStream
 import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.CompressedValue
-import io.velo.TypeMismatchException
 import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
@@ -1207,16 +1210,35 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('blpop wtypea wtypeb 0')
         then:
         reply instanceof AsyncReply
-        def wrongTypeException = (reply as AsyncReply).settablePromise.getException()
-        wrongTypeException instanceof TypeMismatchException
+        (reply as AsyncReply).settablePromise.getException() == null
+        (reply as AsyncReply).settablePromise.getResult() == ErrorReply.WRONG_TYPE
+        new String(encodeAsyncReply(reply as AsyncReply).getResult().asArray()) ==
+                '-WRONGTYPE Operation against a key holding the wrong kind of value\r\n'
 
         when: 'same for brpop'
         inMemoryGetSet.put(slot, 'wtypeb', 0, cvWrongTypeKey)
         reply = bGroup.execute('brpop wtypea wtypeb 0')
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.getException() instanceof TypeMismatchException
+        (reply as AsyncReply).settablePromise.getException() == null
+        (reply as AsyncReply).settablePromise.getResult() == ErrorReply.WRONG_TYPE
+        new String(encodeAsyncReply(reply as AsyncReply).getResult().asArray()) ==
+                '-WRONGTYPE Operation against a key holding the wrong kind of value\r\n'
         inMemoryGetSet.remove(slot, 'wtypeb')
+
+        when: 'corrupt list payloads still use generic errors, not WRONGTYPE'
+        def cvCorruptPop = Mock.prepareCompressedValueList(1)[0]
+        cvCorruptPop.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        cvCorruptPop.compressedData = 'corrupted-list-payload'.bytes
+        inMemoryGetSet.put(slot, 'wtypeb', 0, cvCorruptPop)
+        for (String popCommand : ['blpop', 'brpop']) {
+            def corruptReply = bGroup.execute(popCommand + ' wtypea wtypeb 0') as AsyncReply
+            assert corruptReply.settablePromise.getException() != null
+            assert new String(encodeAsyncReply(corruptReply).getResult().asArray()).startsWith('-ERR ')
+        }
+        inMemoryGetSet.remove(slot, 'wtypeb')
+        then:
+        noExceptionThrown()
 
         when: 'the last element is taken when popping from the right'
         def promiseForRight = new SettablePromise<Reply>()
@@ -1440,6 +1462,13 @@ class BGroupTest extends Specification {
             }
         }
         localPersist.cleanUp()
+    }
+
+    private static Promise<ByteBuf> encodeAsyncReply(AsyncReply reply) {
+        def transfer = MultiWorkerServer.getDeclaredMethod('transferAsyncReply', Request, AsyncReply, Boolean.TYPE)
+        transfer.accessible = true
+        def request = new Request(['blpop'.bytes] as byte[][], false, false)
+        return transfer.invoke(new MultiWorkerServer(), request, reply, false) as Promise<ByteBuf>
     }
 
     private static List startWorkerThread(String name) {
@@ -1835,6 +1864,27 @@ class BGroupTest extends Specification {
         ((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies.length == 1
         ((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] instanceof BulkReply
         (((mpopResultHolder[0] as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'mpop-value'
+
+        when: 'a pending foreign-key wrong-type error retains the Redis error prefix'
+        def protocolStore = new InMemoryGetSet()
+        def protocolCv = Mock.prepareCompressedValueList(1)[0]
+        protocolCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        protocolCv.compressedData = 'wrong-list-type'.bytes
+        protocolStore.put((short) 1, mpopKey2, 0, protocolCv)
+        mpopGroup.byPassGetSet = protocolStore
+        mpopGroup.crossRequestWorker = true
+        def protocolReplies = new LinkedBlockingQueue<String>()
+        mpopLoop1.execute {
+            def protocolReply = mpopGroup.execute("blmpop 1 2 ${mpopKey1} ${mpopKey2} left") as AsyncReply
+            // Completion must bounce to this reactor after execute returns.
+            assert !protocolReply.settablePromise.isComplete()
+            encodeAsyncReply(protocolReply).whenResult { ByteBuf buf ->
+                protocolReplies.offer(new String(buf.asArray()))
+            }
+        }
+        then:
+        protocolReplies.poll(5, TimeUnit.SECONDS) ==
+                '-WRONGTYPE Operation against a key holding the wrong kind of value\r\n'
 
         cleanup:
         BlockingList.clearBlockingListPromisesForAllKeys()

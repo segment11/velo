@@ -1084,12 +1084,16 @@ public class BGroup extends BaseCommand {
                         System.currentTimeMillis(), null, 0, distinctSlots(slotWithKeyHashListParsed));
 
                 // each key is checked on the worker owning it, never blocking the current worker
-                // the continuation below runs on the worker of the last checked key, which is also the
-                // reactor used to schedule the timeout, the reply itself is sent back through the promise
+                // In production, completions bounce back to this first key's worker reactor,
+                // which also schedules the timeout and settles the reply.
                 popOtherKeyAsync(1, keys, isLeft).whenComplete((r, e) -> {
                     if (e != null) {
                         log.error("{} error={}", isLeft ? "blpop" : "brpop", e.getMessage());
-                        finalPromise.setException(Utils.wrapException(isLeft ? "blpop" : "brpop", e));
+                        if (e instanceof TypeMismatchException) {
+                            finalPromise.set(ErrorReply.WRONG_TYPE);
+                        } else {
+                            finalPromise.setException(Utils.wrapException(isLeft ? "blpop" : "brpop", e));
+                        }
                         return;
                     }
 
@@ -1392,7 +1396,11 @@ public class BGroup extends BaseCommand {
         // the remaining keys are checked on the worker owning them, without blocking this one
         popOtherKeyMpopAsync(1, keys, isLeft, popCount).whenComplete((r, e) -> {
             if (e != null) {
-                finalPromise.setException(Utils.wrapException("blmpop", e));
+                if (e instanceof TypeMismatchException) {
+                    finalPromise.set(ErrorReply.WRONG_TYPE);
+                } else {
+                    finalPromise.setException(Utils.wrapException("blmpop", e));
+                }
                 return;
             }
 
@@ -1613,8 +1621,8 @@ public class BGroup extends BaseCommand {
                     System.currentTimeMillis(), 0, distinctSlots(slotWithKeyHashListParsed));
 
             // each key is checked on the worker owning it, never blocking the current worker
-            // the continuation below runs on the worker of the last checked key, which is also the
-            // reactor used to schedule the timeout, the reply itself is sent back through the promise
+            // In production, completions bounce back to this first key's worker reactor,
+            // which also schedules the timeout and settles the reply.
             popOtherKeyZAsync(1, keys, isMin).whenComplete((r, e) -> {
                 if (e != null) {
                     log.error("{} error={}", isMin ? "bzpopmin" : "bzpopmax", e.getMessage());
