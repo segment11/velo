@@ -410,6 +410,9 @@ public class BlockingList {
         }
 
         int removedCount = 0;
+        // the global cleanup removes the waiter from the other keys, it must not run while the
+        // serving list is iterated
+        var releasedWaiters = new ArrayList<PromiseWithLeftOrRightAndCreatedTime>();
         var it = list.iterator();
         int leftI = 0;
         int rightI = 0;
@@ -479,9 +482,9 @@ public class BlockingList {
                 it.remove();
                 removedCount++;
                 // the serving key registration is released here, a multi key block registers the
-                // waiter on every key, release all of them
+                // waiter on every key, release all of them after the iteration
                 inner.releaseRegistration(promise);
-                removeEverywhere(promise);
+                releasedWaiters.add(promise);
             } else {
                 var index = fromLeftToRight.length - 1 - rightI;
                 if (index < 0) {
@@ -533,10 +536,14 @@ public class BlockingList {
                 it.remove();
                 removedCount++;
                 // the serving key registration is released here, a multi key block registers the
-                // waiter on every key, release all of them
+                // waiter on every key, release all of them after the iteration
                 inner.releaseRegistration(promise);
-                removeEverywhere(promise);
+                releasedWaiters.add(promise);
             }
+        }
+
+        for (var released : releasedWaiters) {
+            removeEverywhere(released);
         }
 
         if (removedCount > 0) {

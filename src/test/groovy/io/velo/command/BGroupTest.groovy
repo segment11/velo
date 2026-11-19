@@ -1060,6 +1060,15 @@ class BGroupTest extends Specification {
         reply instanceof AsyncReply
         !(reply as AsyncReply).settablePromise.isComplete()
 
+        when: 'the same key twice, the client is registered once per distinct key'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        inMemoryGetSet.remove(slot, 'dup')
+        reply = bGroup.execute('blpop dup dup 0')
+        then:
+        reply instanceof AsyncReply
+        BlockingList.blockingClientCount() == 1
+        BlockingList.blockingKeyCount() == 1
+
         when: 'second key holds an existing but empty list, still blocks'
         def cvEmptyList = Mock.prepareCompressedValueList(1)[0]
         cvEmptyList.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST

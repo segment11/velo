@@ -365,6 +365,42 @@ class BlockingListTest extends Specification {
         BlockingList.clearBlockingListPromisesForAllKeys()
     }
 
+    def 'test the same waiter registered twice on one key'() {
+        given:
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        Thread.sleep(100)
+        Eventloop[] eventloopArray = [eventloopCurrent]
+        BlockingList.initBySlotWorkerEventloopArray(eventloopArray)
+
+        when: 'the same waiter is registered twice on one key, like BLPOP k k'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def settablePromise = new SettablePromise<Reply>()
+        def dupSlot = BaseCommand.slot('dup-key', (short) 1)
+        def one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(settablePromise, null, true,
+                System.currentTimeMillis(), null, 0, [dupSlot])
+        BlockingList.addOne('dup-key', one)
+        BlockingList.addOne('dup-key', one)
+        then:
+        // one client blocked on one key
+        BlockingList.blockingClientCount() == 1
+        BlockingList.blockingKeyCount() == 1
+
+        when: 'a value is pushed, the delivery must not corrupt the counts'
+        def elementValueBytesArray = new byte[1][]
+        elementValueBytesArray[0] = 'a'.bytes
+        BlockingList.setReplyLPushIfBlockingListExist('dup-key', elementValueBytesArray)
+        then:
+        settablePromise.isComplete()
+        BlockingList.blockingClientCount() == 0
+        BlockingList.blockingKeyCount() == 0
+
+        cleanup:
+        BlockingList.clearBlockingListPromisesForAllKeys()
+    }
+
     def 'test blmpop wake-up returns nested array'() {
         given:
         def eventloopCurrent = Eventloop.builder()

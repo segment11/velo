@@ -20,6 +20,7 @@ import io.velo.type.RedisBitSet;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -1080,7 +1081,7 @@ public class BGroup extends BaseCommand {
                 var asyncReply = new AsyncReply(finalPromise);
 
                 var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft,
-                        System.currentTimeMillis(), null, 0, slotWithKeyHashListParsed);
+                        System.currentTimeMillis(), null, 0, distinctSlots(slotWithKeyHashListParsed));
 
                 // each key is checked on the worker owning it, never blocking the current worker
                 // the continuation below runs on the worker of the last checked key, which is also the
@@ -1124,7 +1125,7 @@ public class BGroup extends BaseCommand {
 
             var firstKey = keys.getFirst();
             var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft,
-                    System.currentTimeMillis(), null, 0, slotWithKeyHashListParsed);
+                    System.currentTimeMillis(), null, 0, distinctSlots(slotWithKeyHashListParsed));
             BlockingList.addOne(firstKey, one);
 
             if (!isBlockIndefinitely) {
@@ -1184,14 +1185,36 @@ public class BGroup extends BaseCommand {
     }
 
     /**
+     * The distinct keys of a blocking command, redis registers a blocked client once per distinct key.
+     *
+     * @param slots the parsed slots of the command
+     * @return the slots without the duplicate keys, the order is kept
+     */
+    private static ArrayList<SlotWithKeyHash> distinctSlots(ArrayList<SlotWithKeyHash> slots) {
+        var distinct = new ArrayList<SlotWithKeyHash>();
+        var seen = new HashSet<String>();
+        for (var slotWithKeyHash : slots) {
+            if (seen.add(slotWithKeyHash.rawKey())) {
+                distinct.add(slotWithKeyHash);
+            }
+        }
+        return distinct;
+    }
+
+    /**
      * Register one blocking promise on the worker owning each key.
      *
      * @param keys the blocking keys
      * @param one  the promise wrapper
      */
     private void addBlockingWaiter(ArrayList<String> keys, BlockingList.PromiseWithLeftOrRightAndCreatedTime one) {
+        // redis registers a blocked client once per distinct key, BLPOP k k must not register it twice
+        var seen = new HashSet<String>();
         for (int i = 0; i < keys.size(); i++) {
             var key = keys.get(i);
+            if (!seen.add(key)) {
+                continue;
+            }
             var slot = slotWithKeyHashListParsed.get(i).slot();
             localPersist.oneSlot(slot).asyncExecute(() -> BlockingList.addOne(key, one));
         }
@@ -1377,7 +1400,7 @@ public class BGroup extends BaseCommand {
             }
 
             var one = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(finalPromise, socket, isLeft,
-                    System.currentTimeMillis(), null, popCount, slotWithKeyHashListParsed);
+                    System.currentTimeMillis(), null, popCount, distinctSlots(slotWithKeyHashListParsed));
             var waiter = one;
             // register the waiter on every key owning worker, so a push to any of them can wake it up
             addBlockingWaiter(keys, waiter);
@@ -1583,7 +1606,7 @@ public class BGroup extends BaseCommand {
             var asyncReply = new AsyncReply(finalPromise);
 
             var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin,
-                    System.currentTimeMillis(), 0, slotWithKeyHashListParsed);
+                    System.currentTimeMillis(), 0, distinctSlots(slotWithKeyHashListParsed));
 
             // each key is checked on the worker owning it, never blocking the current worker
             // the continuation below runs on the worker of the last checked key, which is also the
@@ -1760,7 +1783,7 @@ public class BGroup extends BaseCommand {
             }
 
             var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin,
-                    System.currentTimeMillis(), popCount, slotWithKeyHashListParsed);
+                    System.currentTimeMillis(), popCount, distinctSlots(slotWithKeyHashListParsed));
             var waiter = one;
             // register the waiter on every key owning worker, so a member added to any of them can wake it up
             addZSetBlockingWaiter(keys, waiter);
@@ -1907,8 +1930,13 @@ public class BGroup extends BaseCommand {
      * @param one  the promise wrapper
      */
     private void addZSetBlockingWaiter(ArrayList<String> keys, BlockingZSet.PromiseWithMinOrMaxAndCreatedTime one) {
+        // redis registers a blocked client once per distinct key
+        var seen = new HashSet<String>();
         for (int i = 0; i < keys.size(); i++) {
             var key = keys.get(i);
+            if (!seen.add(key)) {
+                continue;
+            }
             var slot = slotWithKeyHashListParsed.get(i).slot();
             localPersist.oneSlot(slot).asyncExecute(() -> BlockingZSet.addOne(key, one));
         }
