@@ -289,11 +289,15 @@ class BlockingZSetTest extends Specification {
         result3.replies.length == 2
         (result3.replies[0] as BulkReply).asString() == 'd'
         def inner3 = result3.replies[1] as MultiBulkReply
-        inner3.replies.length == 4
-        (inner3.replies[0] as BulkReply).asString() == 'first'
-        (inner3.replies[1] as BulkReply).asString() == '1'
-        (inner3.replies[2] as BulkReply).asString() == 'second'
-        (inner3.replies[3] as BulkReply).asString() == '2'
+        inner3.replies.length == 2
+        def firstPair = inner3.replies[0] as MultiBulkReply
+        firstPair.replies.length == 2
+        (firstPair.replies[0] as BulkReply).asString() == 'first'
+        (firstPair.replies[1] as BulkReply).asString() == '1'
+        def secondPair = inner3.replies[1] as MultiBulkReply
+        secondPair.replies.length == 2
+        (secondPair.replies[0] as BulkReply).asString() == 'second'
+        (secondPair.replies[1] as BulkReply).asString() == '2'
         def storedD = ZGroup.getRedisZSet(slotD, zGroup)
         storedD.size() == 1
         storedD.contains('third')

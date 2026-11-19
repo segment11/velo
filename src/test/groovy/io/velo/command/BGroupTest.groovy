@@ -2127,6 +2127,16 @@ class BGroupTest extends Specification {
         bGroup.byPassGetSet = inMemoryGetSet
         bGroup.from(BaseCommand.mockAGroup())
 
+        and: 'the redis shape nests one array per member/score pair'
+        def memberPairs = { reply ->
+            def arr = reply as MultiBulkReply
+            arr.replies.collect { pair ->
+                def onePair = pair as MultiBulkReply
+                onePair.replies.length == 2
+                [(onePair.replies[0] as BulkReply).asString(), (onePair.replies[1] as BulkReply).asString()]
+            }
+        }
+
         and:
         def localPersist = LocalPersist.instance
         LocalPersistTest.prepareLocalPersist()
@@ -2214,25 +2224,20 @@ class BGroupTest extends Specification {
         reply instanceof MultiBulkReply
         mb.replies.length == 2
         (mb.replies[0] as BulkReply).asString() == 'myzset'
-        def valuesReply = mb.replies[1] as MultiBulkReply
-        valuesReply.replies.length == 2
-        (valuesReply.replies[0] as BulkReply).asString() == 'one'
-        (valuesReply.replies[1] as BulkReply).asString() == '1'
+        memberPairs(mb.replies[1]) == [['one', '1']]
 
         when: 'MAX direction pops the highest score'
         reply = bGroup.execute('bzmpop 1 1 myzset MAX')
         mb = reply as MultiBulkReply
         then:
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'three'
+        memberPairs(mb.replies[1]) == [['three', '3']]
 
         when: 'COUNT 2 pops at most two members, only one is left'
         reply = bGroup.execute('bzmpop 1 1 myzset MIN COUNT 2')
         mb = reply as MultiBulkReply
         then:
         (mb.replies[0] as BulkReply).asString() == 'myzset'
-        (mb.replies[1] as MultiBulkReply).replies.length == 2
-        ((mb.replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'two'
-        ((mb.replies[1] as MultiBulkReply).replies[1] as BulkReply).asString() == '2'
+        memberPairs(mb.replies[1]) == [['two', '2']]
 
         when: 'all keys empty — block with timeout'
         inMemoryGetSet.remove(slot, 'x')
@@ -2281,12 +2286,7 @@ class BGroupTest extends Specification {
         (reply as AsyncReply).settablePromise.isComplete()
         def wakeup = (reply as AsyncReply).settablePromise.getResult() as MultiBulkReply
         (wakeup.replies[0] as BulkReply).asString() == 'bzmpop-wake'
-        def wakeupValues = wakeup.replies[1] as MultiBulkReply
-        wakeupValues.replies.length == 4
-        (wakeupValues.replies[0] as BulkReply).asString() == 'a'
-        (wakeupValues.replies[1] as BulkReply).asString() == '1'
-        (wakeupValues.replies[2] as BulkReply).asString() == 'b'
-        (wakeupValues.replies[3] as BulkReply).asString() == '2'
+        memberPairs(wakeup.replies[1]) == [['a', '1'], ['b', '2']]
 
         when: 'first key missing, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -2302,7 +2302,7 @@ class BGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         (mb.replies[0] as BulkReply).asString() == 'b'
-        (mb.replies[1] as MultiBulkReply).replies.length == 2
+        memberPairs(mb.replies[1]) == [['x', '1']]
 
         when: 'first key holds an existing but empty zset, the second key is used'
         inMemoryGetSet.remove(slot, 'b')
@@ -2320,7 +2320,7 @@ class BGroupTest extends Specification {
         then:
         reply instanceof MultiBulkReply
         ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'b'
-        (((reply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'from-second'
+        memberPairs((reply as MultiBulkReply).replies[1]) == [['from-second', '4']]
 
         when: 'second key holds another type, WRONGTYPE is returned'
         inMemoryGetSet.remove(slot, 'a')
@@ -2369,10 +2369,7 @@ class BGroupTest extends Specification {
         mpopPromiseForRace.isComplete()
         def mpopRaceResult = mpopPromiseForRace.getResult() as MultiBulkReply
         (mpopRaceResult.replies[0] as BulkReply).asString() == 'zmpoprace'
-        def mpopRaceValues = mpopRaceResult.replies[1] as MultiBulkReply
-        mpopRaceValues.replies.length == 4
-        (mpopRaceValues.replies[0] as BulkReply).asString() == 'first'
-        (mpopRaceValues.replies[2] as BulkReply).asString() == 'second'
+        memberPairs(mpopRaceResult.replies[1]) == [['first', '1'], ['second', '2']]
     }
 
 }

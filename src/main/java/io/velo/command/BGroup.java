@@ -1872,11 +1872,11 @@ public class BGroup extends BaseCommand {
                                             BaseCommand.SlotWithKeyHash slotWithKeyHash, byte[] keyBytes,
                                             RedisZSet rz, boolean isMin, int count) {
         int min = Math.min(count, rz.size());
-        var valueReplies = new Reply[min * 2];
+        var valueReplies = new Reply[min];
         for (int j = 0; j < min; j++) {
             var sv = isMin ? rz.pollFirst() : rz.pollLast();
-            valueReplies[j * 2] = new BulkReply(sv.member());
-            valueReplies[j * 2 + 1] = new BulkReply(sv.score());
+            // redis replies with one array per member/score pair, even for a single member
+            valueReplies[j] = new MultiBulkReply(new Reply[]{new BulkReply(sv.member()), new BulkReply(sv.score())});
         }
         ZGroup.saveRedisZSet(rz, slotWithKeyHash, baseCommand, dictMap);
 
