@@ -1248,6 +1248,32 @@ public class ZGroup extends BaseCommand {
         this.data = data2;
     }
 
+    /**
+     * Stores the destination zset on the worker owning the destination key and settles the reply
+     * after the write. The destination key is not part of the parsed slot list, so it may live on
+     * another worker: writing it from the current worker is rejected by the slot ownership guard,
+     * and the blocked clients waiting on that key would never be woken.
+     *
+     * @param rz                 the zset to store
+     * @param dstSlotWithKeyHash the destination slot and key hash
+     * @param count              the number of members to report to the client
+     * @return the reply, completed when the destination write succeeded
+     */
+    private SettablePromise<Reply> saveRedisZSetToDst(RedisZSet rz, SlotWithKeyHash dstSlotWithKeyHash, int count) {
+        var finalPromise = new SettablePromise<Reply>();
+        localPersist.oneSlot(dstSlotWithKeyHash.slot())
+                .asyncRun(() -> saveRedisZSet(rz, dstSlotWithKeyHash))
+                .whenComplete((v, t) -> {
+                    if (t != null) {
+                        log.error("zstore to dst error={}", t.getMessage());
+                        finalPromise.setException(Utils.wrapException("zstore", t));
+                    } else {
+                        finalPromise.set(new IntegerReply(count));
+                    }
+                });
+        return finalPromise;
+    }
+
     @VisibleForTesting
     Reply zdiffstore(boolean isInter, boolean isUnion) {
         // cmd + dst key + numkeys + one key
@@ -1406,8 +1432,16 @@ public class ZGroup extends BaseCommand {
             }
 
             if (doStore) {
-                saveRedisZSet(rz, dstSlotWithKeyHash);
-                return new IntegerReply(rz.size());
+                var dstSlot = dstSlotWithKeyHash.slot();
+                // the in-memory bypass does not touch the slots, the write is then always local
+                var dstIsLocal = isByPassGetSet() || !localPersist.isOneSlotInitialized(dstSlot)
+                        || localPersist.oneSlot(dstSlot).isOwnedByCurrentThread();
+                if (dstIsLocal) {
+                    saveRedisZSet(rz, dstSlotWithKeyHash);
+                    return new IntegerReply(rz.size());
+                }
+                // the destination is on another worker, write it there and settle the reply after
+                return new AsyncReply(saveRedisZSetToDst(rz, dstSlotWithKeyHash, rz.size()));
             } else {
                 var replies = new Reply[rz.size() * (withScores ? 2 : 1)];
                 int i = 0;
@@ -1469,9 +1503,14 @@ public class ZGroup extends BaseCommand {
                 // be dispatched: on the reactor path this callback runs on the first source's
                 // worker (Promise.ofFuture bounce), on the non-reactor fallback path on the last
                 // source's worker — neither is guaranteed to own the dst slot — see bug 84.1.
-                var dstOneSlot = localPersist.oneSlot(dstSlotWithKeyHash.slot());
-                dstOneSlot.asyncExecute(() -> saveRedisZSet(finalRz, dstSlotWithKeyHash));
-                finalPromise.set(new IntegerReply(finalRz.size()));
+                saveRedisZSetToDst(finalRz, dstSlotWithKeyHash, finalRz.size())
+                        .whenComplete((dstReply, dstError) -> {
+                            if (dstError != null) {
+                                finalPromise.setException(dstError);
+                            } else {
+                                finalPromise.set(dstReply);
+                            }
+                        });
             } else {
                 var replies = new Reply[finalRz.size() * (finalWithScores ? 2 : 1)];
                 int i = 0;

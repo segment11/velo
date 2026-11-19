@@ -658,6 +658,16 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     private RequestHandler requestHandler;
 
     /**
+     * Whether the current thread owns this slot, ie. whether it may read and write it directly.
+     * A write from another thread is rejected by the ownership guard, see {@link #asyncRun}.
+     *
+     * @return true when the current thread is the slot owner thread
+     */
+    public boolean isOwnedByCurrentThread() {
+        return Thread.currentThread().threadId() == threadIdProtectedForSafe;
+    }
+
+    /**
      * Runs the given runnable on this slot's event loop thread, inline if already on it.
      *
      * @param runnableEx the work to run

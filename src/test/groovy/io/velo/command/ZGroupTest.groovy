@@ -4,8 +4,11 @@ import io.activej.eventloop.Eventloop
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.OneSlot
 import io.velo.reply.*
 import io.velo.type.RedisZSet
 import spock.lang.Specification
@@ -1948,5 +1951,121 @@ zunionstore
         then:
         reply instanceof MultiBulkReply
         (reply as MultiBulkReply).replies.length == 2
+    }
+
+    def 'test zunionstore'() {
+        given: 'real persistence with two slots, the destination slot owned by another worker thread'
+        LocalPersistTest.prepareLocalPersist((byte) 1, (short) 2)
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+
+        def otherEventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        otherEventloop.keepAlive(true)
+        Thread.start {
+            otherEventloop.run()
+        }
+        Thread.sleep(500)
+        localPersist.oneSlot((short) 1).setSlotWorkerEventloop(otherEventloop)
+        localPersist.fixSlotThreadId((short) 1, otherEventloop.getEventloopThread().threadId())
+
+        and: 'the current thread reactor, it runs the completion callbacks of the dispatched write'
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+
+        and: 'a zgroup bound to the two slot workers'
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.from(BaseCommand.mockAGroup((byte) 0, (byte) 2, (short) 2))
+
+        and: 'a destination key on the other slot and the source keys on this slot'
+        def keyOnSlot = { int wantSlot ->
+            for (int i = 0; i < 10000; i++) {
+                def candidate = "store-${wantSlot}-${i}"
+                if (BaseCommand.slot(candidate, (short) 2).slot() == wantSlot) {
+                    return candidate
+                }
+            }
+            throw new IllegalStateException('no key found for slot ' + wantSlot)
+        }
+        def dstKey = keyOnSlot(1)
+        def srcKey = keyOnSlot(0)
+        def srcKey2 = keyOnSlot(0)
+
+        when: 'the sources hold members'
+        def zaddReply = zGroup.execute("zadd ${srcKey} 1 m1 2 m2")
+        zGroup.execute("zadd ${srcKey2} 3 m3")
+        then:
+        zaddReply instanceof IntegerReply
+
+        when: 'the destination lives on the other worker, the store must still succeed'
+        def reply = zGroup.execute("zunionstore ${dstKey} 2 ${srcKey} ${srcKey2}")
+        Thread.sleep(500)
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        def storeReply = (reply as AsyncReply).settablePromise.getResult()
+        storeReply instanceof IntegerReply
+        (storeReply as IntegerReply).integer == 3
+
+        when: 'the destination holds the union on its own worker'
+        def stored = readKeyOnWorker(otherEventloop, dstKey)
+        then:
+        stored != null
+
+        when: 'a destination on this worker keeps the synchronous reply'
+        def sameSlotDst = keyOnSlot(0)
+        def sameSlotReply = zGroup.execute("zunionstore ${sameSlotDst} 2 ${srcKey} ${srcKey2}")
+        then:
+        sameSlotReply instanceof IntegerReply
+        (sameSlotReply as IntegerReply).integer == 3
+
+        when: 'the destination write fails, the caller gets an error instead of hanging'
+        localPersist.oneSlot((short) 1).setReadonly(true)
+        def failReply = zGroup.execute("zunionstore ${dstKey} 2 ${srcKey} ${srcKey2}")
+        Thread.sleep(500)
+        eventloopCurrent.run()
+        then:
+        failReply instanceof AsyncReply
+        (failReply as AsyncReply).settablePromise.getException() != null
+
+        when: 'the cross worker store reports the failed destination write too'
+        zGroup.crossRequestWorker = true
+        def crossFailReply = zGroup.execute("zunionstore ${dstKey} 2 ${srcKey} ${srcKey2}")
+        Thread.sleep(500)
+        eventloopCurrent.run()
+        then:
+        crossFailReply instanceof AsyncReply
+        (crossFailReply as AsyncReply).settablePromise.getException() != null
+
+        cleanup:
+        eventloopCurrent?.breakEventloop()
+        localPersist.cleanUp()
+        Consts.persistDir.deleteDir()
+        otherEventloop?.breakEventloop()
+    }
+
+    /**
+     * Reads a key on the given worker thread, the slot data may only be read by its owner.
+     *
+     * @param eventloop the worker event loop owning the slot
+     * @param key       the key to read
+     * @return true when the key exists on that worker
+     */
+    private static boolean readKeyOnWorker(Eventloop eventloop, String key) {
+        var promise = new io.activej.promise.SettablePromise<Boolean>()
+        eventloop.execute({
+            try {
+                var slotWithKeyHash = BaseCommand.slot(key, (short) 2)
+                var oneSlot = LocalPersist.instance.oneSlot(slotWithKeyHash.slot())
+                promise.set(oneSlot.get(slotWithKeyHash.rawKey(), slotWithKeyHash.bucketIndex(),
+                        slotWithKeyHash.keyHash()) != null)
+            } catch (Throwable t) {
+                promise.setException(t)
+            }
+        })
+        return promise.getResult()
     }
 }

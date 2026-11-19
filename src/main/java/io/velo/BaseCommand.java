@@ -705,6 +705,16 @@ public abstract class BaseCommand {
     }
 
     /**
+     * Whether the storage access is bypassed by an in-memory mock. The slots are not touched then,
+     * so the slot ownership rules do not apply.
+     *
+     * @return true when the command reads and writes the in-memory bypass instead of the slots
+     */
+    protected boolean isByPassGetSet() {
+        return byPassGetSet != null;
+    }
+
+    /**
      * Gets expiration time for a key in milliseconds since epoch.
      *
      * @param slotWithKeyHash the precomputed slot and hash information
