@@ -2,16 +2,23 @@
 
 This document compares Redis 7.2.4 commands with Velo's current implementation and identifies missing functionality.
 
-**IMPORTANT:** This document is based on comprehensive verification by scanning Velo's actual source code implementations using grep patterns to find actual command handlers, not just examining file names or documentation.
+**IMPORTANT:** Every command listed below was verified against the implementation, not only against a
+`if ("commandName".equals(cmd))` grep. A command is **implemented** when it is registered in the
+`CommandRegistry` (`src/main/java/io/velo/command/*Group.java` and `dyn/src/io/velo/command/*.groovy`)
+or when it is answered by the connection fast path (`RequestHandler`, `MultiWorkerServer`: `PING`,
+`QUIT`, `AUTH`, `HELLO`). A command that answers `NOT_SUPPORT` (for example `SELECT`) is still listed
+as missing.
 
 ## Summary
 
 - **Total Redis 7.2.4 commands:** 341
-- **Velo implemented commands:** 300+
-- **Missing commands:** ~30-40 (estimation)
-- **Coverage:** ~88%+
+- **Velo implemented commands:** 211 registered in the `CommandRegistry` plus the connection fast paths
+- **Missing commands:** the entries of the sections below
+- **Coverage:** high for the string/hash/list/set/sorted set families, missing for streams, transactions
+  and scripting
 
-**Analysis Method:** Commands were verified by checking for `if ("commandName".equals(cmd))` patterns in source files.
+**Analysis Method:** the `CommandRegistry` entries of every command group, the dynamic (groovy) commands
+and the connection fast paths were collected and compared with the Redis 7.2.4 command list.
 
 ---
 
@@ -23,33 +30,28 @@ This document compares Redis 7.2.4 commands with Velo's current implementation a
 
 ---
 
-### Cluster (2 commands)
+### Cluster (0 commands)
 
-**Note:** Velo implements cluster commands through `ClusterxCommand.groovy` with 26/27 subcommands:
-
-- **CLUSTER** - A container for Redis Cluster commands
-- **SETNODEID** - Sets node ID for a node
+**Note:** Velo implements the cluster commands through `ClusterxCommand.groovy` with 26/27 subcommands:
 
 **Implemented Cluster Subcommands:** addslots, addslotsrange, countkeysinslot, delslots, delslotsrange, failover, flushslots, getkeysinslot, info, keyslot, migrate, meet, myid, myshardid, nodes, replicas, replicate, reset, saveconfig, setnodes, setslot, shards, slots, readonly, readwrite
 
 ---
 
-### Connection (21 commands)
+### Connection (16 commands)
 
-- **AUTH** - Authenticates a connection
+**Note:** `AUTH`, `CLIENT` (with the `id`, `list`, `kill`, `getname`, `setname` subcommands), `HELLO`,
+`PING` and `QUIT` are implemented (`CGroup.java`, `HGroup.java`, `RequestHandler.java`,
+`MultiWorkerServer.java`). `SELECT` answers `NOT_SUPPORT` (`SGroup.java`), it is listed as missing.
+
 - **CACHING** - Instructs server whether to track keys in next request
-- **CLIENT** - A container for client connection commands
-- **GETNAME** - Returns name of a connection
 - **GETREDIR** - Returns client ID to which this connection's tracking notifications are redirected
-- **HELLO** - Handshakes with a Redis server
 - **ID** - Returns unique client ID of this connection
 - **KILL** - Terminates open connections
 - **LIST** - Lists open connections
 - **NO-EVICT** - Sets client eviction mode of this connection
 - **NO-TOUCH** - Controls whether commands sent by this client affect LRU/LFU of accessed keys
 - **PAUSE** - Suspends commands processing
-- **PING** - Returns server's liveliness response
-- **QUIT** - Closes a connection
 - **REPLY** - Instructs server whether to reply to commands
 - **SELECT** - Changes selected database
 - **SETINFO** - Sets information specific to this client or connection
@@ -76,10 +78,9 @@ This document compares Redis 7.2.4 commands with Velo's current implementation a
 
 ---
 
-### Geo (2 commands)
+### Geo (0 commands)
 
-- **GEOSEARCH** - Queries a geospatial index for members inside an area of a box or a circle
-- **GEOSEARCHSTORE** - Queries a geospatial index for members inside an area of a box or a circle, optionally stores result
+**Note:** `GEOSEARCH` and `GEOSEARCHSTORE` are implemented in `GGroup.java`.
 
 ---
 
@@ -90,11 +91,9 @@ This document compares Redis 7.2.4 commands with Velo's current implementation a
 
 ---
 
-### Key Management (4 commands)
+### Key Management (2 commands)
 
-- **KEYS** - Returns all key names that match a pattern
 - **TOUCH** - Returns number of existing keys out of those specified after updating time they were last accessed
-- **WAIT** - Blocks until asynchronous replication of all preceding write commands sent by connection is completed
 - **WAITAOF** - Blocks until all of preceding write commands sent by connection are written to append-only file of master and/or replicas
 
 ---
@@ -147,17 +146,14 @@ Note: routing is `commandGroups[firstByte - 'a']` in `RequestHandler`, so all `b
 
 ---
 
-### Server (35 commands)
+### Server (18 commands)
 
 - **BGREWRITEAOF** - Asynchronously rewrites append-only file to disk
-- **COMMAND** - Returns detailed information about all commands
-- **CONFIG** - A container for server configuration commands
 - **COUNT** - Returns a count of commands
 - **DELUSER** - Deletes ACL users, and terminates their connections
 - **DOCS** - Returns documentary information about one, multiple or all commands
 - **DOCTOR** - Outputs a memory problems report
 - **DRYRUN** - Simulates execution of a command by a user, without executing command
-- **FLUSHALL** - Removes all keys from all databases
 - **LOLWUT** - Displays computer art and Redis version
 - **MEMORY** - A container for memory diagnostics commands
 - **MODULE** - A container for module commands
@@ -167,8 +163,6 @@ Note: routing is `commandGroups[firstByte - 'a']` in `RequestHandler`, so all `b
 - **PSYNC** - An internal command used in replication
 - **PURGE** - Asks allocator to release memory
 - **REPLCONF** - An internal command for configuring replication stream
-- **ROLE** - Returns replication role
-- **SAVE** - Synchronously saves database(s) to disk
 - **SET** - Sets configuration parameters in-flight
 - **SLOWLOG** - A container for slow log commands
 - **SWAPDB** - Swaps two Redis databases
@@ -288,14 +282,14 @@ served through `BlockingZSet.java`.
 | Sorted Set | 49 | 49 | 100% |
 | Bitmap | 12 | 11 | 92% |
 | HyperLogLog | 7 | 5 | 71% |
-| Geo | 12 | 10 | 83% |
+| Geo | 12 | 12 | 100% |
 | Stream | 23 | 0 | 0% |
 | Pub/Sub | 23 | 20 | 87% |
 | Transactions | 5 | 0 | 0% |
 | Scripting | 12 | 2 | 17% |
-| Connection | 23 | 2 | 9% |
-| Server | 58 | 23 | 40% |
-| Key Management | 31 | 27 | 87% |
+| Connection | 23 | 8 | 35% |
+| Server | 58 | 28 | 48% |
+| Key Management | 31 | 29 | 94% |
 
 ### Major Gaps
 
@@ -311,11 +305,12 @@ served through `BlockingZSet.java`.
    - Lua scripting enables server-side logic execution
    - Functions provide reusable server-side logic storage
 
-4. **Connection Management** - Completely missing (0/23 commands, 9% coverage)
-   - Client connection management is essential for production environments
-   - Commands like AUTH, PING, QUIT are fundamental
+4. **Connection Management** - Mostly missing (8/23 commands, 35% coverage)
+   - `AUTH`, `CLIENT`, `HELLO`, `PING` and `QUIT` are implemented
+   - The client tracking commands (`TRACKING`, `TRACKINGINFO`, `GETREDIR`) and the connection
+     state commands (`REPLY`, `CACHING`, `PAUSE`, `UNPAUSE`, `UNBLOCK`) are missing
 
-5. **Server Management** - Partial coverage (23/58 commands, 40% coverage)
+5. **Server Management** - Partial coverage (28/58 commands, 48% coverage)
    - Missing many server administration commands
    - MODULE, SLOWLOG, MEMORY commands partially or completely missing
 
@@ -332,8 +327,8 @@ served through `BlockingZSet.java`.
 - **Excellent Hash coverage** (100%)
 - **Excellent Sorted Set coverage** (100%)
 - **Excellent Bitmap coverage** (92%)
-- **Excellent Geo coverage** (83%)
-- **Excellent Key Management coverage** (87%)
+- **Complete Geo coverage** (100%)
+- **High Key Management coverage** (94%)
 - **Excellent List coverage** (100%, includes blocking variants)
 - **Good HyperLogLog coverage** (71%)
 - **Good Pub/Sub coverage** (87%)
@@ -348,7 +343,8 @@ served through `BlockingZSet.java`.
 1. **Priority High**:
    - Implement basic Stream commands (XADD, XREAD, XRANGE, XTRIM)
    - Add transaction support (MULTI, EXEC, DISCARD)
-   - Implement connection management (PING, AUTH, SELECT)
+   - Implement the missing connection management commands (the client tracking family, `REPLY`,
+     `PAUSE`, `UNPAUSE`, `UNBLOCK`) and `SELECT` (it currently answers `NOT_SUPPORT`)
 
 2. **Priority Medium**:
    - Add Lua scripting support (EVAL, EVALSHA, SCRIPT commands)
@@ -362,7 +358,8 @@ served through `BlockingZSet.java`.
 
 ---
 
-**Generated:** 2026-01-06
+**Generated:** 2026-11-19 (corrected, the previous version listed implemented commands as missing)
 **Redis Version:** 7.2.4
-**Velo Version:** 1.0.0
-**Analysis Method:** Comprehensive source code verification using grep on actual implementations
+**Velo Version:** 1.2.0
+**Analysis Method:** the `CommandRegistry` entries of every command group, the dynamic (groovy)
+commands and the connection fast paths were collected and compared with the Redis 7.2.4 command list
