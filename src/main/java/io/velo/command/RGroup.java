@@ -732,17 +732,7 @@ public class RGroup extends BaseCommand {
         }
 
         if (!isCrossRequestWorker) {
-            // the destination slot is owned by this worker, validate the destination type here
-            var dstTypeReply = checkDstTypeOnCurrentWorker(srcSlotWithKeyHash, dstSlotWithKeyHash);
-            if (dstTypeReply != null) {
-                return dstTypeReply;
-            }
-
-            var memberValueBytes = popFromList(srcSlotWithKeyHash, rlSrc, srcLeft);
-
-            final Reply[] finalReplyArray = {null};
-            moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
-            return finalReplyArray[0];
+            return moveOnCurrentWorker(srcSlotWithKeyHash, rlSrc, dstSlotWithKeyHash, srcLeft, dstLeft);
         }
 
         // the destination slot is owned by another slot worker
@@ -806,22 +796,47 @@ public class RGroup extends BaseCommand {
     }
 
     /**
-     * Validates the destination list type on the current worker.
+     * Moves one element on the current worker, reading the destination key at most once.
      *
      * @param srcSlotWithKeyHash the source key
+     * @param rlSrc              the decoded non-empty source list
      * @param dstSlotWithKeyHash the destination key
-     * @return an error reply when the destination cannot accept a list element, null otherwise
+     * @param srcLeft            true to pop the first element, false to pop the last one
+     * @param dstLeft            true to push the element to the head of the destination list
+     * @return the moved element reply, or {@link ErrorReply#WRONG_TYPE} if the destination is not a list
      */
-    private Reply checkDstTypeOnCurrentWorker(SlotWithKeyHash srcSlotWithKeyHash, SlotWithKeyHash dstSlotWithKeyHash) {
+    private Reply moveOnCurrentWorker(SlotWithKeyHash srcSlotWithKeyHash, RedisList rlSrc,
+                                      SlotWithKeyHash dstSlotWithKeyHash, boolean srcLeft, boolean dstLeft) {
         if (srcSlotWithKeyHash.rawKey().equals(dstSlotWithKeyHash.rawKey())) {
-            return null;
+            var memberValueBytes = srcLeft ? rlSrc.removeFirst() : rlSrc.removeLast();
+            if (dstLeft) {
+                rlSrc.addFirst(memberValueBytes);
+            } else {
+                rlSrc.addLast(memberValueBytes);
+            }
+            set(rlSrc.encode(), srcSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+            return new BulkReply(memberValueBytes);
         }
 
         var cvDst = getCv(dstSlotWithKeyHash);
-        if (cvDst != null && !cvDst.isList()) {
-            return ErrorReply.WRONG_TYPE;
+        RedisList rlDst;
+        if (cvDst == null) {
+            rlDst = new RedisList();
+        } else {
+            if (!cvDst.isList()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+            rlDst = RedisList.decode(getValueBytesByCv(cvDst, dstSlotWithKeyHash));
         }
-        return null;
+
+        var memberValueBytes = popFromList(srcSlotWithKeyHash, rlSrc, srcLeft);
+        if (dstLeft) {
+            rlDst.addFirst(memberValueBytes);
+        } else {
+            rlDst.addLast(memberValueBytes);
+        }
+        set(rlDst.encode(), dstSlotWithKeyHash, CompressedValue.SP_TYPE_LIST);
+        return new BulkReply(memberValueBytes);
     }
 
     /**
@@ -919,17 +934,7 @@ public class RGroup extends BaseCommand {
         }
 
         if (!isCrossRequestWorker) {
-            // the destination slot is owned by this worker, validate the destination type here
-            var dstTypeReply = checkDstTypeOnCurrentWorker(srcSlotWithKeyHash, dstSlotWithKeyHash);
-            if (dstTypeReply != null) {
-                return dstTypeReply;
-            }
-
-            var memberValueBytes = popFromList(srcSlotWithKeyHash, rlSrc, srcLeft);
-
-            final Reply[] finalReplyArray = {null};
-            moveDstCallback(dstSlotWithKeyHash, dstLeft, memberValueBytes, reply -> finalReplyArray[0] = reply);
-            return finalReplyArray[0];
+            return moveOnCurrentWorker(srcSlotWithKeyHash, rlSrc, dstSlotWithKeyHash, srcLeft, dstLeft);
         }
 
         // the destination slot is owned by another slot worker

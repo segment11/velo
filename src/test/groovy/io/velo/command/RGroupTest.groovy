@@ -17,6 +17,7 @@ import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 class RGroupTest extends Specification {
@@ -1207,6 +1208,72 @@ class RGroupTest extends Specification {
         failMovePromise.isResult()
         failMovePromise.getResult() == ErrorReply.READONLY
 
+        when: 'local move reads dst only once for distinct keys and src only once for same key'
+        def moveReads = new HashMap<String, AtomicInteger>()
+        def countingMoveStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                moveReads.computeIfAbsent(key) { new AtomicInteger() }.incrementAndGet()
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def countingMoveGroup = new RGroup(null, null, null)
+        countingMoveGroup.byPassGetSet = countingMoveStore
+        countingMoveGroup.from(BaseCommand.mockAGroup())
+        def srcRl = new RedisList()
+        srcRl.addLast('a1'.bytes)
+        srcRl.addLast('a2'.bytes)
+        def srcCv = Mock.prepareCompressedValueList(1)[0]
+        srcCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        srcCv.compressedData = srcRl.encode()
+        countingMoveStore.put(slot, 'mv-src', 0, srcCv)
+        def dstRl = new RedisList()
+        dstRl.addLast('b1'.bytes)
+        def dstCv = Mock.prepareCompressedValueList(1)[0]
+        dstCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        dstCv.compressedData = dstRl.encode()
+        countingMoveStore.put(slot, 'mv-dst', 0, dstCv)
+        moveReads.clear()
+        def moveDistinctReply = countingMoveGroup.execute('rpoplpush mv-src mv-dst')
+        int srcReadsDistinct = moveReads['mv-src'].get()
+        int dstReadsDistinct = moveReads['mv-dst'].get()
+        def dstAfterDistinct = LGroup.getRedisList(BaseCommand.slot('mv-dst', 1), countingMoveGroup)
+
+        moveReads.clear()
+        def moveSameRightToLeft = countingMoveGroup.execute('rpoplpush mv-dst mv-dst')
+        int sameReadsR2L = moveReads['mv-dst'].get()
+        def dstAfterR2L = LGroup.getRedisList(BaseCommand.slot('mv-dst', 1), countingMoveGroup)
+
+        moveReads.clear()
+        def sSame = BaseCommand.slot('mv-dst', 1)
+        def moveSameLeftToRight = countingMoveGroup.move(sSame, sSame, true, false)
+        int sameReadsL2R = moveReads['mv-dst'].get()
+        def dstAfterL2R = LGroup.getRedisList(sSame, countingMoveGroup)
+
+        moveReads.clear()
+        def moveDistinctToRight = countingMoveGroup.move(BaseCommand.slot('mv-src', 1), sSame, true, false)
+        int dstReadsToRight = moveReads['mv-dst'].get()
+        then:
+        moveDistinctReply instanceof BulkReply
+        (moveDistinctReply as BulkReply).asString() == 'a2'
+        srcReadsDistinct == 1
+        dstReadsDistinct == 1
+        dstAfterDistinct.list.collect { new String(it) } == ['a2', 'b1']
+
+        moveSameRightToLeft instanceof BulkReply
+        (moveSameRightToLeft as BulkReply).asString() == 'b1'
+        sameReadsR2L == 1
+        dstAfterR2L.list.collect { new String(it) } == ['b1', 'a2']
+
+        moveSameLeftToRight instanceof BulkReply
+        (moveSameLeftToRight as BulkReply).asString() == 'b1'
+        sameReadsL2R == 1
+        dstAfterL2R.list.collect { new String(it) } == ['a2', 'b1']
+
+        moveDistinctToRight instanceof BulkReply
+        (moveDistinctToRight as BulkReply).asString() == 'a1'
+        dstReadsToRight == 1
+
         cleanup:
         eventloop.breakEventloop()
         moveWorkers?.each { SlotWorker w -> w.thread.interrupt() }
@@ -1348,6 +1415,41 @@ class RGroupTest extends Specification {
         def rlSrcBlockAfter = LGroup.getRedisList(s1, rGroup)
         rlSrcBlockAfter != null
         rlSrcBlockAfter.size() == 1
+
+        when: 'local moveBlock reads dst only once'
+        def blockDstReads = new AtomicInteger()
+        def countingBlockStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'block-dst') {
+                    blockDstReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def countingBlockGroup = new RGroup('', data3, null)
+        countingBlockGroup.byPassGetSet = countingBlockStore
+        countingBlockGroup.from(BaseCommand.mockAGroup())
+        def bSrcCv = Mock.prepareCompressedValueList(1)[0]
+        bSrcCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def bSrcRl = new RedisList()
+        bSrcRl.addLast('m1'.bytes)
+        bSrcCv.compressedData = bSrcRl.encode()
+        countingBlockStore.put(slot, 'block-src', 0, bSrcCv)
+        def bDstCv = Mock.prepareCompressedValueList(1)[0]
+        bDstCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def bDstRl = new RedisList()
+        bDstRl.addLast('m0'.bytes)
+        bDstCv.compressedData = bDstRl.encode()
+        countingBlockStore.put(slot, 'block-dst', 0, bDstCv)
+        def blockMoveReply = countingBlockGroup.moveBlock(
+                BaseCommand.slot('block-src', 1),
+                BaseCommand.slot('block-dst', 1),
+                true, false, 1.0)
+        then:
+        blockMoveReply instanceof BulkReply
+        (blockMoveReply as BulkReply).asString() == 'm1'
+        blockDstReads.get() == 1
 
         when: 'a move timeout that fires after a delivery cannot nil the reply'
         // drop waiters still pending from the earlier indefinite cases, so the push reaches this one
