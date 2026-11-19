@@ -1284,6 +1284,8 @@ public class BGroup extends BaseCommand {
         }
 
         BlockingList.removeOne(Wal.keyString(keyBytes), one);
+        // a multi key block registers the waiter on every key, release all of them
+        BlockingList.removeEverywhere(one);
         var valueBytes = isLeft ? rl.removeFirst() : rl.removeLast();
 
         var replies = new Reply[2];
@@ -1542,6 +1544,8 @@ public class BGroup extends BaseCommand {
         }
 
         BlockingList.removeOne(Wal.keyString(keyBytes), one);
+        // a multi key block registers the waiter on every key, release all of them
+        BlockingList.removeEverywhere(one);
         one.settablePromise().set(popMpopReply(baseCommand, dictMap, slotWithKeyHash, keyBytes, rl, isLeft, count));
         return true;
     }

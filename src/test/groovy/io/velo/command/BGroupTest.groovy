@@ -1060,7 +1060,30 @@ class BGroupTest extends Specification {
         reply instanceof AsyncReply
         !(reply as AsyncReply).settablePromise.isComplete()
 
+        when: 'the recheck delivery releases the waiter from every key it was registered on'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def recheckPromise = new SettablePromise<Reply>()
+        def recheckSlotA = BaseCommand.slot('recheck-a', (short) 1)
+        def recheckSlotB = BaseCommand.slot('recheck-b', (short) 1)
+        def recheckOne = new BlockingList.PromiseWithLeftOrRightAndCreatedTime(recheckPromise, null, true,
+                System.currentTimeMillis(), null, 0, [recheckSlotA, recheckSlotB])
+        BlockingList.addOne('recheck-a', recheckOne)
+        BlockingList.addOne('recheck-b', recheckOne)
+        def recheckCv = Mock.prepareCompressedValueList(1)[0]
+        recheckCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def recheckRl = new RedisList()
+        recheckRl.addLast('value'.bytes)
+        recheckCv.compressedData = recheckRl.encode()
+        inMemoryGetSet.put(slot, 'recheck-a', 0, recheckCv)
+        def recheckCompleted = BGroup.completeIfListNotEmpty(recheckSlotA, 'recheck-a'.bytes, bGroup, bGroup.dictMap, recheckOne, true)
+        then:
+        recheckCompleted
+        recheckPromise.isComplete()
+        BlockingList.blockingClientCount() == 0
+        BlockingList.blockingKeyCount() == 0
+
         when: 'the same key twice, the client is registered once per distinct key'
+        inMemoryGetSet.remove(slot, 'recheck-a')
         BlockingList.clearBlockingListPromisesForAllKeys()
         inMemoryGetSet.remove(slot, 'dup')
         reply = bGroup.execute('blpop dup dup 0')
