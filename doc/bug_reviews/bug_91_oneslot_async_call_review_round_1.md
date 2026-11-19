@@ -978,3 +978,38 @@ shard whose first owned inner slot is nonzero. This remains a cluster integratio
 The reviewer also spotted blank lines breaking the Fix Log Markdown table; corrected them before the
 documentation commit. The reviewer did not run Gradle or reconstruct RED per commit; formal Stage 5
 verification remains pending.
+
+
+### Follow-up — direct async reply encoder access
+
+Per user direction, `MultiWorkerServer.transferAsyncReply` is now public and annotated
+`@VisibleForTesting`; its instance behavior and implementation are unchanged. `BGroupTest.encodeAsyncReply`
+now calls it directly, with no reflective lookup, accessibility override, or invocation. The method remains
+an instance method because it uses the existing instance HTTP helper; no static conversion is needed.
+
+Added `MultiWorkerServerTest.test transfer async reply` to verify the exposed method directly: pending
+completion, raw WRONGTYPE prefix, generic exceptions, FORMAT conversion, RESP3 null, HTTP success and
+HTTP failure. This is an access refactor, so those contract tests also passed before the modifier change
+under Groovy's access rules; no failing runtime regression is claimed for the modifier itself.
+
+```text
+./gradlew -Dorg.gradle.jvmargs=-Xmx3g -I /tmp/velo-bug91-gradle.init.gradle :test \
+  --tests 'io.velo.MultiWorkerServerTest.test transfer async reply' \
+  --tests 'io.velo.command.BGroupTest.test blpop' \
+  --tests 'io.velo.command.BGroupTest.test blmpop'
+BUILD SUCCESSFUL in 19s
+JaCoCo MultiWorkerServer 695-713: 10/10 lines fully covered; all 5 branch lines fully covered.
+```
+
+**Coverage warning:** the focused selection executes 39/869 MultiWorkerServer class lines (4.5%), below
+80%; this reflects the narrowly selected encoder tests, not the class's full-suite coverage. All lines
+and branches of the exposed encoder are covered. No unrelated server tests were added to inflate it.
+
+A broader existing `test mock inject and handle` run fails with `NoSuchElementException` when testing an
+empty pipeline (`MultiWorkerServer.handlePipeline` calls `ArrayList.getLast`). Repeated that test with the
+original private method restored temporarily: it fails identically. Restored the annotated public method
+and reran the focused tests successfully. No empty-pipeline behavior was changed in this access refactor.
+
+[Follow-up test output, baseline failure, and coverage](logs/20261119_bug_91_direct_reply_encoder.log).
+Earlier reflection-based reproduction snippets are retained as historical evidence; current permanent
+tests use the direct call.

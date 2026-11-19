@@ -692,7 +692,8 @@ public class MultiWorkerServer extends Launcher {
      * @param isResp3 true if the reply should be formatted in RESP3, false otherwise
      * @return a promise of the response as a ByteBuf
      */
-    private Promise<ByteBuf> transferAsyncReply(Request request, AsyncReply reply, boolean isResp3) {
+    @VisibleForTesting
+    public Promise<ByteBuf> transferAsyncReply(Request request, AsyncReply reply, boolean isResp3) {
         var promise = reply.getSettablePromise();
         return promise.map((r, e) -> {
             if (e != null) {

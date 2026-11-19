@@ -2,6 +2,7 @@ package io.velo
 
 import io.activej.config.Config
 import io.activej.eventloop.Eventloop
+import io.activej.promise.SettablePromise
 import io.activej.inject.binding.OptionalDependency
 import io.velo.acl.AclUsers
 import io.velo.acl.RCmd
@@ -14,6 +15,9 @@ import io.velo.repl.ReplType
 import io.velo.repl.cluster.MultiSlotRange
 import io.velo.repl.cluster.Node
 import io.velo.repl.cluster.Shard
+import io.velo.reply.AsyncReply
+import io.velo.reply.Reply
+import io.velo.reply.NullArrayReply
 import io.velo.reply.BulkReply
 import io.velo.reply.ErrorReply
 import io.velo.reply.NilReply
@@ -869,6 +873,61 @@ class MultiWorkerServerTest extends Specification {
         if (m?.primaryScheduleRunnable != null) {
             m.onStop()
         }
+    }
+
+    def 'test transfer async reply'() {
+        given:
+        def server = new MultiWorkerServer()
+        def request = new Request(['blpop'.bytes] as byte[][], false, false)
+        def pending = new SettablePromise<Reply>()
+        def encoded = server.transferAsyncReply(request, new AsyncReply(pending), false)
+
+        expect:
+        !encoded.isComplete()
+
+        when:
+        pending.set(ErrorReply.WRONG_TYPE)
+        then:
+        new String(encoded.getResult().asArray()) ==
+                '-WRONGTYPE Operation against a key holding the wrong kind of value\r\n'
+
+        when:
+        def failed = new SettablePromise<Reply>()
+        encoded = server.transferAsyncReply(request, new AsyncReply(failed), false)
+        failed.setException(new IllegalStateException('read failed'))
+        then:
+        new String(encoded.getResult().asArray()) == '-ERR read failed\r\n'
+
+        when:
+        def format = new SettablePromise<Reply>()
+        encoded = server.transferAsyncReply(request, new AsyncReply(format), false)
+        format.set(ErrorReply.FORMAT)
+        then:
+        new String(encoded.getResult().asArray()) == "-ERR wrong number of arguments for 'blpop' command\r\n"
+
+        when:
+        def timeout = new SettablePromise<Reply>()
+        encoded = server.transferAsyncReply(request, new AsyncReply(timeout), true)
+        timeout.set(NullArrayReply.INSTANCE)
+        then:
+        new String(encoded.getResult().asArray()) == '_\r\n'
+
+        when:
+        def http = new Request(['blpop'.bytes] as byte[][], true, false)
+        def httpPromise = new SettablePromise<Reply>()
+        encoded = server.transferAsyncReply(http, new AsyncReply(httpPromise), false)
+        httpPromise.set(new BulkReply('value'))
+        then:
+        new String(encoded.getResult().asArray()).startsWith('HTTP/1.1 200')
+        new String(encoded.getResult().asArray()).endsWith('value')
+
+        when:
+        def httpFailure = new SettablePromise<Reply>()
+        encoded = server.transferAsyncReply(http, new AsyncReply(httpFailure), false)
+        httpFailure.setException(new IllegalStateException('read failed'))
+        then:
+        new String(encoded.getResult().asArray()).startsWith('HTTP/1.1 500')
+        new String(encoded.getResult().asArray()).endsWith('read failed')
     }
 
     def 'test mock inject and handle'() {

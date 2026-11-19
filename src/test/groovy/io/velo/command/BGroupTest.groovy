@@ -1465,10 +1465,8 @@ class BGroupTest extends Specification {
     }
 
     private static Promise<ByteBuf> encodeAsyncReply(AsyncReply reply) {
-        def transfer = MultiWorkerServer.getDeclaredMethod('transferAsyncReply', Request, AsyncReply, Boolean.TYPE)
-        transfer.accessible = true
         def request = new Request(['blpop'.bytes] as byte[][], false, false)
-        return transfer.invoke(new MultiWorkerServer(), request, reply, false) as Promise<ByteBuf>
+        return new MultiWorkerServer().transferAsyncReply(request, reply, false)
     }
 
     private static List startWorkerThread(String name) {
