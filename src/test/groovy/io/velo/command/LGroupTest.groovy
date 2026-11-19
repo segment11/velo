@@ -928,6 +928,43 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lpush a >value b c')
         then:
         reply == ErrorReply.VALUE_TOO_LONG
+
+        when: 'lpushx reads an existing list only once without or with partial blocking delivery'
+        BlockingList.clearBlockingListPromisesForAllKeys()
+        def lpushxReads = new AtomicInteger()
+        def lpushxStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-lpushx') {
+                    lpushxReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def lpushxGroup = new LGroup(null, null, null)
+        lpushxGroup.byPassGetSet = lpushxStore
+        lpushxGroup.from(BaseCommand.mockAGroup())
+        def lpushxCv = Mock.prepareCompressedValueList(1)[0]
+        lpushxCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def lpushxRl = new RedisList()
+        lpushxRl.addLast('init'.bytes)
+        lpushxCv.compressedData = lpushxRl.encode()
+        lpushxStore.put(slot, 'single-lpushx', 0, lpushxCv)
+        def replyNoWaiter = lpushxGroup.execute('lpushx single-lpushx v1')
+        int readsNoWaiter = lpushxReads.get()
+        lpushxReads.set(0)
+        def partialPromise = new SettablePromise<Reply>()
+        BlockingList.addBlockingListPromiseByKey('single-lpushx', partialPromise, null, false)
+        def replyWithWaiter = lpushxGroup.execute('lpushx single-lpushx v2 v3')
+        int readsWithWaiter = lpushxReads.get()
+        then:
+        replyNoWaiter instanceof IntegerReply
+        (replyNoWaiter as IntegerReply).integer == 2
+        readsNoWaiter == 1
+        partialPromise.isComplete()
+        replyWithWaiter instanceof IntegerReply
+        (replyWithWaiter as IntegerReply).integer == 4
+        readsWithWaiter == 1
     }
 
     def 'test lrange'() {

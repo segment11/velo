@@ -359,13 +359,9 @@ public class LGroup extends BaseCommand {
     }
 
     private Reply addToList(byte[][] valueBytesArr, boolean addFirst,
-                            boolean considerBeforeOrAfter, boolean isBefore, byte[] pivotBytes, boolean needKeyExist) {
+                            boolean considerBeforeOrAfter, boolean isBefore, byte[] pivotBytes, RedisList rlAlreadyGet) {
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rl = getRedisList(slotWithKeyHash);
-        // lpushx / rpushx
-        if (rl == null && needKeyExist) {
-            return IntegerReply.REPLY_0;
-        }
+        var rl = rlAlreadyGet != null ? rlAlreadyGet : getRedisList(slotWithKeyHash);
 
         if (rl != null) {
             if (rl.size() >= RedisList.LIST_MAX_SIZE) {
@@ -480,7 +476,7 @@ public class LGroup extends BaseCommand {
 
         byte[][] valueBytesArr = {null};
         valueBytesArr[0] = valueBytes;
-        return addToList(valueBytesArr, false, true, isBefore, pivotBytes, false);
+        return addToList(valueBytesArr, false, true, isBefore, pivotBytes, null);
     }
 
     private Reply llen() {
@@ -895,7 +891,7 @@ public class LGroup extends BaseCommand {
         var afterPopValueBytesArray = BlockingList.setReplyIfBlockingListExist(key, addFirst, valueBytesArr, this);
         // no blocking for this key
         if (afterPopValueBytesArray == null) {
-            return addToList(valueBytesArr, addFirst, false, false, null, needKeyExist);
+            return addToList(valueBytesArr, addFirst, false, false, null, rlAlreadyGet);
         }
 
         // all elements are popped, need to add to list
@@ -909,7 +905,7 @@ public class LGroup extends BaseCommand {
             }
         }
 
-        var reply = addToList(afterPopValueBytesArray, addFirst, false, false, null, needKeyExist);
+        var reply = addToList(afterPopValueBytesArray, addFirst, false, false, null, rlAlreadyGet);
         if (reply instanceof IntegerReply) {
             return new IntegerReply(((IntegerReply) reply).getInteger() + (valueBytesArr.length - afterPopValueBytesArray.length));
         } else {
