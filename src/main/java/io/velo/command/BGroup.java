@@ -857,14 +857,13 @@ public class BGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var isExists = exists(slotWithKeyHash);
+        var cv = getCv(slotWithKeyHash);
 
         RedisBF redisBF;
-        if (isExists) {
+        if (cv != null) {
             if (needCreateNew) {
                 return ErrorReply.BF_ALREADY_EXISTS;
             }
-            var cv = getCv(slotWithKeyHash);
             if (!cv.isBloomFilter()) {
                 return ErrorReply.WRONG_TYPE;
             }

@@ -779,6 +779,29 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('bf.insert d capacity -1 items item0')
         then:
         reply == ErrorReply.CAPACITY_NOT_POSITIVE
+
+        when: 'inserting into an existing bloom filter reads the key only once'
+        def bfReads = new AtomicInteger()
+        def countingStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'bf-single-read') {
+                    bfReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def bfGroup = new BGroup(null, null, null)
+        bfGroup.byPassGetSet = countingStore
+        bfGroup.from(BaseCommand.mockAGroup())
+        bfGroup.execute('bf.insert bf-single-read items init-item')
+        bfReads.set(0)
+        reply = bfGroup.execute('bf.insert bf-single-read items new-item')
+        then:
+        reply instanceof MultiBulkReply
+        (reply as MultiBulkReply).replies.length == 1
+        (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        bfReads.get() == 1
     }
 
     def 'test bf scandump and loadchunk'() {
