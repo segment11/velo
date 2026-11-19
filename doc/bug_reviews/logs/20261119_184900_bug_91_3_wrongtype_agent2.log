@@ -1,0 +1,157 @@
+Agent 2 follow-up verification; HEAD a80f744fcffd606efdcce79ce1f5b2af852c08cb
+
+Temporary spec source:
+package io.velo.command
+
+import io.activej.bytebuf.ByteBuf
+import io.activej.promise.Promise
+import io.velo.BaseCommand
+import io.velo.CompressedValue
+import io.velo.MultiWorkerServer
+import io.velo.TypeMismatchException
+import io.velo.decode.Request
+import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
+import io.velo.persist.LocalPersist
+import io.velo.persist.LocalPersistTest
+import io.velo.reply.AsyncReply
+import io.velo.reply.ErrorReply
+import spock.lang.Specification
+
+import java.nio.charset.StandardCharsets
+
+class Bug913ReviewTempTest extends Specification {
+    def 'same worker secondary list wrong type uses ERR on wire'() {
+        given:
+        LocalPersistTest.prepareLocalPersist()
+        def local = LocalPersist.instance
+        local.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        def store = new InMemoryGetSet()
+        def group = new BGroup(null, null, null)
+        group.from(BaseCommand.mockAGroup())
+        group.byPassGetSet = store
+        group.crossRequestWorker = false
+        def cv = new CompressedValue()
+        cv.dictSeqOrSpType = 0
+        cv.compressedData = 'value'.bytes
+        store.put((short) 0, 'wrong', 0, cv)
+        def transfer = MultiWorkerServer.getDeclaredMethod('transferAsyncReply', Request, AsyncReply, Boolean.TYPE)
+        transfer.accessible = true
+        def server = new MultiWorkerServer()
+
+        expect:
+        ['blpop', 'brpop'].every { String cmd ->
+            def reply = group.execute(cmd + ' empty wrong 1')
+            assert reply instanceof AsyncReply
+            def async = (AsyncReply) reply
+            assert async.settablePromise.getException() instanceof TypeMismatchException
+            def request = new Request([cmd.bytes, 'empty'.bytes, 'wrong'.bytes, '1'.bytes] as byte[][], false, false)
+            def encoded = (Promise<ByteBuf>) transfer.invoke(server, request, async, false)
+            def wire = new String(encoded.getResult().asArray(), StandardCharsets.UTF_8)
+            println cmd + ' crossRequestWorker=false wire=' + wire.trim()
+            assert wire.startsWith('-ERR Expect sp type array=')
+            assert !wire.startsWith('-WRONGTYPE')
+            true
+        }
+
+        cleanup:
+        local?.cleanUp()
+        Consts.persistDir.deleteDir()
+    }
+}
+
+Final run:
+> Task :segment_common:compileJava NO-SOURCE
+> Task :segment_common:compileGroovy UP-TO-DATE
+> Task :segment_common:processResources UP-TO-DATE
+> Task :segment_common:classes UP-TO-DATE
+> Task :segment_common:jar UP-TO-DATE
+> Task :segmentweb:compileJava NO-SOURCE
+> Task :segmentweb:compileGroovy UP-TO-DATE
+> Task :segmentweb:processResources NO-SOURCE
+> Task :segmentweb:classes UP-TO-DATE
+> Task :segmentweb:jar UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :compileGroovy UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :compileTestGroovy
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+
+> Task :test
+
+Bug913ReviewTempTest > same worker secondary list wrong type uses ERR on wire STANDARD_OUT
+    SnowFlake config:
+    START_STAMP=1701354128058
+    SEQUENCE_BIT=12
+    MACHINE_BIT=5
+    DATACENTER_BIT=5
+    MAX_DATACENTER_NUM=31
+    MAX_MACHINE_NUM=31
+    MAX_SEQUENCE=4095
+    MACHINE_LEFT=12
+    DATACENTER_LEFT=17
+    TIMESTAMP_LEFT=22
+    18:48:59.288 [Test worker] WARN  [io.velo.repl.cluster.MultiShard] - Repl clusterx meta file not found=/tmp/velo-data/test-persist/nodes.json
+    18:48:59.334 [Test worker] WARN  [io.velo.repl.cluster.MultiShard] - Repl clusterx meta saved, shards size=1
+    18:48:59.345 [Test worker] INFO  [io.velo.persist.BigStringFiles] - LRU max size for big string=1000, maybe one big string bytes length is 4096B, memory require=3MB, slot=0
+    18:48:59.345 [Test worker] INFO  [io.velo.persist.BigStringFiles] - LRU prepare, type=big_string, MB=3, slot=0
+    18:48:59.351 [Test worker] INFO  [io.velo.persist.DynConfig] - Init dyn config, data={}, slot=0
+    18:48:59.363 [Test worker] INFO  [io.velo.persist.DynConfig] - Update dyn config, key=masterUuid, value=393137194451210240, slot=0
+    18:48:59.364 [Test worker] INFO  [io.velo.persist.DynConfig] - Update dyn config, key=binlogOn, value=false, slot=0
+    18:48:59.364 [Test worker] WARN  [io.velo.persist.OneSlot] - Binlog on=false
+    18:48:59.365 [Test worker] INFO  [io.velo.persist.OneSlot] - One slot wal group number=2048, slot=0
+    18:48:59.366 [Test worker] INFO  [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, MB=0, slot=0
+    18:48:59.366 [Test worker] INFO  [io.velo.persist.OneSlot] - LRU prepare, type=kv_write_in_wal, short value, MB=0, slot=0
+    18:48:59.366 [Test worker] INFO  [io.velo.persist.OneSlot] - Static memory init, type=wal_cache_init, MB=0, slot=0
+    18:48:59.367 [Test worker] INFO  [io.velo.persist.OneSlot] - LRU max size for each wal group=48, all wal group number=2048, maybe one compressed value encoded length is 200B, memory require=19MB, slot=0
+    18:48:59.367 [Test worker] INFO  [io.velo.persist.OneSlot] - LRU prepare, type=kv_read_group_by_wal_group, MB=19, slot=0
+    18:48:59.388 [Test worker] INFO  [io.velo.persist.MetaChunkSegmentFlagSeq] - Static memory init, type=meta_chunk_segment_flag_seq, MB=3, slot=0
+    18:48:59.392 [Test worker] INFO  [io.velo.persist.MetaKeyBucketSplitNumber] - Meta key bucket initial split number=1
+    18:48:59.396 [Test worker] INFO  [io.velo.persist.StatKeyCountInBuckets] - Key count in buckets=0, slot=0
+    18:48:59.399 [Test worker] INFO  [io.velo.persist.FdReadWrite] - Opened name=key_bucket_split_0_slot_0, file length=0MB
+    18:48:59.400 [Test worker] INFO  [io.velo.persist.FdReadWrite] - Key bucket lru max size for one key bucket fd=0, one inner length=4096， compress ratio maybe=0.25, memory require=0.0MB, name=key_bucket_split_0_slot_0
+    18:48:59.400 [Test worker] INFO  [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_key_bucket, MB=0.0, fd=key_bucket_split_0_slot_0, key buckets
+    18:48:59.403 [Test worker] INFO  [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=key_bucket_split_0_slot_0
+    18:48:59.403 [Test worker] INFO  [io.velo.persist.KeyLoader] - Persist key bucket files fd opened, split number=1, slot=0
+    18:48:59.403 [Test worker] INFO  [io.velo.persist.Chunk] - Chunk init slot=0, segment number per fd=262144, fd per chunk=1, max segment index=262143, half segment number=131072
+    18:48:59.405 [Test worker] INFO  [io.velo.persist.FdReadWrite] - Opened name=chunk_data_index_0_slot_0, file length=0MB
+    18:48:59.405 [Test worker] INFO  [io.velo.persist.FdReadWrite] - Chunk lru max size for one chunk fd=0, one inner length=4096, memory require=0MB, name=chunk_data_index_0_slot_0
+    18:48:59.405 [Test worker] INFO  [io.velo.persist.FdReadWrite] - LRU prepare, type=fd_chunk_data, MB=0, fd=chunk_data_index_0_slot_0, chunk
+    18:48:59.405 [Test worker] INFO  [io.velo.persist.FdReadWrite] - Static memory init, type=fd_read_write_buffer, MB=0, name=chunk_data_index_0_slot_0
+    18:48:59.406 [Test worker] WARN  [io.velo.persist.OneSlot] - Init global metrics collect, slot=0
+    18:48:59.411 [Test worker] WARN  [io.velo.persist.LocalPersist] - Fix slot thread id, s=0, tid=1
+    18:48:59.514 [Test worker] ERROR [io.velo.BaseCommand] - blpop error=Expect sp type array=[-2048], but got sp type=0
+    blpop crossRequestWorker=false wire=-ERR Expect sp type array=[-2048], but got sp type=0
+    18:48:59.548 [Test worker] ERROR [io.velo.BaseCommand] - brpop error=Expect sp type array=[-2048], but got sp type=0
+    brpop crossRequestWorker=false wire=-ERR Expect sp type array=[-2048], but got sp type=0
+    Close wal raf success, slot=0
+    Close wal short value raf success, slot=0
+    Meta chunk segment flag seq file closed.
+    Meta chunk segment index file closed
+    Clean up fd read, name=chunk_data_index_0_slot_0, one inner address=126489647464448
+    Clean up fd write, name=chunk_data_index_0_slot_0, write segment batch address=126489605480448
+    Clean up fd read, name=chunk_data_index_0_slot_0, for repl address=126488947081216
+    Clean up fd read, name=chunk_data_index_0_slot_0, read for merge batch address=126488946950144
+    Closed raf, name=chunk_data_index_0_slot_0
+    Clean up fd read, name=key_bucket_split_0_slot_0, one inner address=126489647468544
+    Clean up fd read, name=key_bucket_split_0_slot_0, for one wal group address=126489537933312
+    Closed raf, name=key_bucket_split_0_slot_0
+    Meta key bucket split number file closed
+    Stat key count in buckets file closed
+    Repl close binlog current raf success, slot=0
+
+> Task :jacocoTestReport
+
+[Incubating] Problems report is available at: file:///home/kerry/ws/velo/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 9s
+13 actionable tasks: 3 executed, 10 up-to-date
