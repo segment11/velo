@@ -327,11 +327,10 @@ public class LGroup extends BaseCommand {
             return ErrorReply.LIST_SIZE_TO_LONG;
         }
 
-        var encodedBytes = get(slotWithKeyHash, false, CompressedValue.SP_TYPE_LIST);
-        if (encodedBytes == null) {
-            // -1 or nil ? todo
+        if (cv == null) {
             return NilReply.INSTANCE;
         }
+        var encodedBytes = getValueBytesByCv(cv, slotWithKeyHash);
 
         var buffer = ByteBuffer.wrap(encodedBytes);
         var size = buffer.getShort();
@@ -697,8 +696,8 @@ public class LGroup extends BaseCommand {
             if (!cv.isList()) {
                 return ErrorReply.WRONG_TYPE;
             }
-            var rl = getRedisList(slotWithKeyHash);
-            if (rl == null || rl.isEmpty()) {
+            var rl = RedisList.decode(getValueBytesByCv(cv, slotWithKeyHash));
+            if (rl.isEmpty()) {
                 continue;
             }
 

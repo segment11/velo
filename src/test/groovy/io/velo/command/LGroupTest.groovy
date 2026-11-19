@@ -12,12 +12,14 @@ import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.OneSlot
 import io.velo.reply.*
 import io.velo.type.RedisList
 import redis.clients.jedis.Jedis
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 
 class LGroupTest extends Specification {
     final short slot = 0
@@ -182,6 +184,42 @@ class LGroupTest extends Specification {
         reply = lGroup.execute('lindex >key 1')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'lindex reads the key only once for both existing and missing keys'
+        def lindexReads = new AtomicInteger()
+        def countingStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-lindex' || key == 'missing-lindex') {
+                    lindexReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def countingGroup = new LGroup(null, null, null)
+        countingGroup.byPassGetSet = countingStore
+        countingGroup.from(BaseCommand.mockAGroup())
+        countingStore.put(slot, 'single-lindex', 0, cv)
+        def existingReply = countingGroup.execute('lindex single-lindex 0')
+        int existingReads = lindexReads.get()
+        lindexReads.set(0)
+        def missingReply = countingGroup.execute('lindex missing-lindex 0')
+        int missingReads = lindexReads.get()
+        then:
+        existingReply instanceof BulkReply
+        (existingReply as BulkReply).asString() == 'a'
+        existingReads == 1
+        missingReply == NilReply.INSTANCE
+        missingReads == 1
+
+        when: 'lindex on wrong type key returns WRONGTYPE'
+        def wrongCv = new CompressedValue()
+        wrongCv.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        wrongCv.compressedData = 'notalist'.bytes
+        inMemoryGetSet.put(slot, 'wrong-lindex', 0, wrongCv)
+        reply = lGroup.execute('lindex wrong-lindex 0')
+        then:
+        reply == ErrorReply.WRONG_TYPE
     }
 
     def 'test linsert'() {
@@ -1445,5 +1483,42 @@ port ${tmpPort}
         reply = lGroup.execute('lmpop 1 notlist LEFT')
         then:
         reply == ErrorReply.WRONG_TYPE
+
+        when: 'lmpop reads a non-empty list key only once'
+        def lmpopReads = new AtomicInteger()
+        def lmpopStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-lmpop') {
+                    lmpopReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def lmpopGroup = new LGroup(null, null, null)
+        lmpopGroup.byPassGetSet = lmpopStore
+        lmpopGroup.from(BaseCommand.mockAGroup())
+        def singleCv = Mock.prepareCompressedValueList(1)[0]
+        singleCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        def singleRl = new RedisList()
+        singleRl.addLast('v1'.bytes)
+        singleRl.addLast('v2'.bytes)
+        singleCv.compressedData = singleRl.encode()
+        lmpopStore.put(slot, 'single-lmpop', 0, singleCv)
+        reply = lmpopGroup.execute('lmpop 1 single-lmpop LEFT COUNT 1')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == 'single-lmpop'
+        (((reply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'v1'
+        lmpopReads.get() == 1
+
+        when: 'an encoded empty list key is skipped by lmpop'
+        def emptyListCv = Mock.prepareCompressedValueList(1)[0]
+        emptyListCv.dictSeqOrSpType = CompressedValue.SP_TYPE_LIST
+        emptyListCv.compressedData = new RedisList().encode()
+        inMemoryGetSet.put(slot, 'empty-list', 0, emptyListCv)
+        reply = lGroup.execute('lmpop 1 empty-list LEFT')
+        then:
+        reply == NilReply.INSTANCE
     }
 }
