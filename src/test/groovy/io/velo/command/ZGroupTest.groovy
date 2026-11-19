@@ -14,6 +14,8 @@ import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 class ZGroupTest extends Specification {
     final short slot = 0
@@ -1981,9 +1983,9 @@ zunionstore
         zGroup.from(BaseCommand.mockAGroup((byte) 0, (byte) 2, (short) 2))
 
         and: 'a destination key on the other slot and the source keys on this slot'
-        def keyOnSlot = { int wantSlot ->
+        def keyOnSlot = { int wantSlot, String prefix = 'store' ->
             for (int i = 0; i < 10000; i++) {
-                def candidate = "store-${wantSlot}-${i}"
+                def candidate = "${prefix}-${wantSlot}-${i}"
                 if (BaseCommand.slot(candidate, (short) 2).slot() == wantSlot) {
                     return candidate
                 }
@@ -2006,14 +2008,22 @@ zunionstore
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
+        // the reply is settled after the destination write, the flush above completes it
+        (reply as AsyncReply).settablePromise.isComplete()
         def storeReply = (reply as AsyncReply).settablePromise.getResult()
         storeReply instanceof IntegerReply
         (storeReply as IntegerReply).integer == 3
 
         when: 'the destination holds the union on its own worker'
-        def stored = readKeyOnWorker(otherEventloop, dstKey)
+        def stored = keyExistsOnWorker(otherEventloop, dstKey)
         then:
-        stored != null
+        stored
+
+        when: 'a key that was never written does not exist on that worker'
+        def missingKey = keyOnSlot(1, 'missing')
+        def missing = keyExistsOnWorker(otherEventloop, missingKey)
+        then:
+        !missing
 
         when: 'a destination on this worker keeps the synchronous reply'
         def sameSlotDst = keyOnSlot(0)
@@ -2048,24 +2058,26 @@ zunionstore
     }
 
     /**
-     * Reads a key on the given worker thread, the slot data may only be read by its owner.
+     * Reads a key on the given worker thread, the slot data may only be read by its owner. The
+     * read is awaited with a bound, the promise result alone would be read before the worker
+     * completed it.
      *
      * @param eventloop the worker event loop owning the slot
      * @param key       the key to read
      * @return true when the key exists on that worker
      */
-    private static boolean readKeyOnWorker(Eventloop eventloop, String key) {
-        var promise = new io.activej.promise.SettablePromise<Boolean>()
+    private static boolean keyExistsOnWorker(Eventloop eventloop, String key) {
+        def future = new CompletableFuture<Boolean>()
         eventloop.execute({
             try {
-                var slotWithKeyHash = BaseCommand.slot(key, (short) 2)
-                var oneSlot = LocalPersist.instance.oneSlot(slotWithKeyHash.slot())
-                promise.set(oneSlot.get(slotWithKeyHash.rawKey(), slotWithKeyHash.bucketIndex(),
+                def slotWithKeyHash = BaseCommand.slot(key, (short) 2)
+                def oneSlot = LocalPersist.instance.oneSlot(slotWithKeyHash.slot())
+                future.complete(oneSlot.get(slotWithKeyHash.rawKey(), slotWithKeyHash.bucketIndex(),
                         slotWithKeyHash.keyHash()) != null)
             } catch (Throwable t) {
-                promise.setException(t)
+                future.completeExceptionally(t)
             }
         })
-        return promise.getResult()
+        return future.get(5, TimeUnit.SECONDS)
     }
 }
