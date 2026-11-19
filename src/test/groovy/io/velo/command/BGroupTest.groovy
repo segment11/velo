@@ -2060,6 +2060,34 @@ class BGroupTest extends Specification {
         casOne.tryMarkDelivered()
         then:
         !casOne.tryMarkDelivered()
+
+        when: 'a waiter registered on two keys is served by one of them'
+        BlockingZSet.clearBlockingZSetPromisesForAllKeys()
+        def multiPromise = new SettablePromise<Reply>()
+        def multiSlotA = BaseCommand.slot('bzmulti-a', (short) 1)
+        def multiSlotB = BaseCommand.slot('bzmulti-b', (short) 1)
+        def multiOne = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(multiPromise, null, true,
+                System.currentTimeMillis(), 0, [multiSlotA, multiSlotB])
+        BlockingZSet.addOne('bzmulti-a', multiOne)
+        BlockingZSet.addOne('bzmulti-b', multiOne)
+        then:
+        BlockingZSet.blockingClientCount() == 2
+        BlockingZSet.blockingKeyCount() == 2
+
+        when: 'the first key is served, the waiter must be released from both keys'
+        inMemoryGetSet.remove(slot, 'bzmulti-a')
+        def cvMulti = Mock.prepareCompressedValueList(1)[0]
+        cvMulti.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzMulti = new RedisZSet()
+        rzMulti.add(1.0, 'multi-member')
+        cvMulti.compressedData = rzMulti.encode()
+        inMemoryGetSet.put(slot, 'bzmulti-a', 0, cvMulti)
+        def multiCompleted = BGroup.completeIfZSetNotEmpty(multiSlotA, 'bzmulti-a'.bytes, bGroup, bGroup.dictMap, multiOne)
+        then:
+        multiCompleted
+        multiPromise.isComplete()
+        BlockingZSet.blockingClientCount() == 0
+        BlockingZSet.blockingKeyCount() == 0
     }
 
     def 'test bzpopmax'() {

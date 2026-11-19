@@ -45,6 +45,7 @@ public class BlockingZSet {
         private final boolean isMin;
         private final long createdTime;
         private final int mpopCount;
+        private final List<BaseCommand.SlotWithKeyHash> registeredSlots;
 
         private final AtomicBoolean delivered = new AtomicBoolean();
 
@@ -60,11 +61,37 @@ public class BlockingZSet {
                                                  boolean isMin,
                                                  long createdTime,
                                                  int mpopCount) {
+            this(settablePromise, socket, isMin, createdTime, mpopCount, List.of());
+        }
+
+        /**
+         * @param settablePromise  promise
+         * @param socket           the client socket
+         * @param isMin            pop the lowest scored member when true, the highest one otherwise
+         * @param createdTime      created time for timeout
+         * @param mpopCount        number of members to pop for BZMPOP, 0 means BZPOPMIN/BZPOPMAX (single triple reply)
+         * @param registeredSlots  the keys this waiter is registered on, a multi key block registers the
+         *                          same waiter on every key and serving one key must release all of them
+         */
+        public PromiseWithMinOrMaxAndCreatedTime(SettablePromise<Reply> settablePromise,
+                                                 ITcpSocket socket,
+                                                 boolean isMin,
+                                                 long createdTime,
+                                                 int mpopCount,
+                                                 List<BaseCommand.SlotWithKeyHash> registeredSlots) {
             this.settablePromise = settablePromise;
             this.socket = socket;
             this.isMin = isMin;
             this.createdTime = createdTime;
             this.mpopCount = mpopCount;
+            this.registeredSlots = List.copyOf(registeredSlots);
+        }
+
+        /**
+         * @return the keys this waiter is registered on
+         */
+        public List<BaseCommand.SlotWithKeyHash> registeredSlots() {
+            return registeredSlots;
         }
 
         /**
@@ -217,6 +244,8 @@ public class BlockingZSet {
                 clientCount--;
                 if (list.isEmpty()) {
                     keyCount--;
+                    // the key has no waiter left, do not keep an empty entry
+                    blockingZSetPromisesByKey.remove(key);
                 }
             }
         }
@@ -323,6 +352,28 @@ public class BlockingZSet {
                                           BaseCommand baseCommand, DictMap dictMap,
                                           PromiseWithMinOrMaxAndCreatedTime one) {
         return BGroup.completeIfZSetNotEmpty(slotWithKeyHash, keyBytes, baseCommand, dictMap, one);
+    }
+
+    /**
+     * Removes the waiter from every key it was registered on. A multi key block registers the same
+     * waiter on every key, serving one of them must release all of them, else the waiter stays in
+     * the other keys and the blocked client count keeps growing.
+     *
+     * @param one the promise wrap
+     */
+    public static void removeEverywhere(PromiseWithMinOrMaxAndCreatedTime one) {
+        for (var slotWithKeyHash : one.registeredSlots()) {
+            var slot = slotWithKeyHash.slot();
+            if (!localPersist.isOneSlotInitialized(slot)) {
+                continue;
+            }
+            localPersist.oneSlot(slot).asyncExecute(() -> {
+                var inner = getInnerOrNull();
+                if (inner != null) {
+                    inner.removeOne(slotWithKeyHash.rawKey(), one);
+                }
+            });
+        }
     }
 
     /**

@@ -1579,7 +1579,8 @@ public class BGroup extends BaseCommand {
             SettablePromise<Reply> finalPromise = new SettablePromise<>();
             var asyncReply = new AsyncReply(finalPromise);
 
-            var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin, System.currentTimeMillis(), 0);
+            var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin,
+                    System.currentTimeMillis(), 0, slotWithKeyHashListParsed);
 
             // each key is checked on the worker owning it, never blocking the current worker
             // the continuation below runs on the worker of the last checked key, which is also the
@@ -1608,7 +1609,7 @@ public class BGroup extends BaseCommand {
                         // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                         if (one.tryMarkDelivered()) {
                             finalPromise.set(NilReply.INSTANCE);
-                            removeZSetBlockingWaiter(keys, one);
+                            BlockingZSet.removeEverywhere(one);
                         }
                     });
                 }
@@ -1622,7 +1623,8 @@ public class BGroup extends BaseCommand {
         var asyncReply = new AsyncReply(finalPromise);
 
         var firstKey = keys.getFirst();
-        var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin, System.currentTimeMillis(), 0);
+        var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin,
+                System.currentTimeMillis(), 0, slotWithKeyHashListParsed);
         BlockingZSet.addOne(firstKey, one);
 
         if (!isBlockIndefinitely) {
@@ -1632,7 +1634,7 @@ public class BGroup extends BaseCommand {
                 // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                 if (one.tryMarkDelivered()) {
                     finalPromise.set(NilReply.INSTANCE);
-                    BlockingZSet.removeOne(firstKey, one);
+                    BlockingZSet.removeEverywhere(one);
                 }
             });
         }
@@ -1744,7 +1746,8 @@ public class BGroup extends BaseCommand {
                 return;
             }
 
-            var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin, System.currentTimeMillis(), popCount);
+            var one = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(finalPromise, socket, isMin,
+                    System.currentTimeMillis(), popCount, slotWithKeyHashListParsed);
             var waiter = one;
             // register the waiter on every key owning worker, so a member added to any of them can wake it up
             addZSetBlockingWaiter(keys, waiter);
@@ -1758,7 +1761,7 @@ public class BGroup extends BaseCommand {
                     // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                     if (one.tryMarkDelivered()) {
                         finalPromise.set(NilReply.INSTANCE);
-                        removeZSetBlockingWaiter(keys, one);
+                        BlockingZSet.removeEverywhere(one);
                     }
                 });
             }
@@ -1899,20 +1902,6 @@ public class BGroup extends BaseCommand {
     }
 
     /**
-     * Remove one blocking sorted set promise from the worker owning each key.
-     *
-     * @param keys the blocking keys
-     * @param one  the promise wrapper
-     */
-    private void removeZSetBlockingWaiter(ArrayList<String> keys, BlockingZSet.PromiseWithMinOrMaxAndCreatedTime one) {
-        for (int i = 0; i < keys.size(); i++) {
-            var key = keys.get(i);
-            var slot = slotWithKeyHashListParsed.get(i).slot();
-            localPersist.oneSlot(slot).asyncExecute(() -> BlockingZSet.removeOne(key, one));
-        }
-    }
-
-    /**
      * Complete the blocking reply when a member landed between the emptiness check and the waiter
      * registration, the sorted set is re-read on its owning worker.
      *
@@ -1973,6 +1962,8 @@ public class BGroup extends BaseCommand {
         }
 
         BlockingZSet.removeOne(Wal.keyString(keyBytes), one);
+        // a multi key block registers the waiter on every key, release all of them
+        BlockingZSet.removeEverywhere(one);
         if (one.mpopCount() > 0) {
             one.settablePromise().set(popZSetValuesReply(baseCommand, dictMap, slotWithKeyHash, keyBytes, rz, one.isMin(), one.mpopCount()));
         } else {
