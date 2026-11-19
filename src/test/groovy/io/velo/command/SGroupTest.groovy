@@ -16,6 +16,7 @@ import spock.lang.Specification
 
 import java.nio.ByteBuffer
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 
 class SGroupTest extends Specification {
     final short slot = 0
@@ -2844,6 +2845,44 @@ sunionstore
         reply = sGroup.execute('sscan a 0 count 10')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
+
+        when: 'sscan reads the main key only once for existing, missing, and wrong-type keys'
+        def sscanReads = new AtomicInteger()
+        def countingStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-sscan' || key == 'missing-sscan' || key == 'wrong-sscan') {
+                    sscanReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def countingGroup = new SGroup(null, null, null)
+        countingGroup.byPassGetSet = countingStore
+        countingGroup.from(BaseCommand.mockAGroup())
+        def singleSetCv = Mock.prepareCompressedValueList(1)[0]
+        singleSetCv.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def singleSetRhk = new RedisHashKeys()
+        singleSetRhk.add('m1')
+        singleSetCv.compressedData = singleSetRhk.encode()
+        countingStore.put(slot, 'single-sscan', 0, singleSetCv)
+        def existingReply = countingGroup.execute('sscan single-sscan 0 count 10')
+        int existingReads = sscanReads.get()
+        sscanReads.set(0)
+        def missingReply = countingGroup.execute('sscan missing-sscan 0')
+        int missingReads = sscanReads.get()
+        sscanReads.set(0)
+        countingStore.put(slot, 'wrong-sscan', 0, cvString)
+        def wrongTypeReply = countingGroup.execute('sscan wrong-sscan 0 badopt')
+        int wrongTypeReads = sscanReads.get()
+        then:
+        existingReply instanceof MultiBulkReply
+        (((existingReply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'm1'
+        existingReads == 1
+        missingReply == MultiBulkReply.SCAN_EMPTY
+        missingReads == 1
+        wrongTypeReply == ErrorReply.WRONG_TYPE
+        wrongTypeReads == 1
     }
 
     def 'test srem'() {

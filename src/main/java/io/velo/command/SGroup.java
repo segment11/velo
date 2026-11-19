@@ -2333,8 +2333,14 @@ public class SGroup extends BaseCommand {
         }
 
         // redis checks the key type before validating the options
-        var cvForType = getCvSpTypeOnly(slotWithKeyHashListParsed.getFirst());
-        if (cvForType != null && cvForType != CompressedValue.SP_TYPE_SET) {
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var mainKeyCv = getCv(slotWithKeyHash);
+        if (mainKeyCv != null) {
+            if (mainKeyCv.getDictSeqOrSpType() != CompressedValue.SP_TYPE_SET) {
+                return ErrorReply.WRONG_TYPE;
+            }
+        } else if (exists(slot(RedisHashKeys.keysKey(slotWithKeyHash.rawKey())))) {
+            // a split stored hash keeps no value under the main key, only the h_k_ index
             return ErrorReply.WRONG_TYPE;
         }
 
@@ -2368,19 +2374,12 @@ public class SGroup extends BaseCommand {
             }
         }
 
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var mainKeyCv = getCv(slotWithKeyHash);
-        if (mainKeyCv != null) {
-            if (mainKeyCv.getDictSeqOrSpType() != CompressedValue.SP_TYPE_SET) {
-                return ErrorReply.WRONG_TYPE;
-            }
-        } else if (exists(slot(RedisHashKeys.keysKey(slotWithKeyHash.rawKey())))) {
-            // a split stored hash keeps no value under the main key, only the h_k_ index
-            return ErrorReply.WRONG_TYPE;
+        if (mainKeyCv == null) {
+            return MultiBulkReply.SCAN_EMPTY;
         }
 
-        var rhk = getRedisSet(slotWithKeyHash);
-        if (rhk == null || rhk.isEmpty()) {
+        var rhk = RedisHashKeys.decode(getValueBytesByCv(mainKeyCv, slotWithKeyHash));
+        if (rhk.isEmpty()) {
             return MultiBulkReply.SCAN_EMPTY;
         }
 
