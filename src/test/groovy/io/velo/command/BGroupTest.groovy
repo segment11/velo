@@ -1985,8 +1985,19 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('bzpopmin wtypea wtypeb 0')
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.getException() instanceof TypeMismatchException
+        (reply as AsyncReply).settablePromise.getResult() == ErrorReply.WRONG_TYPE
         inMemoryGetSet.remove(slot, 'wtypeb')
+
+        when: 'a key payload that cannot be decoded is reported as an error reply'
+        def cvCorrupt = Mock.prepareCompressedValueList(1)[0]
+        cvCorrupt.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        cvCorrupt.compressedData = 'corrupted-zset-payload'.bytes
+        inMemoryGetSet.put(slot, 'wcorrupt', 0, cvCorrupt)
+        reply = bGroup.execute('bzpopmin wmissing wcorrupt 0')
+        then:
+        reply instanceof AsyncReply
+        (reply as AsyncReply).settablePromise.getException() != null
+        inMemoryGetSet.remove(slot, 'wcorrupt')
 
         when: 'a zadd lands between the check and the registration, the re-check completes the reply'
         def promiseForRace = new SettablePromise<Reply>()

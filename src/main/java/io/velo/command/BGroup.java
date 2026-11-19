@@ -1588,7 +1588,12 @@ public class BGroup extends BaseCommand {
             popOtherKeyZAsync(1, keys, isMin).whenComplete((r, e) -> {
                 if (e != null) {
                     log.error("{} error={}", isMin ? "bzpopmin" : "bzpopmax", e.getMessage());
-                    finalPromise.setException(Utils.wrapException(isMin ? "bzpopmin" : "bzpopmax", e));
+                    if (e instanceof TypeMismatchException) {
+                        // the key holds another type, answer the redis wrong type error
+                        finalPromise.set(ErrorReply.WRONG_TYPE);
+                    } else {
+                        finalPromise.setException(Utils.wrapException(isMin ? "bzpopmin" : "bzpopmax", e));
+                    }
                     return;
                 }
 
@@ -1737,7 +1742,12 @@ public class BGroup extends BaseCommand {
         // the remaining keys are checked on the worker owning them, without blocking this one
         popOtherKeyZMpopAsync(1, keys, isMin, popCount).whenComplete((r, e) -> {
             if (e != null) {
-                finalPromise.setException(Utils.wrapException("bzmpop", e));
+                if (e instanceof TypeMismatchException) {
+                    // the key holds another type, answer the redis wrong type error
+                    finalPromise.set(ErrorReply.WRONG_TYPE);
+                } else {
+                    finalPromise.setException(Utils.wrapException("bzmpop", e));
+                }
                 return;
             }
 
