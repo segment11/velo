@@ -10,10 +10,13 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.OneSlot
 import io.velo.reply.*
 import io.velo.type.RedisHH
 import io.velo.type.RedisHashKeys
 import spock.lang.Specification
+
+import java.util.concurrent.atomic.AtomicInteger
 
 class HGroupTest extends Specification {
     def _HGroup = new HGroup(null, null, null)
@@ -1817,6 +1820,68 @@ httl
         reply = hGroup.execute('hscan a 0 count 10 novalues')
         then:
         reply == MultiBulkReply.SCAN_EMPTY
+
+        when: 'hscan reads the main key only once in HH mode and split mode'
+        def mainKeyReads = new AtomicInteger()
+        def splitKeysKeyReads = new AtomicInteger()
+        def countingStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short s, String key, int bucketIndex, long keyHash) {
+                if (key == 'single-hh' || key == 'missing-hh' || key == 'single-split' || key == 'wrong-hscan') {
+                    mainKeyReads.incrementAndGet()
+                } else if (key == RedisHashKeys.keysKey('single-split')) {
+                    splitKeysKeyReads.incrementAndGet()
+                }
+                return super.getBuf(s, key, bucketIndex, keyHash)
+            }
+        }
+        def countingGroup = new HGroup(null, null, null)
+        countingGroup.byPassGetSet = countingStore
+        countingGroup.from(BaseCommand.mockAGroup())
+
+        LocalPersist.instance.hashSaveMemberTogether = true
+        def singleHhCv = Mock.prepareCompressedValueList(1)[0]
+        singleHhCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HH
+        def singleHh = new RedisHH()
+        singleHh.put('f1', 'v1'.bytes)
+        singleHhCv.compressedData = singleHh.encode()
+        countingStore.put(slot, 'single-hh', 0, singleHhCv)
+        def hhExistingReply = countingGroup.execute('hscan single-hh 0 count 10')
+        int hhExistingReads = mainKeyReads.get()
+
+        mainKeyReads.set(0)
+        def hhMissingReply = countingGroup.execute('hscan missing-hh 0 count 10')
+        int hhMissingReads = mainKeyReads.get()
+
+        LocalPersist.instance.hashSaveMemberTogether = false
+        mainKeyReads.set(0)
+        splitKeysKeyReads.set(0)
+        def singleSplitCv = Mock.prepareCompressedValueList(1)[0]
+        singleSplitCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        def singleSplitRhk = new RedisHashKeys()
+        singleSplitRhk.add('f1')
+        singleSplitCv.compressedData = singleSplitRhk.encode()
+        countingStore.put(slot, RedisHashKeys.keysKey('single-split'), 0, singleSplitCv)
+        def splitReply = countingGroup.execute('hscan single-split 0 count 10 novalues')
+        int splitMainReads = mainKeyReads.get()
+        int splitIdxReads = splitKeysKeyReads.get()
+
+        mainKeyReads.set(0)
+        countingStore.put(slot, 'wrong-hscan', 0, cvString)
+        def wrongOptReply = countingGroup.execute('hscan wrong-hscan 0 badopt')
+        int wrongOptReads = mainKeyReads.get()
+        then:
+        hhExistingReply instanceof MultiBulkReply
+        (((hhExistingReply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'f1'
+        hhExistingReads == 1
+        hhMissingReply == MultiBulkReply.SCAN_EMPTY
+        hhMissingReads == 1
+        splitReply instanceof MultiBulkReply
+        (((splitReply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'f1'
+        splitMainReads == 1
+        splitIdxReads == 1
+        wrongOptReply == ErrorReply.WRONG_TYPE
+        wrongOptReads == 1
 
         cleanup:
         LocalPersist.instance.hashSaveMemberTogether = false

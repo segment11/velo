@@ -2312,9 +2312,19 @@ public class HGroup extends BaseCommand {
         }
 
         // redis checks the key type before validating the options
-        var cvForType = getCvSpTypeOnly(slotWithKeyHashListParsed.getFirst());
-        if (cvForType != null && cvForType != CompressedValue.SP_TYPE_HASH && cvForType != CompressedValue.SP_TYPE_HH) {
-            return ErrorReply.WRONG_TYPE;
+        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
+        var useHH = isUseHH(keyBytes);
+        CompressedValue hhCv = null;
+        if (useHH) {
+            hhCv = getCv(slotWithKeyHash);
+            if (hhCv != null && hhCv.getDictSeqOrSpType() != CompressedValue.SP_TYPE_HH) {
+                return ErrorReply.WRONG_TYPE;
+            }
+        } else {
+            var typeReply = checkSplitKeyType(slotWithKeyHash);
+            if (typeReply != null) {
+                return typeReply;
+            }
         }
 
         String matchPattern = null;
@@ -2350,14 +2360,8 @@ public class HGroup extends BaseCommand {
             }
         }
 
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var typeReply = checkSplitKeyType(slotWithKeyHash);
-        if (typeReply != null) {
-            return typeReply;
-        }
-
-        if (isUseHH(keyBytes)) {
-            return hscan2(cursorLong, matchPattern, count, noValues);
+        if (useHH) {
+            return hscan2(hhCv, slotWithKeyHash, cursorLong, matchPattern, count, noValues);
         }
 
         // performance bad
@@ -2413,10 +2417,13 @@ public class HGroup extends BaseCommand {
         return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
     }
 
-    private Reply hscan2(long cursorLong, String matchPattern, int count, boolean noValues) {
-        var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var rhh = getRedisHH(slotWithKeyHash);
-        if (rhh == null || rhh.isEmpty()) {
+    private Reply hscan2(CompressedValue cv, SlotWithKeyHash slotWithKeyHash,
+                         long cursorLong, String matchPattern, int count, boolean noValues) {
+        if (cv == null) {
+            return MultiBulkReply.SCAN_EMPTY;
+        }
+        var rhh = RedisHH.decode(getValueBytesByCv(cv, slotWithKeyHash));
+        if (rhh.isEmpty()) {
             return MultiBulkReply.SCAN_EMPTY;
         }
 
