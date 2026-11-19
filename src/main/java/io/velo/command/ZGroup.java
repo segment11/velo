@@ -2690,6 +2690,25 @@ public class ZGroup extends BaseCommand {
         return new MultiBulkReply(new Reply[]{new BulkReply(nextCursor), new MultiBulkReply(replies)});
     }
 
+    /**
+     * Builds the member/score pairs of a ZMPOP reply. Redis replies with one array per pair, even
+     * for a single member, see genericZpopCommand() with use_nested_array in redis src/t_zset.c.
+     *
+     * @param rz    the sorted set to pop from, the popped members are removed from it
+     * @param isMin pop from the low end when true, from the high end otherwise
+     * @param count maximum number of members to pop
+     * @return one array reply per popped member
+     */
+    private static Reply[] zmpopMemberPairReplies(RedisZSet rz, boolean isMin, int count) {
+        int min = Math.min(count, rz.size());
+        var replies = new Reply[min];
+        for (int j = 0; j < min; j++) {
+            var sv = isMin ? rz.pollFirst() : rz.pollLast();
+            replies[j] = new MultiBulkReply(new Reply[]{new BulkReply(sv.member()), new BulkReply(sv.score())});
+        }
+        return replies;
+    }
+
     private Reply zmpop() {
         if (data.length < 4) {
             return ErrorReply.FORMAT;
@@ -2757,13 +2776,7 @@ public class ZGroup extends BaseCommand {
 
                 var keyBytes = data[2 + i];
 
-                int min = Math.min(count, rz.size());
-                var valueReplies = new Reply[min * 2];
-                for (int j = 0; j < min; j++) {
-                    var sv = isMin ? rz.pollFirst() : rz.pollLast();
-                    valueReplies[j * 2] = new BulkReply(sv.member());
-                    valueReplies[j * 2 + 1] = new BulkReply(sv.score());
-                }
+                var valueReplies = zmpopMemberPairReplies(rz, isMin, count);
 
                 saveRedisZSet(rz, slotWithKeyHash);
 
@@ -2835,13 +2848,7 @@ public class ZGroup extends BaseCommand {
                 var rz = item.rz();
                 var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
 
-                int min = Math.min(finalCount, rz.size());
-                var valueReplies = new Reply[min * 2];
-                for (int j = 0; j < min; j++) {
-                    var sv = finalIsMin ? rz.pollFirst() : rz.pollLast();
-                    valueReplies[j * 2] = new BulkReply(sv.member());
-                    valueReplies[j * 2 + 1] = new BulkReply(sv.score());
-                }
+                var valueReplies = zmpopMemberPairReplies(rz, finalIsMin, finalCount);
 
                 var keyBytes = data[2 + i];
                 var keyReply = new BulkReply(keyBytes);

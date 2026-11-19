@@ -1286,6 +1286,16 @@ class ZGroupPart2Test extends Specification {
         zGroup.byPassGetSet = inMemoryGetSet
         zGroup.from(BaseCommand.mockAGroup())
 
+        and: 'the redis shape nests one array per member/score pair'
+        def memberPairs = { reply ->
+            def arr = reply as MultiBulkReply
+            arr.replies.collect { pair ->
+                def onePair = pair as MultiBulkReply
+                onePair.replies.length == 2
+                [(onePair.replies[0] as BulkReply).asString(), (onePair.replies[1] as BulkReply).asString()]
+            }
+        }
+
         when: 'format error - too few args'
         def reply = zGroup.execute('zmpop')
         then:
@@ -1363,30 +1373,21 @@ class ZGroupPart2Test extends Specification {
         reply instanceof MultiBulkReply
         mb.replies.length == 2
         (mb.replies[0] as BulkReply).asString() == 'myzset'
-        def valuesReply = mb.replies[1] as MultiBulkReply
-        valuesReply.replies.length == 2
-        (valuesReply.replies[0] as BulkReply).asString() == 'one'
-        (valuesReply.replies[1] as BulkReply).asString() == '1'
+        memberPairs(mb.replies[1]) == [['one', '1']]
 
         when: 'single key, pop MAX'
         reply = zGroup.execute('zmpop 1 myzset MAX')
         mb = reply as MultiBulkReply
-        def valuesReply2 = mb.replies[1] as MultiBulkReply
         then:
         reply instanceof MultiBulkReply
-        valuesReply2.replies.length == 2
-        (valuesReply2.replies[0] as BulkReply).asString() == 'three'
-        (valuesReply2.replies[1] as BulkReply).asString() == '3'
+        memberPairs(mb.replies[1]) == [['three', '3']]
 
         when: 'single key, COUNT 2 (only 1 element left)'
         reply = zGroup.execute('zmpop 1 myzset MIN COUNT 2')
         mb = reply as MultiBulkReply
-        def valuesReply3 = mb.replies[1] as MultiBulkReply
         then:
         reply instanceof MultiBulkReply
-        valuesReply3.replies.length == 2
-        (valuesReply3.replies[0] as BulkReply).asString() == 'two'
-        (valuesReply3.replies[1] as BulkReply).asString() == '2'
+        memberPairs(mb.replies[1]) == [['two', '2']]
 
         when: 'zset now empty, key removed'
         reply = zGroup.execute('zmpop 1 myzset MIN')
@@ -1405,15 +1406,10 @@ class ZGroupPart2Test extends Specification {
         inMemoryGetSet.put(slot, 'b', 0, cvB)
         reply = zGroup.execute('zmpop 2 a b MIN COUNT 3')
         mb = reply as MultiBulkReply
-        def valuesReply4 = mb.replies[1] as MultiBulkReply
         then:
         reply instanceof MultiBulkReply
         (mb.replies[0] as BulkReply).asString() == 'b'
-        valuesReply4.replies.length == 4
-        (valuesReply4.replies[0] as BulkReply).asString() == 'x'
-        (valuesReply4.replies[1] as BulkReply).asString() == '10'
-        (valuesReply4.replies[2] as BulkReply).asString() == 'y'
-        (valuesReply4.replies[3] as BulkReply).asString() == '20'
+        memberPairs(mb.replies[1]) == [['x', '10'], ['y', '20']]
 
         when: 'wrong type - key is not a zset'
         inMemoryGetSet.remove(slot, 'mylist')
@@ -1449,10 +1445,7 @@ class ZGroupPart2Test extends Specification {
         reply instanceof MultiBulkReply
         def mbSlot = reply as MultiBulkReply
         (mbSlot.replies[0] as BulkReply).asString() == 'b'
-        def vrSlot = mbSlot.replies[1] as MultiBulkReply
-        vrSlot.replies.length == 2
-        (vrSlot.replies[0] as BulkReply).asString() == 'seven'
-        (vrSlot.replies[1] as BulkReply).asString() == '7'
+        memberPairs(mbSlot.replies[1]) == [['seven', '7']]
 
         when: 'cross-slot - all keys missing'
         inMemoryGetSet.remove(slot, 'a')
@@ -1496,10 +1489,7 @@ class ZGroupPart2Test extends Specification {
         def mbCs = asyncResult as MultiBulkReply
         mbCs.replies.length == 2
         (mbCs.replies[0] as BulkReply).asString() == 'a'
-        def vrCs = mbCs.replies[1] as MultiBulkReply
-        vrCs.replies.length == 2
-        (vrCs.replies[0] as BulkReply).asString() == 'one'
-        (vrCs.replies[1] as BulkReply).asString() == '1'
+        memberPairs(mbCs.replies[1]) == [['one', '1']]
 
         when: 'cross-slot - first empty, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -1516,17 +1506,12 @@ class ZGroupPart2Test extends Specification {
         eventloopCurrent.run()
         asyncResult = (reply as AsyncReply).settablePromise.getResult()
         def mbCs2 = asyncResult as MultiBulkReply
-        def vrCs2 = mbCs2.replies[1] as MultiBulkReply
         then:
         reply instanceof AsyncReply
         asyncResult instanceof MultiBulkReply
         mbCs2.replies.length == 2
         (mbCs2.replies[0] as BulkReply).asString() == 'b'
-        vrCs2.replies.length == 4
-        (vrCs2.replies[0] as BulkReply).asString() == 'z'
-        (vrCs2.replies[1] as BulkReply).asString() == '30'
-        (vrCs2.replies[2] as BulkReply).asString() == 'y'
-        (vrCs2.replies[3] as BulkReply).asString() == '20'
+        memberPairs(mbCs2.replies[1]) == [['z', '30'], ['y', '20']]
 
         when: 'cross-slot - first key empty zset, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -1546,14 +1531,11 @@ class ZGroupPart2Test extends Specification {
         eventloopCurrent.run()
         asyncResult = (reply as AsyncReply).settablePromise.getResult()
         def mbCs3 = asyncResult as MultiBulkReply
-        def vrCs3 = mbCs3.replies[1] as MultiBulkReply
         then:
         reply instanceof AsyncReply
         asyncResult instanceof MultiBulkReply
         (mbCs3.replies[0] as BulkReply).asString() == 'b'
-        vrCs3.replies.length == 2
-        (vrCs3.replies[0] as BulkReply).asString() == 'm'
-        (vrCs3.replies[1] as BulkReply).asString() == '5'
+        memberPairs(mbCs3.replies[1]) == [['m', '5']]
 
         when: 'cross-slot - wrong type'
         inMemoryGetSet.remove(slot, 'a')
