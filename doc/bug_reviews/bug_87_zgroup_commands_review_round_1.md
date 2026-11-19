@@ -6,7 +6,8 @@
 `zrangebylex`, `zrangebyscore`, `zrangestore`, `zrank`, `zrem`, `zremrangebylex`,
 `zremrangebyrank`, `zremrangebyscore`, `zrevrange`, `zrevrangebylex`, `zrevrangebyscore`,
 `zrevrank`, `zscore`, `zscan`, `zunion`, `zunionstore`) (* = intentional `NOT_SUPPORT`,
-bug_43 decision)
+bug_43 decision — **superseded 2026-11-19**, the three blocking pops are implemented since commit
+`33458c51` and are reviewed in `bug_90_blocking_zset_commands_review_round_1.md`)
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
@@ -664,7 +665,10 @@ One guard per entry point (`zdiffstore` 1167-1181 for the three stores; `zranges
   members; member-encoding round-trip through `String` in zadd/zrem/zincrby etc. is the
   systemic RedisHashKeys/RedisZSet design (String-based members), out of scope here.
 - `bzmpop`/`bzpopmax`/`bzpopmin` → NOT_SUPPORT — bug_43 implemented decision, tests exist
-  ('test blocking sorted set pops not supported', 3233).
+  ('test blocking sorted set pops not supported', 3233). **SUPERSEDED (2026-11-19):** the three
+  commands are implemented since commit `33458c51` (in `BGroup.java` + `BlockingZSet.java`), the
+  spec was removed and the implementation is reviewed in `bug_90_blocking_zset_commands_review_round_1.md`
+  — a round 2 of this report must not re-report the blocking pops as missing.
 - `getCv()` filters expired CVs (BaseCommand.java:777-779) — no expired-key findings for any
   Z command (they all branch on getRedisZSet == null).
 - `zrandmember` count==size returns all members in sorted (not shuffled) order — Redis

@@ -664,6 +664,13 @@ Verdict:
 
 ## Implementation Note - Blocking Sorted-Set Pops
 
+> **SUPERSEDED (2026-11-19):** the decision below was reversed. Commit `33458c51` implemented
+> `BZMPOP`, `BZPOPMAX` and `BZPOPMIN` in `BGroup.java` (with the new `BlockingZSet.java` registry),
+> and the implementation was reviewed in `doc/bug_reviews/bug_90_blocking_zset_commands_review_round_1.md`
+> (8 findings, plus `90.10` for the sibling `ZMPOP` reply shape). The `NOT_SUPPORT` behaviour and its
+> spec (`test blocking sorted set pops not supported`) no longer exist. The notes below are kept as
+> the history of the original decision.
+
 Implemented decision: `BZMPOP`, `BZPOPMAX`, and `BZPOPMIN` are intentionally not supported because blocking sorted-set pop semantics require additional blocking-command infrastructure.
 
 Behavior:
