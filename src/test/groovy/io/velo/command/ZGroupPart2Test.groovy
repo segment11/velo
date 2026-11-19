@@ -10,6 +10,7 @@ import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
 import io.velo.reply.*
+import io.velo.type.RedisHashKeys
 import io.velo.type.RedisZSet
 import spock.lang.Specification
 
@@ -1720,5 +1721,64 @@ class ZGroupPart2Test extends Specification {
         reply = zGroup.execute('zscan a 0 unknownoption')
         then:
         reply == ErrorReply.SYNTAX
+    }
+
+    def 'test getRedisZSetOrSet'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+        def zGroup = new ZGroup(null, null, null)
+        zGroup.byPassGetSet = inMemoryGetSet
+        zGroup.from(BaseCommand.mockAGroup())
+
+        and:
+        def slotWithKeyHash = BaseCommand.slot('a', (short) 1)
+
+        when: 'the key does not exist'
+        def rzMissing = ZGroup.getRedisZSetOrSet(slotWithKeyHash, zGroup)
+        then:
+        rzMissing == null
+
+        when: 'the key holds a sorted set'
+        def cvZSet = Mock.prepareCompressedValueList(1)[0]
+        cvZSet.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def rzSource = new RedisZSet()
+        rzSource.add(1.5, 'm1')
+        rzSource.add(2.5, 'm2')
+        cvZSet.compressedData = rzSource.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvZSet)
+        def rzFromZSet = ZGroup.getRedisZSetOrSet(slotWithKeyHash, zGroup)
+        then:
+        rzFromZSet != null
+        rzFromZSet.size() == 2
+        rzFromZSet.contains('m1')
+        rzFromZSet.contains('m2')
+        rzFromZSet.get('m1').score() == 1.5d
+
+        when: 'the key holds a set, every member gets the score 1.0 like redis'
+        def cvSet = Mock.prepareCompressedValueList(1)[0]
+        cvSet.dictSeqOrSpType = CompressedValue.SP_TYPE_SET
+        def rhk = new RedisHashKeys()
+        rhk.add('m1')
+        rhk.add('m2')
+        cvSet.compressedData = rhk.encode()
+        inMemoryGetSet.put(slot, 'a', 0, cvSet)
+        def rzFromSet = ZGroup.getRedisZSetOrSet(slotWithKeyHash, zGroup)
+        then:
+        rzFromSet != null
+        rzFromSet.size() == 2
+        rzFromSet.contains('m1')
+        rzFromSet.contains('m2')
+        rzFromSet.get('m1').score() == 1.0d
+        rzFromSet.get('m2').score() == 1.0d
+
+        when: 'the key holds another type'
+        def cvString = new CompressedValue()
+        cvString.dictSeqOrSpType = CompressedValue.SP_TYPE_SHORT_STRING
+        cvString.compressedData = 'hello'.bytes
+        inMemoryGetSet.put(slot, 'a', 0, cvString)
+        def rzWrongType = ZGroup.getRedisZSetOrSet(slotWithKeyHash, zGroup)
+        then:
+        def ex = thrown(TypeMismatchException)
+        ex.message.contains('Expect sp type array=[-8192, -4096]')
     }
 }
