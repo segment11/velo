@@ -361,16 +361,17 @@ public class PGroup extends BaseCommand {
     /**
      * The HyperLogLog of a key and the serialized bytes it was loaded from.
      *
-     * @param hll   the HyperLogLog, null when the key does not exist
-     * @param bytes the serialized bytes of the stored HyperLogLog, null when the key does not exist
+     * @param hll      the HyperLogLog, null when the key does not exist
+     * @param bytes    the serialized bytes of the stored HyperLogLog, null when the key does not exist
+     * @param expireAt the key expire time in milliseconds, or {@link CompressedValue#NO_EXPIRE} when missing or no expire
      */
-    private record HllWithBytes(HyperLogLog hll, byte[] bytes) {
+    private record HllWithBytes(HyperLogLog hll, byte[] bytes, long expireAt) {
     }
 
     private HllWithBytes getHllWithBytes(SlotWithKeyHash s) {
         var cv = getCv(s);
         if (cv == null) {
-            return new HllWithBytes(null, null);
+            return new HllWithBytes(null, null, CompressedValue.NO_EXPIRE);
         }
 
         if (!cv.isHll()) {
@@ -387,7 +388,7 @@ public class PGroup extends BaseCommand {
 
         var is = new ByteArrayInputStream(decompressed);
         try {
-            return new HllWithBytes(HyperLogLogUtils.deserializeHLL(is), decompressed);
+            return new HllWithBytes(HyperLogLogUtils.deserializeHLL(is), decompressed, cv.getExpireAt());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -395,14 +396,6 @@ public class PGroup extends BaseCommand {
 
     private HyperLogLog getHll(SlotWithKeyHash s) {
         return getHllWithBytes(s).hll();
-    }
-
-    private long getHllExpireAt(SlotWithKeyHash s) {
-        var cv = getCv(s);
-        if (cv == null) {
-            return CompressedValue.NO_EXPIRE;
-        }
-        return cv.isHll() ? cv.getExpireAt() : CompressedValue.NO_EXPIRE;
     }
 
     private Reply pfadd() {
@@ -435,7 +428,7 @@ public class PGroup extends BaseCommand {
 
         if (isChanged) {
             try {
-                saveHllBytes(slotWithKeyHash, hllBytes, getHllExpireAt(slotWithKeyHash));
+                saveHllBytes(slotWithKeyHash, hllBytes, hllWithBytes.expireAt());
             } catch (IOException e) {
                 return new ErrorReply(e.getMessage());
             }
@@ -537,7 +530,8 @@ public class PGroup extends BaseCommand {
         var dstS = slotWithKeyHashListParsed.getFirst();
 
         if (!isCrossRequestWorker) {
-            var dstHll = getHll(dstS);
+            var dstHllWithBytes = getHllWithBytes(dstS);
+            var dstHll = dstHllWithBytes.hll();
             if (dstHll == null) {
                 dstHll = emptyHll();
             }
@@ -547,7 +541,7 @@ public class PGroup extends BaseCommand {
             }
 
             try {
-                saveHll(dstS, dstHll, getHllExpireAt(dstS));
+                saveHll(dstS, dstHll, dstHllWithBytes.expireAt());
                 return OKReply.INSTANCE;
             } catch (IOException e) {
                 return new ErrorReply(e.getMessage());
@@ -602,20 +596,21 @@ public class PGroup extends BaseCommand {
                 // to the dst slot eventloop instead — see bug 84.1.
                 var dstOneSlot = localPersist.oneSlot(dstS.slot());
                 dstOneSlot.asyncCall(() -> {
-                    HyperLogLog dstHll;
+                    HllWithBytes dstHllWithBytes;
                     try {
-                        dstHll = getHll(dstS);
+                        dstHllWithBytes = getHllWithBytes(dstS);
                     } catch (TypeMismatchException e1) {
                         // the destination holds a value of another type, redis answers WRONGTYPE
                         return Boolean.FALSE;
                     }
+                    var dstHll = dstHllWithBytes.hll();
                     if (dstHll == null) {
                         dstHll = emptyHll();
                     }
                     for (var hll : srcHllList) {
                         mergeHllInto(dstHll, hll);
                     }
-                    saveHll(dstS, dstHll, getHllExpireAt(dstS));
+                    saveHll(dstS, dstHll, dstHllWithBytes.expireAt());
                     return Boolean.TRUE;
                 }).whenComplete((r1, e1) -> {
                     if (e1 != null) {

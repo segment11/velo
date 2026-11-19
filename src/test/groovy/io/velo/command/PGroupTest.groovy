@@ -17,6 +17,7 @@ import spock.lang.Specification
 
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 class PGroupTest extends Specification {
@@ -28,6 +29,7 @@ class PGroupTest extends Specification {
     static class RecordingGetSet implements ByPassGetSet {
         final Map<String, CompressedValue> map = new ConcurrentHashMap<>()
         final Map<String, Long> putThreadId = new ConcurrentHashMap<>()
+        final Map<String, AtomicInteger> readCount = new ConcurrentHashMap<>()
 
         @Override
         void put(short slot, String key, int bucketIndex, CompressedValue cv) {
@@ -42,6 +44,7 @@ class PGroupTest extends Specification {
 
         @Override
         OneSlot.BufOrCompressedValue getBuf(short slot, String key, int bucketIndex, long keyHash) {
+            readCount.computeIfAbsent(key) { new AtomicInteger() }.incrementAndGet()
             var cv = map.get(key)
             if (cv == null) {
                 return null
@@ -419,6 +422,21 @@ class PGroupTest extends Specification {
         oneMoreReply == IntegerReply.REPLY_1
         // the altered HLL must not be dropped
         afterBytes != beforeBytes
+
+        when: 'pfadd reads the key only once when persisting a change and preserves expireAt'
+        def recordingStore = new RecordingGetSet()
+        def countingGroup = new PGroup('pfadd', null, null)
+        countingGroup.byPassGetSet = recordingStore
+        countingGroup.from(BaseCommand.mockAGroup())
+        countingGroup.execute('pfadd single_pfadd init')
+        def singleExpireAt = System.currentTimeMillis() + 60_000
+        recordingStore.map['single_pfadd'].expireAt = singleExpireAt
+        recordingStore.readCount.clear()
+        def singlePfaddReply = countingGroup.execute('pfadd single_pfadd another')
+        then:
+        singlePfaddReply == IntegerReply.REPLY_1
+        recordingStore.map['single_pfadd'].expireAt == singleExpireAt
+        recordingStore.readCount['single_pfadd'].get() == 1
     }
 
     def 'test pfcount and pfmerge'() {
@@ -583,6 +601,24 @@ class PGroupTest extends Specification {
         waitForReply(crossReply as AsyncReply) == OKReply.INSTANCE
         // the destination key must be written on the destination slot owner thread
         recordingGetSet.putThreadId[dstKey] == dstOwnerThreadId.get()
+        // cross-worker pfmerge reads dstKey only once
+        recordingGetSet.readCount[dstKey].get() == 1
+
+        when: 'local pfmerge reads dst only once and preserves its expireAt'
+        def localStore = new RecordingGetSet()
+        def localGroup = new PGroup('pfmerge', null, null)
+        localGroup.byPassGetSet = localStore
+        localGroup.from(BaseCommand.mockAGroup())
+        localGroup.execute('pfadd local_dst e1')
+        localGroup.execute('pfadd local_src e2')
+        def localExpireAt = System.currentTimeMillis() + 60_000
+        localStore.map['local_dst'].expireAt = localExpireAt
+        localStore.readCount.clear()
+        def localMergeReply = localGroup.execute('pfmerge local_dst local_src')
+        then:
+        localMergeReply == OKReply.INSTANCE
+        localStore.map['local_dst'].expireAt == localExpireAt
+        localStore.readCount['local_dst'].get() == 1
 
         cleanup:
         eventloop?.breakEventloop()
