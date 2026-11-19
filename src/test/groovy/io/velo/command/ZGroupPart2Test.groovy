@@ -9,12 +9,14 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
+import io.velo.persist.OneSlot
 import io.velo.reply.*
 import io.velo.type.RedisHashKeys
 import io.velo.type.RedisZSet
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 
 class ZGroupPart2Test extends Specification {
     final short slot = 0
@@ -1287,8 +1289,8 @@ class ZGroupPart2Test extends Specification {
         zGroup.from(BaseCommand.mockAGroup())
 
         and: 'the redis shape nests one array per member/score pair'
-        def memberPairs = { reply ->
-            def arr = reply as MultiBulkReply
+        def memberPairs = { pairReply ->
+            def arr = pairReply as MultiBulkReply
             arr.replies.collect { pair ->
                 def onePair = pair as MultiBulkReply
                 onePair.replies.length == 2
@@ -1454,7 +1456,7 @@ class ZGroupPart2Test extends Specification {
                 .withIdleInterval(Duration.ofMillis(100))
                 .build()
         eventloop.keepAlive(true)
-        Thread.start {
+        def eventloopThread = Thread.start {
             eventloop.run()
         }
         LocalPersist.instance.addOneSlot(slot, eventloop)
@@ -1482,9 +1484,9 @@ class ZGroupPart2Test extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cvX)
         reply = zGroup.execute('zmpop 2 a b MIN')
         eventloopCurrent.run()
-        asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        asyncResult = reply
         then:
-        reply instanceof AsyncReply
+        reply instanceof MultiBulkReply
         asyncResult instanceof MultiBulkReply
         def mbCs = asyncResult as MultiBulkReply
         mbCs.replies.length == 2
@@ -1546,10 +1548,81 @@ class ZGroupPart2Test extends Specification {
         inMemoryGetSet.put(slot, 'a', 0, cvBad)
         reply = zGroup.execute('zmpop 2 a b MIN')
         eventloopCurrent.run()
-        asyncResult = (reply as AsyncReply).settablePromise.getResult()
+        asyncResult = reply
         then:
-        reply instanceof AsyncReply
+        reply == ErrorReply.WRONG_TYPE
         asyncResult == ErrorReply.WRONG_TYPE
+        when: 'an empty first key still reports a wrong-type secondary key'
+        inMemoryGetSet.remove(slot, 'a')
+        inMemoryGetSet.put(slot, 'b', 0, cvBad)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        then:
+        (reply as AsyncReply).settablePromise.getResult() == ErrorReply.WRONG_TYPE
+
+        when: 'empty secondary zsets are skipped after the first key was checked locally'
+        inMemoryGetSet.put(slot, 'b', 0, cvEmpty)
+        reply = zGroup.execute('zmpop 2 a b MIN')
+        eventloopCurrent.run()
+        then:
+        (reply as AsyncReply).settablePromise.getResult() == NilReply.INSTANCE
+
+        when: 'a decisive first key never reads a failing foreign slot'
+        def localPersist = LocalPersist.instance
+        localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
+        localPersist.addOneSlot((short) 1, eventloop)
+        def foreignReads = new AtomicInteger()
+        def guardedStore = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short readSlot, String key, int bucketIndex, long keyHash) {
+                if (readSlot == 1) {
+                    foreignReads.incrementAndGet()
+                    throw new IllegalStateException('unused foreign slot failed')
+                }
+                return super.getBuf(readSlot, key, bucketIndex, keyHash)
+            }
+        }
+        def guardedGroup = new ZGroup(null, null, null)
+        guardedGroup.from(BaseCommand.mockAGroup((byte) 0, (byte) 2, (short) 2))
+        guardedGroup.byPassGetSet = guardedStore
+        guardedGroup.crossRequestWorker = true
+        def firstKey = (1..100).collect { 'local-zmpop-' + it }.find { BaseCommand.slot(it, 2).slot() == 0 }
+        def foreignKey = (1..100).collect { 'remote-zmpop-' + it }.find { BaseCommand.slot(it, 2).slot() == 1 }
+        def localCv = Mock.prepareCompressedValueList(1)[0]
+        localCv.dictSeqOrSpType = CompressedValue.SP_TYPE_ZSET
+        def localZSet = new RedisZSet()
+        localZSet.add(1.0, 'one')
+        localZSet.add(2.0, 'two')
+        localZSet.add(3.0, 'three')
+        localCv.compressedData = localZSet.encode()
+        guardedStore.put((short) 0, firstKey, 0, localCv)
+        reply = guardedGroup.execute("zmpop 2 $firstKey $foreignKey MIN COUNT 2")
+        eventloopCurrent.run()
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == firstKey
+        memberPairs((reply as MultiBulkReply).replies[1]) == [['one', '1'], ['two', '2']]
+        foreignReads.get() == 0
+        ZGroup.getRedisZSet(BaseCommand.slot(firstKey, 2), guardedGroup).size() == 1
+
+        when: 'the last local member is popped with MAX and the key is deleted'
+        reply = guardedGroup.execute("zmpop 2 $firstKey $foreignKey MAX")
+        then:
+        reply instanceof MultiBulkReply
+        memberPairs((reply as MultiBulkReply).replies[1]) == [['three', '3']]
+        foreignReads.get() == 0
+        guardedGroup.getCv(BaseCommand.slot(firstKey, 2)) == null
+
+        when: 'a wrong-type first key also skips the foreign slot'
+        guardedStore.put((short) 0, firstKey, 0, cvBad)
+        reply = guardedGroup.execute("zmpop 2 $firstKey $foreignKey MIN")
+        then:
+        reply == ErrorReply.WRONG_TYPE
+        foreignReads.get() == 0
+
+        cleanup:
+        eventloop?.breakEventloop()
+        eventloopThread?.join(5000)
     }
 
     def 'test zscan'() {

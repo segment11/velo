@@ -2798,40 +2798,42 @@ public class ZGroup extends BaseCommand {
             }
         }
 
-        if (!isCrossRequestWorker) {
-            for (int i = 0; i < numKeys; i++) {
-                var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
-                var cv = getCv(slotWithKeyHash);
-                if (cv == null) {
-                    continue;
-                }
-                if (!cv.isZSet()) {
-                    return ErrorReply.WRONG_TYPE;
-                }
-                var rz = getRedisZSet(slotWithKeyHash);
-                if (rz == null || rz.isEmpty()) {
-                    continue;
-                }
-
-                var keyBytes = data[2 + i];
-
-                var valueReplies = zmpopMemberPairReplies(rz, isMin, count);
-
-                saveRedisZSet(rz, slotWithKeyHash);
-
-                var keyReply = new BulkReply(keyBytes);
-                var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
-                return new MultiBulkReply(arr);
+        // The request worker owns key 0. A decisive first key needs no foreign reads or barrier.
+        int localKeyCount = isCrossRequestWorker ? 1 : numKeys;
+        for (int i = 0; i < localKeyCount; i++) {
+            var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
+            var cv = getCv(slotWithKeyHash);
+            if (cv == null) {
+                continue;
+            }
+            if (!cv.isZSet()) {
+                return ErrorReply.WRONG_TYPE;
+            }
+            var rz = getRedisZSet(slotWithKeyHash);
+            if (rz == null || rz.isEmpty()) {
+                continue;
             }
 
+            var keyBytes = data[2 + i];
+
+            var valueReplies = zmpopMemberPairReplies(rz, isMin, count);
+
+            saveRedisZSet(rz, slotWithKeyHash);
+
+            var keyReply = new BulkReply(keyBytes);
+            var arr = new Reply[]{keyReply, new MultiBulkReply(valueReplies)};
+            return new MultiBulkReply(arr);
+        }
+
+        if (!isCrossRequestWorker) {
             return NilReply.INSTANCE;
         }
 
         // cross-slot path
         record IndexAndRz(int index, RedisZSet rz, boolean isWrongType) {
         }
-        ArrayList<Promise<IndexAndRz>> rzPromises = new ArrayList<>(numKeys);
-        for (int i = 0; i < numKeys; i++) {
+        ArrayList<Promise<IndexAndRz>> rzPromises = new ArrayList<>(numKeys - 1);
+        for (int i = 1; i < numKeys; i++) {
             var slotWithKeyHash = slotWithKeyHashListParsed.get(i);
             var oneSlot = localPersist.oneSlot(slotWithKeyHash.slot());
             int finalI = i;
@@ -2871,7 +2873,7 @@ public class ZGroup extends BaseCommand {
                 rzResults[result.index()] = result;
             }
 
-            for (int i = 0; i < numKeys; i++) {
+            for (int i = 1; i < numKeys; i++) {
                 var item = rzResults[i];
                 if (item.rz() == null) {
                     if (item.isWrongType()) {
