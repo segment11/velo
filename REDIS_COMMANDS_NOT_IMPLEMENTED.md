@@ -93,17 +93,11 @@ as missing. `SELECT` answers `NOT_SUPPORT` (`SGroup.java`), it is listed as miss
 
 ---
 
-### List (7 commands)
+### List (0 commands)
 
-**Status: all implemented (verified 2026-11-19).**
-
-- **BLMPOP** - implemented in `BGroup.java`
-- **BZMPOP** - implemented in `BGroup.java` (+ `BlockingZSet.java` for blocking wake-up)
-- **BZPOPMAX** - implemented in `BGroup.java`
-- **BZPOPMIN** - implemented in `BGroup.java`
-- **LINSERT** - implemented in `LGroup.java`
-- **LMOVE** - implemented in `LGroup.java`
-- **LMPOP** - implemented in `LGroup.java`
+**Status: all implemented (verified 2026-11-19).** `BLMPOP`, `BZMPOP`, `BZPOPMAX` and
+`BZPOPMIN` are implemented in `BGroup.java` (the blocking ones with `BlockingZSet.java` for the
+blocking wake-up), `LINSERT`, `LMOVE` and `LMPOP` in `LGroup.java`.
 
 Note: routing is `commandGroups[firstByte - 'a']` in `RequestHandler`, so all `b*` commands
 (including the sorted-set blocking pops BZMPOP/BZPOPMAX/BZPOPMIN) live in `BGroup`.
@@ -128,7 +122,7 @@ Note: routing is `commandGroups[firstByte - 'a']` in `RequestHandler`, so all `b
 
 ---
 
-### Scripting (10 commands)
+### Scripting (8 commands)
 
 - **EVAL** - Executes a server-side Lua script
 - **EVALSHA** - Executes a server-side Lua script by SHA1 digest
@@ -162,20 +156,18 @@ Note: routing is `commandGroups[firstByte - 'a']` in `RequestHandler`, so all `b
 
 ---
 
-### Set (11 commands)
+### Set (0 commands)
 
 **Status: all implemented in `SGroup.java` (verified by source scan and `SGroupTest`).**
-
-- SDIFF, SDIFFSTORE, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE - implemented via the
-  shared `sdiff`/`sdiffstore`/`sintercard` methods
+`SDIFF`, `SDIFFSTORE`, `SINTER`, `SINTERCARD`, `SINTERSTORE`, `SUNION` and `SUNIONSTORE` are
+implemented via the shared `sdiff`/`sdiffstore`/`sintercard` methods.
 
 ---
 
-### Sorted Set (1 command)
+### Sorted Set (0 commands)
 
-**Status: implemented (verified 2026-11-19).**
-
-- **ZSCAN** - implemented in `ZGroup.java`, covered by `ZGroupPart2Test`
+**Status: implemented (verified 2026-11-19).** `ZSCAN` is implemented in
+`ZGroup.java`, covered by `ZGroupPart2Test`.
 
 **Note:** ZGroup.java now implements all Redis sorted set commands (29/29); the blocking variants
 BZMPOP / BZPOPMAX / BZPOPMIN are routed to `BGroup.java` by the first-letter command dispatch and
@@ -183,7 +175,7 @@ served through `BlockingZSet.java`.
 
 ---
 
-### Stream (23 commands)
+### Stream (25 commands)
 
 **Velo does not implement Redis Streams at all.** All 23 stream commands are missing:
 
@@ -239,7 +231,7 @@ served through `BlockingZSet.java`.
 
 ---
 
-### Sentinel (16 commands)
+### Sentinel (18 commands)
 
 - **CKQUORUM** - Checks for a Redis Sentinel quorum
 - **CONFIG** - Configures Redis Sentinel
@@ -266,27 +258,32 @@ served through `BlockingZSet.java`.
 
 ### Coverage by Data Type
 
-| Data Type | Commands | Implemented | Coverage |
-|-------------|----------|-------------|----------|
-| String | 40 | 40 | 100% |
-| Hash | 36 | 36 | 100% |
-| List | 39 | 39 | 100% |
-| Set | 24 | 24 | 100% |
-| Sorted Set | 49 | 49 | 100% |
-| Bitmap | 12 | 11 | 92% |
-| HyperLogLog | 7 | 5 | 71% |
-| Geo | 12 | 12 | 100% |
-| Stream | 23 | 0 | 0% |
-| Pub/Sub | 23 | 20 | 87% |
-| Transactions | 5 | 0 | 0% |
-| Scripting | 12 | 2 | 17% |
-| Connection | 23 | 16 | 70% |
-| Server | 58 | 26 | 45% |
-| Key Management | 31 | 29 | 94% |
+The **missing** column is the number of entries of the matching section above, it is exact. The
+**commands** column is an estimate of the Redis 7.2 command count of the family (the count includes
+the container subcommands, eg. the `CLIENT` subcommands), the implemented and coverage columns are
+derived from the two others, so the three numbers always reconcile.
+
+| Data Type | Commands (estimate) | Missing (listed above) | Implemented (derived) | Coverage (derived) |
+|-------------|---------------------|------------------------|----------------------|----------------------|
+| String | 40 | 0 | 40 | 100% |
+| Hash | 36 | 0 | 36 | 100% |
+| List | 39 | 0 | 39 | 100% |
+| Set | 24 | 0 | 24 | 100% |
+| Sorted Set | 49 | 0 | 49 | 100% |
+| Bitmap | 12 | 1 | 11 | 92% |
+| HyperLogLog | 7 | 2 | 5 | 71% |
+| Geo | 12 | 0 | 12 | 100% |
+| Stream | 25 | 25 | 0 | 0% |
+| Pub/Sub | 23 | 3 | 20 | 87% |
+| Transactions | 5 | 5 | 0 | 0% |
+| Scripting | 12 | 8 | 4 | 33% |
+| Connection | 23 | 8 | 15 | 65% |
+| Server | 58 | 16 | 42 | 72% |
+| Key Management | 31 | 2 | 29 | 94% |
 
 ### Major Gaps
 
-1. **Redis Streams** - Completely missing (0/23 commands, 0% coverage)
+1. **Redis Streams** - Completely missing (0/25 commands, 0% coverage)
    - Streams are a core Redis 5.0+ feature for log data structures
    - Implementing streams would significantly improve Velo's capabilities
 
@@ -294,16 +291,16 @@ served through `BlockingZSet.java`.
    - MULTI/EXEC/DISCARD/WATCH are fundamental Redis features
    - Essential for atomic operations on multiple keys
 
-3. **Scripting** - Mostly missing (2/12 commands, 17% coverage)
+3. **Scripting** - Mostly missing (4/12 commands, 33% coverage)
    - Lua scripting enables server-side logic execution
    - Functions provide reusable server-side logic storage
 
-4. **Connection Management** - Mostly missing (16/23 commands, 70% coverage)
+4. **Connection Management** - Mostly missing (15/23 commands, 65% coverage)
    - `AUTH`, `CLIENT`, `HELLO`, `PING` and `QUIT` are implemented
    - The client tracking commands (`TRACKING`, `TRACKINGINFO`, `GETREDIR`) and the connection
-     state commands (`REPLY`, `CACHING`, `PAUSE`, `UNPAUSE`, `UNBLOCK`) are missing
+     state commands (`CACHING`, `PAUSE`, `UNPAUSE`, `UNBLOCK`) are missing
 
-5. **Server Management** - Partial coverage (26/58 commands, 45% coverage)
+5. **Server Management** - Partial coverage (42/58 commands, 72% coverage)
    - Missing many server administration commands
    - The ACL subcommands `DELUSER` and `DRYRUN` are implemented (`AGroup.java`)
    - MODULE, SLOWLOG, MEMORY commands partially or completely missing
@@ -337,7 +334,7 @@ served through `BlockingZSet.java`.
 1. **Priority High**:
    - Implement basic Stream commands (XADD, XREAD, XRANGE, XTRIM)
    - Add transaction support (MULTI, EXEC, DISCARD)
-   - Implement the missing connection management commands (the client tracking family, `REPLY`,
+   - Implement the missing connection management commands (the client tracking family,
      `PAUSE`, `UNPAUSE`, `UNBLOCK`) and `SELECT` (it currently answers `NOT_SUPPORT`)
 
 2. **Priority Medium**:
