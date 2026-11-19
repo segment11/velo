@@ -1992,6 +1992,8 @@ public class BGroup extends BaseCommand {
                 return false;
             }
             BlockingZSet.removeOne(Wal.keyString(keyBytes), one);
+            // a multi key block registers the waiter on every key, release all of them
+            BlockingZSet.removeEverywhere(one);
             one.settablePromise().set(ErrorReply.WRONG_TYPE);
             return true;
         }

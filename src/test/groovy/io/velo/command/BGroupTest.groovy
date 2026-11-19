@@ -2023,6 +2023,28 @@ class BGroupTest extends Specification {
         (reply as AsyncReply).settablePromise.getException() != null
         inMemoryGetSet.remove(slot, 'wcorrupt')
 
+        when: 'the wrong type completion releases the waiter from every key it was registered on'
+        BlockingZSet.clearBlockingZSetPromisesForAllKeys()
+        def wrongTypePromise = new SettablePromise<Reply>()
+        def wrongTypeSlotA = BaseCommand.slot('wtype-multi-a', (short) 1)
+        def wrongTypeSlotB = BaseCommand.slot('wtype-multi-b', (short) 1)
+        def wrongTypeOne = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(wrongTypePromise, null, true,
+                System.currentTimeMillis(), 0, [wrongTypeSlotA, wrongTypeSlotB])
+        BlockingZSet.addOne('wtype-multi-a', wrongTypeOne)
+        BlockingZSet.addOne('wtype-multi-b', wrongTypeOne)
+        def wrongTypeCv = Mock.prepareCompressedValueList(1)[0]
+        wrongTypeCv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        wrongTypeCv.compressedData = 'not-a-zset'.bytes
+        inMemoryGetSet.put(slot, 'wtype-multi-a', 0, wrongTypeCv)
+        def wrongTypeCompleted = BGroup.completeIfZSetNotEmpty(wrongTypeSlotA, 'wtype-multi-a'.bytes, bGroup,
+                bGroup.dictMap, wrongTypeOne)
+        then:
+        wrongTypeCompleted
+        wrongTypePromise.getResult() == ErrorReply.WRONG_TYPE
+        BlockingZSet.blockingClientCount() == 0
+        BlockingZSet.blockingKeyCount() == 0
+        inMemoryGetSet.remove(slot, 'wtype-multi-a')
+
         when: 'a zadd lands between the check and the registration, the re-check completes the reply'
         def promiseForRace = new SettablePromise<Reply>()
         def oneForRace = new BlockingZSet.PromiseWithMinOrMaxAndCreatedTime(promiseForRace, null, true, System.currentTimeMillis(), 0)
