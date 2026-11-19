@@ -1048,9 +1048,7 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        (reply as AsyncReply).settablePromise.getResult() == NullArrayReply.INSTANCE
 
         // multi-keys
         when:
@@ -1100,9 +1098,7 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        (reply as AsyncReply).settablePromise.getResult() == NullArrayReply.INSTANCE
 
         when:
         reply = bGroup.execute('blpop a x')
@@ -1577,9 +1573,7 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        (reply as AsyncReply).settablePromise.getResult() == NullArrayReply.INSTANCE
 
         when: 'a push completes the reply before the timeout fires, the timeout changes nothing'
         inMemoryGetSet.remove(slot, 'x')
@@ -1940,9 +1934,9 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        (reply as AsyncReply).settablePromise.getResult() == NullArrayReply.INSTANCE
+        // redis answers a timed out blocking command with a null array, not a null bulk
+        (reply as AsyncReply).settablePromise.getResult().buffer().asArray() == '*-1\r\n'.bytes
 
         when: 'first key missing, second key has data'
         inMemoryGetSet.remove(slot, 'a')
@@ -1972,9 +1966,7 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        (reply as AsyncReply).settablePromise.getResult() == NullArrayReply.INSTANCE
 
         when: 'a later key holds another type, the multi key check fails and the error is forwarded'
         inMemoryGetSet.remove(slot, 'wtypea')
@@ -2290,9 +2282,7 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        (reply as AsyncReply).settablePromise.getResult() == NullArrayReply.INSTANCE
 
         when: 'all keys empty in the multi key form, the timeout replies nil'
         inMemoryGetSet.remove(slot, 'a')
@@ -2302,9 +2292,7 @@ class BGroupTest extends Specification {
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
-        (reply as AsyncReply).settablePromise.whenResult { result ->
-            result == NilReply.INSTANCE
-        }.result
+        (reply as AsyncReply).settablePromise.getResult() == NullArrayReply.INSTANCE
 
         when: 'a multi key BZMPOP with timeout 0 stays pending'
         inMemoryGetSet.remove(slot, 'a')

@@ -1107,7 +1107,7 @@ public class BGroup extends BaseCommand {
                         reactor.delay(timeoutMillis, () -> {
                             // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                             if (one.tryMarkDelivered()) {
-                                finalPromise.set(NilReply.INSTANCE);
+                                finalPromise.set(NullArrayReply.INSTANCE);
                                 removeBlockingWaiter(keys, one);
                             }
                         });
@@ -1131,7 +1131,7 @@ public class BGroup extends BaseCommand {
                 reactor.delay(timeoutMillis, () -> {
                     // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                     if (one.tryMarkDelivered()) {
-                        finalPromise.set(NilReply.INSTANCE);
+                        finalPromise.set(NullArrayReply.INSTANCE);
                         BlockingList.removeOne(firstKey, one);
                     }
                 });
@@ -1387,7 +1387,7 @@ public class BGroup extends BaseCommand {
                 reactor.delay(timeoutMillis, () -> {
                     // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                     if (one.tryMarkDelivered()) {
-                        finalPromise.set(NilReply.INSTANCE);
+                        finalPromise.set(NullArrayReply.INSTANCE);
                         removeBlockingWaiter(keys, one);
                     }
                 });
@@ -1613,7 +1613,7 @@ public class BGroup extends BaseCommand {
                     reactor.delay(timeoutMillis, () -> {
                         // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                         if (one.tryMarkDelivered()) {
-                            finalPromise.set(NilReply.INSTANCE);
+                            finalPromise.set(NullArrayReply.INSTANCE);
                             BlockingZSet.removeEverywhere(one);
                         }
                     });
@@ -1638,7 +1638,7 @@ public class BGroup extends BaseCommand {
             reactor.delay(timeoutMillis, () -> {
                 // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                 if (one.tryMarkDelivered()) {
-                    finalPromise.set(NilReply.INSTANCE);
+                    finalPromise.set(NullArrayReply.INSTANCE);
                     BlockingZSet.removeEverywhere(one);
                 }
             });
@@ -1770,7 +1770,7 @@ public class BGroup extends BaseCommand {
                 reactor.delay(timeoutMillis, () -> {
                     // one-shot delivery arbiter: a timeout that lost to a delivery must not touch the promise
                     if (one.tryMarkDelivered()) {
-                        finalPromise.set(NilReply.INSTANCE);
+                        finalPromise.set(NullArrayReply.INSTANCE);
                         BlockingZSet.removeEverywhere(one);
                     }
                 });
