@@ -519,7 +519,7 @@ class AGroupTest extends Specification {
                 def target = Eventloop.builder().build()
                 def worker = new Thread({ target.run() } as Runnable)
                 oneSlot.slotWorkerEventloop = target
-                oneSlot.threadIdProtectedForSafe = worker.threadId()
+                localPersist.fixSlotThreadId(slot, worker.threadId())
                 int attemptsBefore = recordingBinlog.attempts.get()
                 Reply pending = null
                 try {
@@ -550,7 +550,7 @@ class AGroupTest extends Specification {
         recordingBinlog.attempts.get() == 8
 
         when: 'inline ACL updates preserve synchronous replies, including append failures'
-        oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         for (boolean fail : [false, true]) {
             recordingBinlog.fail = fail
             for (String command : commands) {
@@ -579,7 +579,7 @@ class AGroupTest extends Specification {
         cleanup:
         ValkeyRawConfSupport.aclFilename = originalFilename
         oneSlot.binlog = originalBinlog
-        oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         recordingBinlog.cleanUp()
         binlogDir.deleteDir()
         binlogAclFile.delete()
