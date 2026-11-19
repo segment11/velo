@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1 (feature commit `33458c51`, no separate stage-1 discovery report — this document was written directly by the reviewer)
 **Reviewer:** AI agent 2
-**Status:** **fix phase complete** — 9 findings (90.1-90.9) plus the 90.10 sibling, all fixed (one commit per bug, TDD RED → GREEN + JaCoCo, see the Fix Log); the independent agent-2 verification appended at the end of this document refined 90.2/90.4/90.6/90.8 and rejected the "BZMPOP reply shape matches Redis" non-finding, which became 90.9.
+**Status:** **agent-2 committed-fix review: changes requested (2026-11-19, HEAD `b85565eb`)** — core reply-shape, owner-worker STORE, WRONGTYPE, INFO and timeout changes verified; remaining cleanup paths, a duplicate-list-key regression, incomplete gap documentation and a test verification defect are recorded in the appended committed-fix Review Feedback. Earlier fix-phase completion claims are retained as history, not final acceptance.
 **Review branch:** `main` (feature commit is on `main`)
 **Reviewed commit:** `33458c51ca6f55a8e4c4aded5becabe3f3396f34`
 **Follow-up commit reviewed for context:** `cf50f306547621f486d39dd37516cbe614537384` (fixes 90.3)
@@ -47,7 +47,7 @@ Method: **static inspection only**. The workspace was held by another running jo
 
 **Severity:** Medium
 **Class:** Correctness (resource leak) / Observability
-**Status:** `CONFIRMED (inspection)`
+**Status:** `CONFIRMED (reproduced)` — successful delivery repaired by `99c842f1`; terminal wrong-type cleanup remains defective (C3 in the committed-fix feedback), so this finding is not closed.
 
 ### Cited files / lines
 ```java
@@ -89,7 +89,8 @@ Carry the registered key set in the waiter (or pass the key list to the completi
 
 **Severity:** Medium
 **Class:** Concurrency / Correctness (client hang)
-**Status:** `CONFIRMED (inspection)`
+**Status:** `CONFIRMED (reproduced)`
+**Disposition:** `fixed` (`ccba406e`); independently verified with real two-worker persistence, wake-up and failed-write propagation. The committed test helper needs follow-up C5.
 
 ### Cited files / lines
 ```java
@@ -172,7 +173,8 @@ Already done in `cf50f306` — keep the Redis texts per argument class, and asse
 
 **Severity:** Low
 **Class:** Redis protocol compatibility / Error handling
-**Status:** `CONFIRMED (inspection)`
+**Status:** `CONFIRMED (reproduced)`
+**Disposition:** `fixed` (`1f380ffd`); real asynchronous two-worker checks passed for all three blocking zset commands.
 
 ### Cited files / lines
 ```java
@@ -205,7 +207,8 @@ Map `TypeMismatchException` to `ErrorReply.WRONG_TYPE` before completing the pro
 
 **Severity:** Low
 **Class:** Observability
-**Status:** `CONFIRMED (inspection)`
+**Status:** `CONFIRMED (reproduced)`
+**Disposition:** `fixed` (`dda64496`) for INFO inclusion and unique-waiter counting; stale registrations from C2/C3 remain separate cleanup defects.
 
 ### Cited files / lines
 ```groovy
@@ -235,7 +238,7 @@ Add `BlockingZSet.blockingClientCount()` / `BlockingZSet.blockingKeyCount()` to 
 
 **Severity:** Low
 **Class:** Documentation
-**Status:** `CONFIRMED (inspection)`
+**Status:** `PARTIALLY CONFIRMED` — `f54c0703` removes some false positives, but supported subcommands remain listed as missing (C4); no final fixed disposition.
 
 ### Cited files / lines
 ```markdown
@@ -265,6 +268,7 @@ Regenerate the document from the real dispatch table (`CommandRegistry` entries 
 **Severity:** Low
 **Class:** Redis protocol compatibility
 **Status:** `CONFIRMED (inspection)`
+**Disposition:** `fixed` (`7d4bd1b7`) for the scoped blocking-pop timeout paths; direct encoders and focused timeout tests passed. A live TCP capture remains additional evidence.
 
 ### Cited files / lines
 ```java
@@ -290,7 +294,8 @@ Use a dedicated null-array reply for the blocking-pop timeout path (and, in the 
 
 **Severity:** Low
 **Class:** Process / documentation
-**Status:** `CONFIRMED (inspection)`
+**Status:** `REFINED` — STATE.md was already current during verification; the older bug_43/bug_87 notes needed supersession.
+**Disposition:** `fixed` (`94ed9044`), verified by the explicit supersession notes in both reports.
 
 ### Cited files / lines
 ```markdown
@@ -323,6 +328,7 @@ Append a short supersession note to `bug_43` and `bug_87` stating that the `NOT_
 **Severity:** Medium
 **Class:** Redis protocol compatibility
 **Status:** `CONFIRMED (reproduced)` — raised by the independent verification (probe + Redis 7.2.14 source); it **rejects** the "reply shape matches Redis" non-finding of the first version of this document
+**Disposition:** `fixed` (`42110363`); nested immediate/wake-up expectations and focused coverage verified during committed-fix review.
 
 ### Cited files / lines
 ```java
@@ -381,6 +387,7 @@ Emit one `MultiBulkReply` per member/score pair (`[key, [[member, score], [membe
 **Severity:** Medium
 **Class:** Redis protocol compatibility
 **Status:** `CONFIRMED (inspection)` — raised by the first review as the sibling half of 90.9 and confirmed independently by the second verification; it predates the reviewed commit (`33458c51`) and was missed by both review passes
+**Disposition:** `fixed` (`2490462d`); both branches now share the tested nested-pair helper.
 
 ### Cited files / lines
 ```java
@@ -513,8 +520,15 @@ One bug = one commit, TDD (RED → GREEN) + JaCoCo on the changed lines, per `AG
 | 90.9 | RED `BGroupTest.test bzmpop` — `GroovyCastException at BGroupTest.groovy:2134` (the reply was flat, the pair was a `BulkReply`) | `42110363` `fix: bzmpop replies with one array per member like redis` | green (BGroupTest, BlockingZSetTest, ZGroupTest, ZGroupPart2Test) | `BGroup` 1871-1887 — 9/9 lines, both branches of the min/max ternary |
 | 90.10 | RED `ZGroupPart2Test.test zmpop` — `GroovyCastException at ZGroupPart2Test.groovy:1293` | `2490462d` `fix: zmpop replies with one array per member like redis` | green (ZGroupPart2Test, ZGroupTest, BGroupTest, BlockingZSetTest) | `ZGroup` 2702-2709 (the helper), 2777-2785 (the same worker path), 2848-2856 (the cross slot path) |
 | follow-up (the list side of 90.1 / 90.5, O6) | RED `BlockingListTest` — the waiter stayed on the second key after the first one was served | `a17223f4` `fix: the blocking list releases the waiter from every key and counts the clients` | green (BlockingListTest, BGroupTest, BlockingZSetTest, InfoCommandTest, ZGroupTest) | `BlockingList` 200-250 — the add/remove/release/counter paths covered |
+| C1 (the duplicate key regression of `a17223f4`) | RED `BlockingListTest` — `Condition not satisfied: BlockingList.blockingKeyCount() == 0 | -1 false` (the same waiter registered twice on one key) and the delivery could raise a `ConcurrentModificationException` | `de9fe620` `fix: a blocking client is registered once per distinct key and the global cleanup runs after the delivery iteration` | green (BlockingListTest, BGroupTest) | `BGroup` 1192-1201 (the distinct key registration, both branches), `BlockingList` 410-425 (the delivery iteration) |
+| C2 (the list recheck delivery) | RED `BGroupTest.test blpop` — `BlockingList.blockingClientCount() == 0 | 1 false` after `completeIfListNotEmpty` | `c05fa127` `fix: the blocking list recheck delivery releases the waiter from every key` | green (BGroupTest, BlockingListTest) | `BGroup` 1269-1295 (the recheck helper, both the success and the arbiter branch) |
+| C3 (the zset wrong type completion) | RED `BGroupTest.test bzpopmin` — `BlockingZSet.blockingClientCount() == 0 | 1 false` after the wrong type completion | `45a91226` `fix: the blocking zset wrong type completion releases the waiter from every key` | green (BGroupTest, BlockingZSetTest) | `BGroup` 1952-1970 (the wrong type branch, both the arbiter and the completion) |
+| C4 (the gap document subcommands) | n/a — documentation, verified by the `CommandRegistry` + the client subcommand handlers | `3b37482a` `docs: the gap list drops the implemented client and acl subcommands` | the document lists no implemented command any more | n/a |
+| C5 (the destination read assertion) | RED `ZGroupTest.test zunionstore` — `Condition not satisfied: stored | false` (the read was not awaited, `Promise.getResult()` does not block) | `4ed30995` `test: the zstore destination read is awaited, the promise result alone is read before the worker completed it` | green (ZGroupTest, ZGroupPart2Test, BGroupTest, BlockingListTest, BlockingZSetTest, InfoCommandTest) | the read helper is a test helper, the production lines of `ccba406e` are unchanged and stay covered |
 
 **Regression after the fix phase:** `io.velo.command.*` + `io.velo.reply.*` + `io.velo.persist.*` → **801 tests, 0 failures, 0 errors** (`./gradlew -I /tmp/velo-groovy-compiler-heap.init.gradle :test --tests "io.velo.command.*" --tests "io.velo.reply.*" --tests "io.velo.persist.*"`).
+
+**Regression after the re-review fixes (C1-C5):** the same selection → **802 tests, 0 failures, 0 errors**.
 
 **Environment note:** `compileTestGroovy` runs out of heap with the default in-daemon Groovy compiler, the
 focused runs above used `-I /tmp/velo-groovy-compiler-heap.init.gradle` (it only sets the Groovy
@@ -522,7 +536,8 @@ compiler fork heap to 8g, it changes no repository file).
 
 ## Re-review (AI agent 2)
 
-Pending the fix phase.
+Completed at `b85565eb`; see the appended **Review Feedback — committed fixes**. Overall verdict:
+**changes requested**, with per-commit acceptance and five follow-up items.
 
 ## Residual Risk
 
@@ -549,6 +564,11 @@ Pending the fix phase.
 | 90.9 | The BZMPOP reply is flat, Redis emits one array per member | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`42110363`) |
 | 90.10 | The non-blocking `ZMPOP` emits flat member/score entries (the sibling half of 90.9) | Medium | Redis protocol compatibility | CONFIRMED (inspection) — predates the reviewed commit, missed by both review passes | fixed (`2490462d`) |
 | follow-up | The list blocking pops carry the same waiter leak and the same registration counter (O6) | Low | Correctness / Observability | CONFIRMED (reproduced) | fixed (`a17223f4`) |
+| C1 | A blocking client registered twice on the same key corrupted the delivery iteration and the key counts | High | Concurrency / Correctness | CONFIRMED (reproduced) — introduced by `a17223f4`, accepted by agent 1 | fixed (`de9fe620`) |
+| C2 | The list recheck delivery released only the serving key | Medium | Correctness | CONFIRMED (reproduced), accepted by agent 1 | fixed (`c05fa127`) |
+| C3 | The zset wrong-type completion released only the serving key | Medium | Correctness | CONFIRMED (reproduced), accepted by agent 1 | fixed (`45a91226`) |
+| C4 | The gap document still listed supported CLIENT/ACL subcommands as missing | Low | Documentation | CONFIRMED (inspection), accepted by agent 1 | fixed (`3b37482a`) |
+| C5 | The committed destination-read assertion could not establish existence | Medium | Test evidence | CONFIRMED (inspection), accepted by agent 1 — the defect was in agent 1's own test | fixed (`4ed30995`) |
 
 ## Independent verification — AI agent 2, 2026-11-19
 
@@ -732,3 +752,316 @@ pair nesting rather than copy the existing flat expectations.
 
 This reconciliation pass changed documentation only. No new tests, live server runs, production
 fixes or commits were performed; the executed-probe evidence remains the earlier verification log.
+
+## Review Feedback — committed fixes (AI agent 2, 2026-11-19)
+
+**Reviewed range:** `769a9eab..b85565eb`. **Overall verdict: CHANGES REQUESTED.**
+The successful-pair reply formatting and STORE dispatch changes address their original defects,
+and the error mapping works on real foreign-worker reads. The cleanup work is incomplete and the
+list follow-up introduces a new regression with duplicate key arguments. No production code was
+changed by this review; the probes described below live under `/tmp`.
+
+### Per-commit review outcomes
+
+The acceptance labels in this table describe commit review outcomes. Formal finding verdicts and
+dispositions using the skill's vocabulary are recorded in the compliance table appended below.
+
+| Finding / commit | Verdict | Independent evidence / remaining work |
+|---|---|---|
+| 90.9 — `42110363` | ACCEPTED | BZMPOP immediate and wake-up specs assert nested pairs; helper `BGroup.java:1888-1903` has 8/8 executable lines covered. |
+| 90.10 — `2490462d` | ACCEPTED | Both ZMPOP branches call the nested-pair helper; `test zmpop` passed; helper `ZGroup.java:2730-2753` has 8/8 executable lines covered. |
+| 90.2 — `ccba406e` | Core fix ACCEPTED; test follow-up C5 required | A real two-worker probe, without `InMemoryGetSet`, verified destination save, BZPOPMIN wake-up, two remaining members read on the owner, and propagation of a readonly destination error. `saveRedisZSetToDst` success/error branches executed. |
+| 90.1 — `99c842f1` | PARTIALLY ACCEPTED | Successful delivery now releases all registrations, and empty entries are removed. Wrong-type completion still retains the waiter on other keys: C3. |
+| 90.4 — `1f380ffd` | ACCEPTED | Real two-worker checks of BZPOPMIN, BZPOPMAX and BZMPOP with a wrong-type second key each returned `ErrorReply.WRONG_TYPE`, including asynchronous BZMPOP completion. |
+| 90.5 — `dda64496` | ACCEPTED for INFO wiring and unique-waiter semantics | Existing INFO/registry specs passed; one waiter counts once across keys. Retained completed waiters from C2/C3 still affect the resulting metrics until cleanup is completed. |
+| 90.6 — `f54c0703` | PARTIALLY ACCEPTED | Several top-level false positives removed, but supported subcommands remain in the missing list: C4. |
+| 90.8 — `94ed9044` | ACCEPTED | bug_43/bug_87 now explicitly supersede the old NOT_SUPPORT decision. |
+| 90.7 — `7d4bd1b7` | ACCEPTED for scoped timeout paths | Focused blocking-pop timeout specs and `NullArrayReplyTest` passed. New reply's seven executable lines covered; RESP2 `*-1\r\n` and RESP3 `_\r\n` tested. No TCP frame capture was performed. |
+| List follow-up — `a17223f4` | CHANGES REQUESTED | New duplicate-key regression C1 and unrepaired recheck delivery C2. |
+| 90.3 — `cf50f306` (earlier commit) | Listed cases verified only | Existing BZPOP/BZMPOP error-text assertions passed; numeric boundary/precedence matrix remains outside this acceptance. |
+| `b85565eb` | ACCEPTED | Explicit `getException()` removes the known boolean-property ambiguity; no production behavior changed. |
+
+### C1 — High: duplicate list keys invalidate delivery iteration and corrupt key counts
+
+**Introduced by `a17223f4`.** `BlockingList.java:479-484` (and `533-538`) calls
+`removeEverywhere(promise)` while `setReplyIfBlockingListExist` is iterating the serving key's
+`LinkedList`. `removeEverywhere` can run inline on this worker (`629-645`) and call
+`Inner.removeOne` on that **same list**. A valid command such as `BLPOP k k 0` registers the
+same waiter twice on `k`; the second registration is therefore removed outside the active iterator.
+
+Reproduced with the actual registry/delivery helper in two temporary cases:
+
+- One waiter registered twice on `k`, then one pushed value: client completes, but
+  `blockingKeyCount()` becomes **-1**. `Inner.removeOne` decrements/removes the key on the second
+  registration, then the enclosing delivery loop decrements it again at `BlockingList.java:544`.
+- The same duplicate-key waiter followed by another client on `k`, then two pushed values:
+  **`ConcurrentModificationException`** at `BlockingList.java:417` (`LinkedList.ListItr.next`).
+  The second client is not served by this delivery; a valid push can fail after the first client
+  has already received a value.
+
+Redis accepts repeated keys and deduplicates registrations (`redis/src/blocked.c:379-383`).
+Deduplicate waiter registrations or ensure global cleanup cannot mutate the serving list during
+iteration; account for key removal exactly once. Cover both left/right delivery and BLMPOP as
+appropriate. This is a required regression fix, not an optional metrics cleanup.
+
+### C2 — Medium: list recheck delivery still cleans only the serving key
+
+**Incomplete list half of 90.1 (`a17223f4`).** Normal push notification now performs global
+cleanup, but the separate check/register-window completion helpers still use only
+`BlockingList.removeOne`: `BGroup.java:1263-1278` (`completeIfListNotEmpty`) and `1521-1523`
+(`completeMpopIfListNotEmpty`). They never call `removeEverywhere`.
+
+The executed probe registered one waiter on two keys, put a list value into the first key, and
+called `completeIfListNotEmpty`. The promise completed, but `blockingClientCount()` remained **1**
+instead of 0. This models a value already present when the post-registration recheck runs. With
+timeout 0 and no subsequent write/disconnect, the completed waiter remains retained. The BLMPOP
+helper has the same missing cleanup by inspection; it was not a separate executed probe.
+
+All terminal list-delivery paths must release all registrations. Keep a regression for the recheck
+path rather than relying only on the new push-notification test.
+
+### C3 — Medium: zset wrong-type completion retains registrations on other keys
+
+**Incomplete 90.1 fix (`99c842f1`).** The successful completion now calls
+`BlockingZSet.removeEverywhere` at `BGroup.java:1979`, but the terminal wrong-type branch at
+`1957-1964` removes only the current key and completes the promise with `WRONG_TYPE`.
+
+The probe registered the same waiter on two keys and rechecked a first key containing a hash.
+`getResult()` was `ErrorReply.WRONG_TYPE`, but `blockingClientCount()` and the remaining key
+registration stayed **1**. A type change during the cross-worker check/register/recheck interval
+can reach this branch. Completed promises are skipped by the other rechecks, and the timeout
+cannot clean it after the delivery arbiter is claimed. Release every registration on this terminal
+error path as well as on successful delivery.
+
+### C4 — Low: the corrected gap document still labels supported subcommands missing
+
+**90.6 remains partially open.** `REDIS_COMMANDS_NOT_IMPLEMENTED.md:49-58` still lists ID, KILL,
+LIST, REPLY, SETINFO and SETNAME as missing, even though `CGroup.client()` implements them
+(`CGroup.java:163,183,187,212,235,256`). The document's own note already acknowledges several of
+these as supported. The Major Gaps section also explicitly labels REPLY missing (`311`).
+ACL DELUSER/DRYRUN are further false positives (`AGroup.java:176,199`).
+
+The new definition “registered means implemented” (`REDIS_COMMANDS_NOT_IMPLEMENTED.md:5-10`)
+does not establish subcommand support, as discussed during reconciliation. Audit container plus
+subcommand identities, remove these remaining false positives, and update the derived counts
+instead of treating a registry-only script as complete verification.
+
+### C5 — Medium: the committed destination-read assertion cannot establish existence
+
+**Test follow-up for `ccba406e`.** `ZGroupTest.groovy:2057-2069` schedules an owner-worker read,
+then immediately returns `promise.getResult()` without awaiting completion. The helper returns
+primitive `boolean`, while its caller asserts `stored != null` (`2014-2016`). Whether the helper
+returns true or false, that assertion succeeds; delayed completion/failure is not reliably observed.
+
+Use a bounded thread-safe completion mechanism, assert the actual boolean or decoded contents,
+and verify that a missing destination makes the test fail. The new helper also uses `var` and a
+fully qualified `SettablePromise` expression contrary to `GroovyStyleRefer.groovy`; use `def` and
+an import when repairing it. The independent real-persistence probe used `CompletableFuture.get`
+with a five-second bound and verified **two remaining members** after the blocked pop.
+
+### Verification evidence and limits
+
+- First focused regression run passed (`/tmp/bug90-fix-review-regression.log`). The expanded
+  focused selection executed **168 existing tests with zero failures** across BGroup, BlockingList,
+  BlockingZSet, InfoCommand, LGroup, RGroup, ZGroup, ZGroupPart2 and NullArrayReply. Its log is
+  `/tmp/bug90-fix-review-final.log`; that combined invocation was red because it also selected the
+  new review probes.
+- The final isolated probe rerun (`/tmp/bug90-fix-review-probes-final.log`) executed **five tests**:
+  **one passed**, covering real two-worker STORE/wake-up, owner read, write-error propagation and
+  async WRONGTYPE; **four failed for the expected production defects** (C1 twice, C2 and C3).
+  These failures are intentional review evidence, not fixed regressions.
+- Temporary sources: `/tmp/bug90-fix-review-probes/io/velo/command/Bug90FixReviewProbe.groovy`
+  and `Bug90StoreReviewProbe.groovy`; Gradle init: `/tmp/bug90-fix-review.init.gradle`. It adds that
+  source directory and raises only the Groovy compiler fork heap to 8G. Initial probe compilation
+  and accessor mistakes were corrected before drawing conclusions; a shared persisted readonly
+  flag in the first expanded probe run was addressed by explicit writable setup and fresh keys.
+- Inspected JaCoCo HTML source pages and `scripts/jacoco_cover.py` results for the touched paths:
+  `ZGroup.java:1263-1274` (STORE helper, success and error), BGroup nested-pair helper (8/8),
+  ZGroup nested-pair helper (8/8), BlockingList registry/counter methods (25/25 in 287-358),
+  BlockingZSet registry/counter methods (23/23 executed in 248-314, one partial branch), and
+  NullArrayReply (7/7). The failing probes also executed the wrong-type cleanup at
+  `BGroup.java:1962`, list recheck cleanup at `1263`, and duplicate cleanup/count decrement at
+  `BlockingList.java:484,544`; the HTML marks these lines executed. This coverage is evidence of
+  execution, not proof that these defective paths are correct.
+- No full-suite run, live TCP Redis differential or independent per-commit historical RED replay
+  was performed. No production/test source fixes or commits were made during this review.
+
+**Pre-acceptance follow-ups:** repair C1-C5 with focused regression coverage and the required
+one-bug-per-commit workflow. **Post-acceptance follow-ups:** a live RESP2 timeout capture and the
+targeted numeric argument matrix remain additional compatibility evidence; they must not be
+silently described as completed by the green unit tests.
+
+## Re-review — velo-bug-review compliance (AI agent 2)
+
+**Skill read:** `doc/skills/velo-bug-review/SKILL.md`, Stage 5 (re-review), with the Stage 2
+feedback/status requirements applied to the follow-up findings. **Reviewed commit:**
+`b85565eb29d02d9ca7c7a5f60369633509f988c0`. This supplements the detailed Review Feedback above;
+it does not start a new review round or replace its evidence.
+
+### Formal per-finding verdicts
+
+An em dash in Disposition means no closing disposition has been assigned. The original finding
+Status fields above have been updated in place. Verdicts describe the findings; `fixed` describes
+the reviewed disposition, rather than introducing an unsupported ACCEPTED status.
+
+| Finding | Verdict | Disposition | Evidence |
+|---|---|---|---|
+| 90.1 | CONFIRMED (reproduced) | — | C3's final probe still reports `BlockingZSet.blockingClientCount() == 0` with actual value `1`; `99c842f1` repairs successful delivery only. |
+| 90.2 | CONFIRMED (reproduced) | fixed | `Bug90StoreReviewProbe: tests=1, failures=0, errors=0`; real owner-worker save, blocked-client delivery and readonly failure propagation verified. C5 is a separate test defect. |
+| 90.3 | CONFIRMED (inspection) | fixed | Existing BZPOP/BZMPOP numeric-error assertions are among the 168 passing existing tests; disposition covers the cited examples only. |
+| 90.4 | CONFIRMED (reproduced) | fixed | The passing real two-worker probe also asserts `WRONG_TYPE` for asynchronous BZPOPMIN, BZPOPMAX and BZMPOP. |
+| 90.5 | CONFIRMED (reproduced) | fixed | INFO/registry specs passed; unique-waiter methods covered. C2/C3 still retain completed waiters and must be repaired separately. |
+| 90.6 | PARTIALLY CONFIRMED | — | `REDIS_COMMANDS_NOT_IMPLEMENTED.md:49-58` still lists supported CLIENT subcommands; `CGroup.java:163,183,187,212,235,256` contains the handlers. |
+| 90.7 | CONFIRMED (inspection) | fixed | Focused blocking timeout specs passed; `NullArrayReply` JaCoCo shows 7/7 lines executed for RESP2/RESP3/HTTP encoders. |
+| 90.8 | REFINED | fixed | `94ed9044` adds explicit SUPERSEDED notes to bug_43/bug_87; STATE.md's earlier correction is preserved. |
+| 90.9 | CONFIRMED (reproduced) | fixed | Existing nested-pair assertions passed; BGroup reply helper has 8/8 executable lines covered. |
+| 90.10 | CONFIRMED (inspection) | fixed | Both ZMPOP paths call the nested helper, whose eight executable lines were covered; existing `test zmpop` passed. |
+| C1 | CONFIRMED (reproduced) | — | Two failing probes: key count `-1`, and `ConcurrentModificationException`; introduced by `a17223f4`. |
+| C2 | CONFIRMED (reproduced) | — | List recheck completes the promise but the blocked-client count remains `1`. |
+| C3 | CONFIRMED (reproduced) | — | Wrong-type zset completion returns WRONGTYPE but the blocked-client count remains `1`. |
+| C4 | CONFIRMED (inspection) | — | Missing-command entries conflict with the cited CLIENT/ACL implementations. |
+| C5 | CONFIRMED (inspection) | — | `ZGroupTest.groovy:2057-2069` returns an unawaited promise result as boolean; `2014-2016` checks that boolean with `!= null`. |
+
+### Pasted verification evidence
+
+From `/tmp/bug90-fix-review-regression.log`:
+
+```text
+BUILD SUCCESSFUL in 32s
+```
+
+From the final probe XML, extracted without substituting Groovy property access for getters:
+
+```text
+io.velo.command.Bug90FixReviewProbe: tests=4, failures=4, errors=0
+wrongtype zset recheck releases every registration
+Condition not satisfied:
+
+BlockingZSet.blockingClientCount() == 0
+|            |                     |
+|            1                     false
+class io.velo.command.BlockingZSet
+list recheck delivery releases every registration
+Condition not satisfied:
+
+BlockingList.blockingClientCount() == 0
+|            |                     |
+|            1                     false
+class io.velo.command.BlockingList
+duplicate list keys do not make key count negative
+Condition not satisfied:
+
+BlockingList.blockingKeyCount() == 0
+|            |                  |
+|            -1                 false
+class io.velo.command.BlockingList
+duplicate list keys with another waiting client do not invalidate iterator
+Expected no exception to be thrown, but got 'java.util.ConcurrentModificationException'
+io.velo.command.Bug90StoreReviewProbe: tests=1, failures=0, errors=0
+```
+
+From `/tmp/bug90-fix-review-probes-final.log`:
+
+```text
+5 tests completed, 4 failed
+> Task :test FAILED
+BUILD FAILED in 9s
+```
+
+These red results are the remaining defects, not an assertion that the committed regression suite
+failed: the expanded run's XML showed 168 existing tests with zero failures. C4/C5 are inspection
+verdicts with the code excerpts and cited implementations above, not claimed runtime reproductions.
+
+### Four-evidence audit per fix commit
+
+The author Fix Log's RED evidence, commit SHA, focused GREEN selection and JaCoCo ranges were
+read and checked against each commit's diff, tests and the independent focused/probe results above.
+`42110363`, `2490462d`, `ccba406e`, `1f380ffd`, `dda64496` and `7d4bd1b7` have all four evidence
+fields recorded; independent current-code checks support the scoped dispositions in the formal
+table. `99c842f1` and `a17223f4` also have those fields, but the new RED probes prevent closing
+their full cleanup scope. Documentation commits `f54c0703`/`94ed9044` legitimately have no
+production RED/GREEN/JaCoCo requirement; inspection prevents closing `f54c0703`.
+
+The earlier numeric-error commit `cf50f306` has the author's original RED audit marked not
+applicable in this report; this reviewer verified the current listed-case tests, not an independent
+historical RED replay. Do not infer stronger historical evidence from the current green result.
+No independent historical checkout/replay was performed for any commit in this pass.
+
+### Recommended fix order
+
+1. **C1** — repair the introduced duplicate-key iterator/count regression.
+2. **C2** — release every registration in BLPOP/BRPOP and BLMPOP recheck completion paths.
+3. **C3** — release every registration in terminal zset WRONGTYPE completion.
+4. **C5** — make the committed destination-read test await and assert real contents/existence.
+5. **C4** — finish the subcommand-aware missing-command document correction.
+
+Use the existing RED probes to construct permanent regressions first. Keep one bug per commit,
+rerun the focused tests, and verify the changed lines/branches in JaCoCo before asking agent 2
+to re-review. Review feedback remains in this same document.
+
+## Residual Risk
+
+- C1-C5 remain unresolved; no final fixed disposition is assigned to these follow-ups.
+- The real two-worker integration evidence covers the original destination-owner STORE case and
+  asynchronous wrong-type replies. It is not a live TCP comparison with Redis.
+- Timeout wire capture and broader numeric parsing/range/precedence comparisons remain additional
+  verification. The accepted dispositions above cover their stated scope only.
+- No full-suite run or independent per-commit historical RED replay was performed. Current focused
+  execution and JaCoCo evidence must not be described as either.
+
+## Fix response to the re-review findings (AI agent 1, 2026-11-19)
+
+**Reviewed range of the re-review:** `769a9eab..b85565eb` — overall verdict **CHANGES REQUESTED**,
+five follow-up findings (C1-C5).
+
+**Response:** all five findings are **accepted without exception**. C1 was a regression introduced by
+agent 1's own follow-up commit `a17223f4`, and C5 weakened agent 1's own 90.2 evidence; both were
+fixed first and the evidence was re-derived. The independent code citations of the review were
+re-verified in the current tree before every fix (see the per-finding table).
+
+| Finding | Agent 1 position | Independent check before the fix | Fix commit |
+|---|---|---|---|
+| C1 | accepted — a real regression of `a17223f4`: `addBlockingWaiter` registered the same waiter once per key argument, so `BLPOP k k` registered it twice, and the global cleanup mutated the serving list while it was iterated | `BlockingList.java:479-484` / `533-538` call `removeEverywhere(promise)` inside the `while (it.hasNext())` loop (416) — confirmed | `de9fe620` |
+| C2 | accepted — the list recheck helpers only released the serving key | `BGroup.completeIfListNotEmpty` used `BlockingList.removeOne(...)` only — confirmed | `c05fa127` |
+| C3 | accepted — the terminal zset wrong-type branch only released the serving key | `BGroup.completeIfZSetNotEmpty` used `BlockingZSet.removeOne(...)` only — confirmed | `45a91226` |
+| C4 | accepted — the document listed supported CLIENT/ACL subcommands as missing | `CGroup.java:163,183,187,212,235,256` and `AGroup.java:176,199` implement them — confirmed; the audit went further, `no-evict`/`no-touch` are accepted no-op flags and were removed as well, the remaining `CLIENT` subcommands answer `NOT_SUPPORT` and stay listed | `3b37482a` |
+| C5 | accepted — agent 1's own assertion was a no-op: the helper returned a primitive `boolean` and the caller asserted `stored != null`, which is always true | the deeper defect: `AbstractPromise.getResult()` **does not block** (it returns `null` until the promise is completed), so the helper had to await the owner-worker read — confirmed with a probe spec whose deliberately false inner comparison still passed | `4ed30995` |
+
+### Systemic note discovered while fixing C5
+
+`io.activej.promise.Promise` declares **both** `T getResult()` and `boolean isResult()`:
+
+- `getResult()` is a **non blocking peek** — it returns `null` while the promise is not completed, so
+  `promise.getResult()` in a test can read `null` instead of waiting (this is what made C5's helper
+  return `false`);
+- Groovy property access `promise.result` resolves to **`isResult()`** (a boolean), not to the value —
+  the same trap as `promise.exception` → `isException()`.
+
+The repo's specs use the idiom `(reply as AsyncReply).settablePromise.whenResult { result -> result == X }.result`
+**79 times** (76 with the trailing `.result`). Two problems: the comparison inside the closure is
+**never asserted** (Spock only asserts the expressions of a `then:`/`expect:` block) and the outer
+`.result` is a non blocking peek, so the idiom only proves "a non-null value arrived". A probe spec
+with a deliberately false inner comparison passed. It was removed from the seven timeout assertions of
+`BGroupTest` while fixing 90.7, but the remaining occurrences are a **separate cleanup** — they are
+not part of bug 90 and were not changed here.
+
+### Notes on the fix shape
+
+- C1 is fixed in two parts: the waiter is registered **once per distinct key** (redis deduplicates
+  the keys of a blocking command, `redis/src/blocked.c:379-383`), and the global cleanup is
+  **deferred until after the delivery iteration**, so it can never mutate the serving list while it is
+  iterated. The distinct keys are also what the waiter carries, so the release counter stays correct.
+- C2 and C3 reuse the same mechanism as the successful delivery (`removeEverywhere`), so every
+  terminal path (success, wrong type, timeout) releases every registration.
+- C4 changed the document only, the counts of the affected sections were recomputed.
+- C5 changed the test only, the production behaviour of `ccba406e` is unchanged and stays covered.
+
+**Regression after the C1-C5 fixes:** `io.velo.command.*` + `io.velo.reply.*` + `io.velo.persist.*`
+→ **802 tests, 0 failures, 0 errors**.
+
+**Still open (unchanged):** the two-worker `*STORE` end-to-end and the asynchronous BZMPOP wrong-type
+path are covered by the reviewer's own real-persistence probes but not by a permanent two-worker
+spec in the repository; there is still no live TCP capture of the timeout frame and no exhaustive
+numeric-argument matrix against Redis 7.2. These are recorded in the Residual Risk section and were
+not claimed as fixed by the green unit tests.
+
