@@ -24,6 +24,7 @@ import java.nio.ByteBuffer
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class XGroupTest extends Specification {
     def _XXGroup = new XGroup(null, null, null)
@@ -2104,6 +2105,36 @@ class XGroupTest extends Specification {
         r = x.fetchExistsBigString(slot, 0)
         then:
         r.isReplType(ReplType.exists_big_string)
+
+        when: 'continuation chunk on same bucket reuses updated uuid set without reading it twice'
+        def uuidSetReads = new AtomicInteger()
+        def countingGetSet = new InMemoryGetSet() {
+            @Override
+            OneSlot.BufOrCompressedValue getBuf(short sl, String key, int bucketIndex, long keyHash) {
+                if (key == s.rawKey()) {
+                    uuidSetReads.incrementAndGet()
+                }
+                return super.getBuf(sl, key, bucketIndex, keyHash)
+            }
+        }
+        x.byPassGetSet = countingGetSet
+        def contKeyBytes = 'big-string-cont-key'.bytes
+        def contContent = ByteBuffer.allocate(4 + 4 + 1 + 8 + 8 + 4 + contKeyBytes.length + 4 + 16)
+                .putInt(0)
+                .putInt(1)
+                .put((byte) 0)
+                .putLong(77L)
+                .putLong(88L)
+                .putInt(contKeyBytes.length)
+                .put(contKeyBytes)
+                .putInt(16)
+                .put(new byte[16])
+                .array()
+        replRequest.data = contContent
+        r = x.handleRepl(replRequest) as ReplReply
+        then:
+        r.isReplType(ReplType.exists_big_string)
+        uuidSetReads.get() == 1
 
         cleanup:
         localPersist.cleanUp()

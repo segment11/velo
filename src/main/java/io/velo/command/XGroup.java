@@ -1421,7 +1421,7 @@ public class XGroup extends BaseCommand {
                 innerReply = fetchExistsBigString(slot, bucketIndex + 1);
             }
         } else {
-            innerReply = fetchExistsBigString(slot, bucketIndex);
+            innerReply = rhk != null ? fetchExistsBigString(slot, bucketIndex, rhk) : fetchExistsBigString(slot, bucketIndex);
         }
 
         return wrapExistsReplyAfter(pendingWrites, slot, innerReply);
@@ -1445,6 +1445,10 @@ public class XGroup extends BaseCommand {
         var firstOneSlot = localPersist.currentThreadFirstOneSlot();
         final var s = findKeyMustInSlot(firstOneSlot.slot(), "exists_big_string_uuids_bucket_index_" + bucketIndex);
         var rhk = SGroup.getRedisSet(s, this);
+        return fetchExistsBigString(slot, bucketIndex, rhk);
+    }
+
+    private Repl.ReplReply fetchExistsBigString(short slot, int bucketIndex, RedisHashKeys rhk) {
         var set = rhk != null ? rhk.getSet() : new HashSet<String>();
         if (set.isEmpty()) {
             var content = fillBytes(4, buf -> buf.putInt(bucketIndex));
