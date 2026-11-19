@@ -1,6 +1,7 @@
 package io.velo.command;
 
 import io.activej.net.socket.tcp.ITcpSocket;
+import io.activej.promise.SettablePromise;
 import io.velo.BaseCommand;
 import io.velo.Utils;
 import io.velo.ValkeyRawConfSupport;
@@ -194,8 +195,7 @@ public class AGroup extends BaseCommand {
                 }
             }
 
-            appendAclUpdateBinlog();
-            return new IntegerReply(count);
+            return appendAclUpdateBinlog(new IntegerReply(count));
         } else if ("dryrun".equals(subCmd)) {
             if (data.length < 4) {
                 return ErrorReply.SYNTAX;
@@ -314,14 +314,7 @@ public class AGroup extends BaseCommand {
                         lines.add(setuserLine);
                     }
 
-                    firstOneSlot.asyncCall(() -> {
-                        try {
-                            firstOneSlot.getBinlog().append(new XAclUpdate(lines));
-                        } catch (IOException e) {
-                            throw new RuntimeException("Append binlog error, acl lines=" + lines, e);
-                        }
-                        return null;
-                    });
+                    return appendAclUpdateBinlog(new XAclUpdate(lines), OKReply.INSTANCE);
                 }
 
                 return OKReply.INSTANCE;
@@ -383,8 +376,7 @@ public class AGroup extends BaseCommand {
                 FileUtils.writeLines(tmpFile, "UTF-8", lines);
                 Files.move(tmpFile.toPath(), aclFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 
-                appendAclUpdateBinlog();
-                return OKReply.INSTANCE;
+                return appendAclUpdateBinlog(OKReply.INSTANCE);
             } catch (IOException e) {
                 return new ErrorReply("write acl file error: " + e.getMessage());
             }
@@ -463,8 +455,7 @@ public class AGroup extends BaseCommand {
                     u.copyStateFrom(temp);
                 });
 
-                appendAclUpdateBinlog();
-                return OKReply.INSTANCE;
+                return appendAclUpdateBinlog(OKReply.INSTANCE);
             } catch (AclInvalidRuleException | IllegalArgumentException e) {
                 log.error("Set user error={}", e.getMessage());
                 return ErrorReply.ACL_SETUSER_RULE_INVALID;
@@ -496,26 +487,30 @@ public class AGroup extends BaseCommand {
         return ErrorReply.SYNTAX;
     }
 
-    private void appendAclUpdateBinlog() {
-        var line = dataToLine();
+    private Reply appendAclUpdateBinlog(Reply reply) {
+        return appendAclUpdateBinlog(new XAclUpdate(dataToLine()), reply);
+    }
+
+    private Reply appendAclUpdateBinlog(XAclUpdate update, Reply reply) {
         var firstOneSlot = localPersist.firstOneSlot();
-        if (firstOneSlot != null && firstOneSlot.getDynConfig().isBinlogOn()) {
-            var p = firstOneSlot.asyncCall(() -> {
-                try {
-                    firstOneSlot.getBinlog().append(new XAclUpdate(line));
-                    return true;
-                } catch (IOException e) {
-                    throw new RuntimeException("Append binlog error, acl line=" + line, e);
-                }
-            });
-            // sync
-            var r = p.getResult();
-            var e = p.getException();
-            if (e != null) {
-                throw (RuntimeException) e;
-            }
-            log.warn("Append binlog success, acl line={}, result={}", line, r);
+        if (firstOneSlot == null || !firstOneSlot.getDynConfig().isBinlogOn()) {
+            return reply;
         }
+
+        SettablePromise<Reply> promise = new SettablePromise<>();
+        firstOneSlot.asyncCall(() -> {
+            firstOneSlot.getBinlog().append(update);
+            return reply;
+        }).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("Append acl binlog error", e);
+                promise.set(new ErrorReply(Utils.wrapException("Append acl binlog", e).getMessage()));
+            } else {
+                promise.set(r);
+            }
+        });
+        // Replication replay uses synchronous replies when the binlog slot is already owned by this worker.
+        return promise.isComplete() ? promise.getResult() : new AsyncReply(promise);
     }
 
     private Reply append() {

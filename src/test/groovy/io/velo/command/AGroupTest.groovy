@@ -1,5 +1,6 @@
 package io.velo.command
 
+import io.activej.eventloop.Eventloop
 import io.activej.config.Config
 import io.velo.*
 import io.velo.acl.AclUsers
@@ -10,11 +11,16 @@ import io.velo.mock.InMemoryGetSet
 import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
+import io.velo.persist.DynConfig
+import io.velo.repl.Binlog
+import io.velo.repl.BinlogContent
 import io.velo.reply.*
 import org.apache.commons.codec.digest.DigestUtils
 import spock.lang.Specification
 
+import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicInteger
 
 class AGroupTest extends Specification {
     def _AGroup = new AGroup(null, null, null)
@@ -117,6 +123,12 @@ class AGroupTest extends Specification {
         localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
         def oneSlot = localPersist.oneSlot(slot)
         oneSlot.dynConfig.binlogOn = true
+
+        def originalFilename = ValkeyRawConfSupport.aclFilename
+        def originalBinlog = oneSlot.binlog
+        def binlogAclFile = File.createTempFile('velo-acl-binlog-', '.conf')
+        def binlogDir = Files.createTempDirectory('velo-acl-binlog-').toFile()
+        def recordingBinlog = new RecordingAclBinlog(binlogDir, oneSlot.dynConfig)
 
         // ***** *****
         // 'all' is a pseudo category used internally by +@all, redis does not expose it in ACL CAT
@@ -496,7 +508,81 @@ class AGroupTest extends Specification {
         then:
         reply == ErrorReply.FORMAT
 
+        when: 'all binlog-writing ACL subcommands await remote success and failure'
+        ValkeyRawConfSupport.aclFilename = binlogAclFile.absolutePath
+        oneSlot.binlog = recordingBinlog
+        def caller = Eventloop.builder().withCurrentThread().build()
+        def commands = ['acl save', 'acl load', 'acl setuser binlog-user on', 'acl deluser binlog-user']
+        for (boolean fail : [false, true]) {
+            recordingBinlog.fail = fail
+            for (String command : commands) {
+                def target = Eventloop.builder().build()
+                def worker = new Thread({ target.run() } as Runnable)
+                oneSlot.slotWorkerEventloop = target
+                oneSlot.threadIdProtectedForSafe = worker.threadId()
+                int attemptsBefore = recordingBinlog.attempts.get()
+                Reply pending = null
+                try {
+                    pending = aGroup.execute(command)
+                    assert pending instanceof AsyncReply
+                    assert !(pending as AsyncReply).settablePromise.isComplete()
+                    assert recordingBinlog.attempts.get() == attemptsBefore
+                } finally {
+                    worker.start()
+                    caller.run()
+                    worker.join(5000)
+                }
+                assert !worker.alive
+                assert recordingBinlog.attempts.get() == attemptsBefore + 1
+                def completed = (pending as AsyncReply).settablePromise.getResult()
+                assert completed != null
+                if (fail) {
+                    assert completed instanceof ErrorReply
+                    assert (completed as ErrorReply).message.contains('injected acl append failure')
+                } else if (command.startsWith('acl deluser')) {
+                    assert (completed as IntegerReply).integer == 1
+                } else {
+                    assert completed == OKReply.INSTANCE
+                }
+            }
+        }
+        then:
+        recordingBinlog.attempts.get() == 8
+
+        when: 'inline ACL updates preserve synchronous replies, including append failures'
+        oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
+        for (boolean fail : [false, true]) {
+            recordingBinlog.fail = fail
+            for (String command : commands) {
+                def completed = aGroup.execute(command)
+                assert !(completed instanceof AsyncReply)
+                if (fail) {
+                    assert completed instanceof ErrorReply
+                    assert (completed as ErrorReply).message.contains('injected acl append failure')
+                } else if (command.startsWith('acl deluser')) {
+                    assert (completed as IntegerReply).integer == 1
+                } else {
+                    assert completed == OKReply.INSTANCE
+                }
+            }
+        }
+        then:
+        recordingBinlog.attempts.get() == 16
+
+        when: 'binlog disabled does not append'
+        oneSlot.dynConfig.binlogOn = false
+        reply = aGroup.execute('acl setuser binlog-user on')
+        then:
+        reply == OKReply.INSTANCE
+        recordingBinlog.attempts.get() == 16
+
         cleanup:
+        ValkeyRawConfSupport.aclFilename = originalFilename
+        oneSlot.binlog = originalBinlog
+        oneSlot.threadIdProtectedForSafe = Thread.currentThread().threadId()
+        recordingBinlog.cleanUp()
+        binlogDir.deleteDir()
+        binlogAclFile.delete()
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
     }
@@ -717,5 +803,21 @@ class AGroupTest extends Specification {
         cleanup:
         localPersist.cleanUp()
         Consts.persistDir.deleteDir()
+    }
+    private static class RecordingAclBinlog extends Binlog {
+        final AtomicInteger attempts = new AtomicInteger()
+        boolean fail
+
+        RecordingAclBinlog(File dir, DynConfig config) {
+            super((short) 0, dir, config)
+        }
+
+        @Override
+        void append(BinlogContent content) throws IOException {
+            attempts.incrementAndGet()
+            if (fail) {
+                throw new IOException('injected acl append failure')
+            }
+        }
     }
 }
