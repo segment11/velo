@@ -2809,8 +2809,9 @@ public class ZGroup extends BaseCommand {
             if (!cv.isZSet()) {
                 return ErrorReply.WRONG_TYPE;
             }
-            var rz = getRedisZSet(slotWithKeyHash);
-            if (rz == null || rz.isEmpty()) {
+            var encodedBytes = getValueBytesByCv(cv, slotWithKeyHash);
+            var rz = RedisZSet.decode(encodedBytes);
+            if (rz.isEmpty()) {
                 continue;
             }
 

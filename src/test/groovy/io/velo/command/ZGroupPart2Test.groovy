@@ -1571,6 +1571,7 @@ class ZGroupPart2Test extends Specification {
         def localPersist = LocalPersist.instance
         localPersist.fixSlotThreadId((short) 0, Thread.currentThread().threadId())
         localPersist.addOneSlot((short) 1, eventloop)
+        def localReads = new AtomicInteger()
         def foreignReads = new AtomicInteger()
         def guardedStore = new InMemoryGetSet() {
             @Override
@@ -1579,6 +1580,7 @@ class ZGroupPart2Test extends Specification {
                     foreignReads.incrementAndGet()
                     throw new IllegalStateException('unused foreign slot failed')
                 }
+                localReads.incrementAndGet()
                 return super.getBuf(readSlot, key, bucketIndex, keyHash)
             }
         }
@@ -1602,14 +1604,17 @@ class ZGroupPart2Test extends Specification {
         reply instanceof MultiBulkReply
         ((reply as MultiBulkReply).replies[0] as BulkReply).asString() == firstKey
         memberPairs((reply as MultiBulkReply).replies[1]) == [['one', '1'], ['two', '2']]
+        localReads.get() == 1
         foreignReads.get() == 0
         ZGroup.getRedisZSet(BaseCommand.slot(firstKey, 2), guardedGroup).size() == 1
 
         when: 'the last local member is popped with MAX and the key is deleted'
+        localReads.set(0)
         reply = guardedGroup.execute("zmpop 2 $firstKey $foreignKey MAX")
         then:
         reply instanceof MultiBulkReply
         memberPairs((reply as MultiBulkReply).replies[1]) == [['three', '3']]
+        localReads.get() == 1
         foreignReads.get() == 0
         guardedGroup.getCv(BaseCommand.slot(firstKey, 2)) == null
 
