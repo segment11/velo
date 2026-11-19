@@ -150,6 +150,12 @@ assert person.name == 'hello'
 // do not
 assert person.getName() == 'hello'
 
+// exception: when both getX() and isX() exist, property access may resolve to isX()
+// ActiveJ Promise has getException() and isException(): promise.exception resolves to a boolean
+// use promise.getException() explicitly when the exception object is needed
+// the same holds for the result: Promise has getResult() and isResult(), promise.result is the
+// boolean "is the result ready", not the value. use promise.getResult() explicitly
+
 // use ?:
 def name = person.name ?: 'world'
 // do not

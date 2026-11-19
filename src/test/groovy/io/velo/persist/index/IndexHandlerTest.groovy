@@ -46,7 +46,8 @@ class IndexHandlerTest extends Specification {
         }
         eventloopCurrent.run()
         then:
-        p0e.exception != null
+        p0e.getException() instanceof RuntimeException
+        p0e.getException().message == 'error'
 
         when:
         boolean result = false
