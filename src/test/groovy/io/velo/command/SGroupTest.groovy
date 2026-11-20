@@ -2883,6 +2883,62 @@ sunionstore
         missingReads == 1
         wrongTypeReply == ErrorReply.WRONG_TYPE
         wrongTypeReads == 1
+
+        when: 'sscan rejects a 1 MiB big string or invalid options on a big-string set without loading big-string body bytes'
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def realGroup = new SGroup(null, null, null)
+        realGroup.from(BaseCommand.mockAGroup())
+
+        def bigStrKey = 'kerry-test-big-string-sscan-str'
+        def sBigStr = BaseCommand.slot(bigStrKey, 1)
+        def oneMib = new byte[1024 * 1024]
+        oneSlot.bigStringFiles.writeBigStringBytes(9001L, sBigStr.bucketIndex(), sBigStr.keyHash(), oneMib)
+        def cvBigStr = Mock.prepareCompressedValueList(1)[0]
+        cvBigStr.keyHash = sBigStr.keyHash()
+        cvBigStr.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigStr.setCompressedDataAsBigString(9001L, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.put(bigStrKey, sBigStr.bucketIndex(), cvBigStr)
+
+        def bigSetKey = 'kerry-test-big-string-sscan-set'
+        def sBigSet = BaseCommand.slot(bigSetKey, 1)
+        def bigSetRhk = new RedisHashKeys()
+        bigSetRhk.add('big-member')
+        def bigSetBytes = bigSetRhk.encode()
+        oneSlot.bigStringFiles.writeBigStringBytes(9002L, sBigSet.bucketIndex(), sBigSet.keyHash(), bigSetBytes)
+        def cvBigSet = Mock.prepareCompressedValueList(1)[0]
+        cvBigSet.keyHash = sBigSet.keyHash()
+        cvBigSet.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigSet.setCompressedDataAsBigString(9002L, CompressedValue.SP_TYPE_SET)
+        oneSlot.put(bigSetKey, sBigSet.bucketIndex(), cvBigSet)
+        oneSlot.bigStringFiles.clearLRUCache()
+
+        def bigStrWrongReply = realGroup.execute("sscan ${bigStrKey} 0")
+        long readsAfterWrong = oneSlot.bigStringFiles.readFileCountTotal
+        long bytesAfterWrong = oneSlot.bigStringFiles.readByteLengthTotal
+
+        def bigSetBadOptReply = realGroup.execute("sscan ${bigSetKey} 0 badopt")
+        long readsAfterBadOpt = oneSlot.bigStringFiles.readFileCountTotal
+        long bytesAfterBadOpt = oneSlot.bigStringFiles.readByteLengthTotal
+
+        def bigSetValidReply = realGroup.execute("sscan ${bigSetKey} 0 count 10")
+        long readsAfterValid = oneSlot.bigStringFiles.readFileCountTotal
+        then:
+        bigStrWrongReply == ErrorReply.WRONG_TYPE
+        readsAfterWrong == 0
+        bytesAfterWrong == 0
+        bigSetBadOptReply == ErrorReply.SYNTAX
+        readsAfterBadOpt == 0
+        bytesAfterBadOpt == 0
+        bigSetValidReply instanceof MultiBulkReply
+        (((bigSetValidReply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'big-member'
+        readsAfterValid == 1
+
+        cleanup:
+        localPersist?.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test srem'() {

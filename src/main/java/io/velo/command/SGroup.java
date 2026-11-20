@@ -2332,11 +2332,12 @@ public class SGroup extends BaseCommand {
             return new ErrorReply("invalid cursor");
         }
 
-        // redis checks the key type before validating the options
+        // redis checks the key type before validating the options;
+        // defer big-string body loading until after type and option validation pass
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var mainKeyCv = getCv(slotWithKeyHash);
+        var mainKeyCv = getCv(slotWithKeyHash, false);
         if (mainKeyCv != null) {
-            if (mainKeyCv.getDictSeqOrSpType() != CompressedValue.SP_TYPE_SET) {
+            if (mainKeyCv.getRealDictSeqOrSpType() != CompressedValue.SP_TYPE_SET) {
                 return ErrorReply.WRONG_TYPE;
             }
         } else if (exists(slot(RedisHashKeys.keysKey(slotWithKeyHash.rawKey())))) {
