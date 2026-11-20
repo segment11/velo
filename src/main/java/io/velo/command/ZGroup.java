@@ -2649,10 +2649,11 @@ public class ZGroup extends BaseCommand {
             return new ErrorReply("invalid cursor");
         }
 
-        // redis checks the key type before validating the options
+        // redis checks the key type before validating the options;
+        // defer big-string body loading until after type and option validation pass
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(slotWithKeyHash);
-        if (cv != null && !cv.isZSet()) {
+        var cv = getCv(slotWithKeyHash, false);
+        if (cv != null && cv.getRealDictSeqOrSpType() != CompressedValue.SP_TYPE_ZSET) {
             return ErrorReply.WRONG_TYPE;
         }
 

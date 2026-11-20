@@ -6,6 +6,7 @@ import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.TypeMismatchException
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
@@ -1817,6 +1818,60 @@ class ZGroupPart2Test extends Specification {
         missingReads == 1
         wrongTypeReply == ErrorReply.WRONG_TYPE
         wrongTypeReads == 1
+
+        when: 'zscan rejects a 1 MiB big string or invalid options on a big-string zset without loading big-string body bytes'
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def realGroup = new ZGroup(null, null, null)
+        realGroup.from(BaseCommand.mockAGroup())
+
+        def bigStrKey = 'kerry-test-big-string-zscan-str'
+        def sBigStr = BaseCommand.slot(bigStrKey, 1)
+        oneSlot.bigStringFiles.writeBigStringBytes(9101L, sBigStr.bucketIndex(), sBigStr.keyHash(), new byte[1024 * 1024])
+        def cvBigStr = Mock.prepareCompressedValueList(1)[0]
+        cvBigStr.keyHash = sBigStr.keyHash()
+        cvBigStr.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigStr.setCompressedDataAsBigString(9101L, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.put(bigStrKey, sBigStr.bucketIndex(), cvBigStr)
+
+        def bigZSetKey = 'kerry-test-big-string-zscan-zset'
+        def sBigZSet = BaseCommand.slot(bigZSetKey, 1)
+        def bigRz = new RedisZSet()
+        bigRz.add(7.0, 'big-zmember')
+        oneSlot.bigStringFiles.writeBigStringBytes(9102L, sBigZSet.bucketIndex(), sBigZSet.keyHash(), bigRz.encode())
+        def cvBigZSet = Mock.prepareCompressedValueList(1)[0]
+        cvBigZSet.keyHash = sBigZSet.keyHash()
+        cvBigZSet.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigZSet.setCompressedDataAsBigString(9102L, CompressedValue.SP_TYPE_ZSET)
+        oneSlot.put(bigZSetKey, sBigZSet.bucketIndex(), cvBigZSet)
+        oneSlot.bigStringFiles.clearLRUCache()
+
+        def bigStrWrongReply = realGroup.execute("zscan ${bigStrKey} 0")
+        long readsAfterWrong = oneSlot.bigStringFiles.readFileCountTotal
+        long bytesAfterWrong = oneSlot.bigStringFiles.readByteLengthTotal
+
+        def bigZSetBadOptReply = realGroup.execute("zscan ${bigZSetKey} 0 badopt")
+        long readsAfterBadOpt = oneSlot.bigStringFiles.readFileCountTotal
+        long bytesAfterBadOpt = oneSlot.bigStringFiles.readByteLengthTotal
+
+        def bigZSetValidReply = realGroup.execute("zscan ${bigZSetKey} 0 count 10")
+        long readsAfterValid = oneSlot.bigStringFiles.readFileCountTotal
+        then:
+        bigStrWrongReply == ErrorReply.WRONG_TYPE
+        readsAfterWrong == 0
+        bytesAfterWrong == 0
+        bigZSetBadOptReply == ErrorReply.SYNTAX
+        readsAfterBadOpt == 0
+        bytesAfterBadOpt == 0
+        bigZSetValidReply instanceof MultiBulkReply
+        (((bigZSetValidReply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'big-zmember'
+        readsAfterValid == 1
+
+        cleanup:
+        localPersist?.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test getRedisZSetOrSet'() {
