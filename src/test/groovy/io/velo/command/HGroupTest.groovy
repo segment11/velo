@@ -7,6 +7,7 @@ import io.velo.SocketInspectorTest
 import io.velo.acl.AclUsers
 import io.velo.acl.U
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
@@ -1883,8 +1884,61 @@ httl
         wrongOptReply == ErrorReply.WRONG_TYPE
         wrongOptReads == 1
 
+        when: 'HH-mode hscan rejects a 1 MiB big string or invalid options on a big-string hash without loading big-string body bytes'
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        LocalPersist.instance.hashSaveMemberTogether = true
+        def realGroup = new HGroup(null, null, null)
+        realGroup.from(BaseCommand.mockAGroup())
+
+        def bigStrKey = 'kerry-test-big-string-hscan-str'
+        def sBigStr = BaseCommand.slot(bigStrKey, 1)
+        oneSlot.bigStringFiles.writeBigStringBytes(9201L, sBigStr.bucketIndex(), sBigStr.keyHash(), new byte[1024 * 1024])
+        def cvBigStr = Mock.prepareCompressedValueList(1)[0]
+        cvBigStr.keyHash = sBigStr.keyHash()
+        cvBigStr.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigStr.setCompressedDataAsBigString(9201L, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.put(bigStrKey, sBigStr.bucketIndex(), cvBigStr)
+
+        def bigHhKey = 'kerry-test-big-string-hscan-hh'
+        def sBigHh = BaseCommand.slot(bigHhKey, 1)
+        def bigRhh = new RedisHH()
+        bigRhh.put('big-field', 'big-val'.bytes)
+        oneSlot.bigStringFiles.writeBigStringBytes(9202L, sBigHh.bucketIndex(), sBigHh.keyHash(), bigRhh.encode())
+        def cvBigHh = Mock.prepareCompressedValueList(1)[0]
+        cvBigHh.keyHash = sBigHh.keyHash()
+        cvBigHh.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigHh.setCompressedDataAsBigString(9202L, CompressedValue.SP_TYPE_HH)
+        oneSlot.put(bigHhKey, sBigHh.bucketIndex(), cvBigHh)
+        oneSlot.bigStringFiles.clearLRUCache()
+
+        def bigStrWrongReply = realGroup.execute("hscan ${bigStrKey} 0")
+        long readsAfterWrong = oneSlot.bigStringFiles.readFileCountTotal
+        long bytesAfterWrong = oneSlot.bigStringFiles.readByteLengthTotal
+
+        def bigHhBadOptReply = realGroup.execute("hscan ${bigHhKey} 0 badopt")
+        long readsAfterBadOpt = oneSlot.bigStringFiles.readFileCountTotal
+        long bytesAfterBadOpt = oneSlot.bigStringFiles.readByteLengthTotal
+
+        def bigHhValidReply = realGroup.execute("hscan ${bigHhKey} 0 count 10")
+        long readsAfterValid = oneSlot.bigStringFiles.readFileCountTotal
+        then:
+        bigStrWrongReply == ErrorReply.WRONG_TYPE
+        readsAfterWrong == 0
+        bytesAfterWrong == 0
+        bigHhBadOptReply == ErrorReply.SYNTAX
+        readsAfterBadOpt == 0
+        bytesAfterBadOpt == 0
+        bigHhValidReply instanceof MultiBulkReply
+        (((bigHhValidReply as MultiBulkReply).replies[1] as MultiBulkReply).replies[0] as BulkReply).asString() == 'big-field'
+        readsAfterValid == 1
+
         cleanup:
         LocalPersist.instance.hashSaveMemberTogether = false
+        localPersist?.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test hgetdel'() {

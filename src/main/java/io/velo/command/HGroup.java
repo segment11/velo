@@ -2311,13 +2311,14 @@ public class HGroup extends BaseCommand {
             return new ErrorReply("invalid cursor");
         }
 
-        // redis checks the key type before validating the options
+        // redis checks the key type before validating the options;
+        // defer big-string body loading until after type and option validation pass
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
         var useHH = isUseHH(keyBytes);
         CompressedValue hhCv = null;
         if (useHH) {
-            hhCv = getCv(slotWithKeyHash);
-            if (hhCv != null && hhCv.getDictSeqOrSpType() != CompressedValue.SP_TYPE_HH) {
+            hhCv = getCv(slotWithKeyHash, false);
+            if (hhCv != null && hhCv.getRealDictSeqOrSpType() != CompressedValue.SP_TYPE_HH) {
                 return ErrorReply.WRONG_TYPE;
             }
         } else {
