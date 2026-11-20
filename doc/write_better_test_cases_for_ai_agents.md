@@ -11,6 +11,7 @@ Agents often make the same mistakes:
 - writing a test whose name says "overflow" while the test data never reaches the overflow branch
 - treating "code looks reasonable" as enough without proving the changed lines executed
 - adding production-only test hooks when a simpler test strategy would work
+- reading/writing non-public fields or calling non-accessible methods through Groovy dynamic access
 
 This repo expects a higher bar:
 - TDD first
@@ -159,6 +160,12 @@ Good for:
 - adding `setForTestOnly(...)` style methods to production classes
 - changing production visibility only to make tests easier when crafted input or reflection is enough
 
+Note: a minimal `@TestOnly` / `@VisibleForTesting` accessor is the accepted escape hatch when internal
+state is genuinely needed — see "Groovy Tests Must Not Bypass Java Visibility" below. What to avoid is
+a test-only hook that exists *in addition to* a cheaper real-entry or crafted-input strategy.
+Explicit Java reflection (Pattern 2) is different from Groovy dynamic access and stays allowed as a
+last resort.
+
 ## Reflection vs Crafted Input vs `@VisibleForTesting`
 
 Use this decision rule:
@@ -173,6 +180,71 @@ Use this decision rule:
 - Good: small extracted helper
 - Acceptable: reflection for rare branch forcing
 - Worst: production API added only for tests
+
+## Groovy Tests Must Not Bypass Java Visibility
+
+Groovy dynamic dispatch silently bypasses Java access modifiers. Code like this "works" only through
+Groovy's runtime reflective fallback, so it compiles fine and then breaks silently when a member is
+renamed, moved, or its visibility changes:
+
+```groovy
+// FORBIDDEN in tests
+def dataRef = req.@data                     // direct field access via .@ operator
+def n = oneSlot.kvWalHitTotal               // package-private field from another package
+savedRhh.mapExpireAt.get('field1')          // private field read as a property
+reply = rGroup.rename(false)                // private method call from a test
+```
+
+Why it is banned:
+
+- it depends on implementation shape, not a contract — refactors break tests at runtime, not compile time
+- it hides what the test actually depends on, so a green test may prove nothing after a rename
+- it is machine-checked: `scripts/test_field_access_check.sh` scans `src/test/groovy` and `dyn/test` and must report 0 issues
+
+### What to do instead
+
+1. Prefer the real public entry path (command `execute`, public decode/encode API).
+2. If internal state is genuinely needed, add a minimal accessor to the production class and annotate it:
+   - `@TestOnly` for test-only getters/setters (e.g. `ReplRequest.getRawData()`)
+   - `@VisibleForTesting` when widening existing visibility (e.g. making a protected method public)
+   Keep the accessor minimal (a getter/setter or a widened method), never a backdoor into business logic.
+3. Reuse existing `@TestOnly` / `@VisibleForTesting` accessors before adding new ones.
+
+Example of the fix pattern:
+
+```groovy
+// before (banned): def dataRef = req.@data
+def dataRef = req.rawData                   // uses the @TestOnly getter
+
+// before (banned): savedRhh.mapExpireAt.get('field1')
+savedRhh.getExpireAt('field1')              // real public method
+
+// before (banned): reply = rGroup.rename(false)
+reply = rGroup.execute('rename a b')        // real entry path
+```
+
+### What is still allowed
+
+Explicit Java reflection (`getDeclaredField(...).setAccessible(true)`) for rare internal-state forcing,
+as in Pattern 2 below, is a different thing: it is intentional, greppable, and fails fast in the test
+itself. It remains the last-resort option. The ban and the check script target *implicit* Groovy
+dynamic access to non-public members.
+
+### The check script
+
+Run it after touching any Groovy test; it must report 0 issues before you commit:
+
+```bash
+scripts/test_field_access_check.sh                    # field/property accesses
+scripts/test_field_access_check.sh --include-methods  # also non-accessible method calls
+scripts/test_field_access_check.sh BGroupTest         # filter by file/class/package
+scripts/test_field_access_check.sh --compile          # rebuild classes first
+```
+
+The tool parses Groovy sources against real production classes, so it has no false positives on
+renamed members. A `.@` access, a private field read, a cross-package non-public access, or a call to
+a non-accessible method (with `--include-methods`) each show up as an issue with file, line, and
+target class.
 
 ## JaCoCo Expectations
 
@@ -332,6 +404,8 @@ Before claiming a test change is complete, verify:
 - Did I inspect JaCoCo and confirm the touched lines or branches executed?
 - If I added a new public method, did I add a direct unit test in its class's own test spec?
 - If I used reflection, can I justify why it is better than adding production-only test hooks?
+- If I touched Groovy tests, does `scripts/test_field_access_check.sh` report 0 issues (0 method issues too
+  with `--include-methods`), with no `.@` access, private field reads, or non-accessible method calls?
 
 ## Final Rule
 

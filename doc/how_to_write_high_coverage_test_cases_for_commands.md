@@ -84,6 +84,31 @@ Cover these categories when the command has them:
 10. Boundary behavior:
     zero, negative, max count, empty result, nil result, multi-bulk empty result, count larger than available data.
 
+## Verifying Persisted State Without Bypassing Visibility
+
+Command tests often verify persisted state after a mutation (category 7). Do that through public APIs or
+`@TestOnly` / `@VisibleForTesting` accessors only — never through Groovy dynamic access to non-public
+members (`req.@data`, `rhh.mapExpireAt`, calling `group.rename(false)` directly). Those bypass Java
+visibility via Groovy's runtime reflective fallback, break silently on renames, and are flagged by
+`scripts/test_field_access_check.sh` (must report 0 issues).
+
+```groovy
+// good: public decode API + public accessor
+def rhhCv = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
+def savedRhh = RedisHH.decode(rhhCv.cv().getCompressedData())
+savedRhh.getExpireAt('field1') > System.currentTimeMillis()
+
+// good: real entry path instead of a private method call
+reply = rGroup.execute('rename a b')
+
+// bad: private field as a Groovy property
+savedRhh.mapExpireAt.get('field1')
+```
+
+If an internal field has no accessor and the test genuinely needs it, add a minimal `@TestOnly`
+getter/setter to the production class rather than touching the field directly. See
+`doc/write_better_test_cases_for_ai_agents.md` section "Groovy Tests Must Not Bypass Java Visibility".
+
 ## Test Structure
 
 Use one setup block, then a sequence of small `when` / `then` cases.

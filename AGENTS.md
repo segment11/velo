@@ -76,6 +76,12 @@ java -Xmx8g -Xms8g -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m -j
   python3 scripts/jacoco_cover.py io.velo.command.SGroup 1102 1230 --src      # with source text
   python3 scripts/jacoco_cover.py io.velo.command.SGroup 1102 1230 --dir /path # custom project root
   ```
+- Groovy tests must not bypass Java visibility (see Testing Guidelines); verify with the field access check:
+  ```bash
+  scripts/test_field_access_check.sh                    # must report 0 field issues
+  scripts/test_field_access_check.sh --include-methods  # also checks non-accessible method calls
+  scripts/test_field_access_check.sh BGroupTest         # filter by file/class/package
+  ```
 
 ## Code Style Guidelines
 
@@ -244,6 +250,7 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 - Mock external dependencies appropriately
 - Use as much as existing test codes
 - Test thread-safety for concurrent operations
+- Groovy tests must not bypass Java visibility with Groovy dynamic access: never read/write non-public fields (`req.@data`, `obj.packagePrivateField`) and never call private or cross-package non-accessible methods from tests — it relies on Groovy runtime reflective fallback, breaks silently on rename, and is flagged by `scripts/test_field_access_check.sh` (must report 0 issues). Prefer the real public entry path; if internal state is genuinely needed, add a minimal `@TestOnly` / `@VisibleForTesting` accessor (getter/setter or widened method) to the production class and use that instead
 - After running tests for a change, check the JaCoCo HTML report in `build/reports/jacocoHtml/` for the touched classes and make sure the changed code path was executed
 
 ## Bug Reviews Workflow
