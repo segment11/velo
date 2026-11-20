@@ -175,7 +175,8 @@ public abstract class BaseCommand {
      *
      * @return the data line string
      */
-    protected String dataToLine() {
+    @VisibleForTesting
+    public String dataToLine() {
         var sb = new StringBuilder();
         for (var i = 0; i < data.length; i++) {
             var s = new String(data[i]);
@@ -220,6 +221,12 @@ public abstract class BaseCommand {
 
     /** The Zstd dictionary map singleton. */
     protected final DictMap dictMap = DictMap.getInstance();
+
+    /** @return the Zstd dictionary map singleton */
+    @TestOnly
+    public DictMap getDictMap() {
+        return dictMap;
+    }
 
     /** The request handler that owns this command. */
     protected RequestHandler requestHandler;

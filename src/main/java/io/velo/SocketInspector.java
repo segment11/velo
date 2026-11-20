@@ -263,6 +263,16 @@ public class SocketInspector implements TcpSocket.Inspector {
     int[] connectedClientCountArray;
 
     /**
+     * Sets the connected client count array. Test only.
+     *
+     * @param connectedClientCountArray connected client count array per net worker
+     */
+    @TestOnly
+    public void setConnectedClientCountArray(int[] connectedClientCountArray) {
+        this.connectedClientCountArray = connectedClientCountArray;
+    }
+
+    /**
      * Array of network input bytes lengths for each network worker.
      * for stats
      */

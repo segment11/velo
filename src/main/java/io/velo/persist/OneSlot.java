@@ -1021,6 +1021,17 @@ public class OneSlot implements InMemoryEstimate, InSlotMetricCollector, NeedCle
     }
 
     private final int walGroupNumber;
+
+    /**
+     * Gets the number of WAL groups in this slot. Test only.
+     *
+     * @return the WAL group count
+     */
+    @TestOnly
+    public int getWalGroupNumber() {
+        return walGroupNumber;
+    }
+
     // index is group index
     private final Wal[] walArray;
 

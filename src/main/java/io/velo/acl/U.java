@@ -252,6 +252,12 @@ public class U {
         return passwords.isEmpty() ? null : passwords.getFirst();
     }
 
+    /** @return unmodifiable view of passwords for this user */
+    @TestOnly
+    public List<Password> getPasswords() {
+        return Collections.unmodifiableList(passwords);
+    }
+
     /** Default initialized user with 'default' username. */
     public static final U INIT_DEFAULT_U = new U(DEFAULT_USER);
 

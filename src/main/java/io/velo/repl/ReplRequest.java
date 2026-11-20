@@ -53,6 +53,16 @@ public class ReplRequest {
     }
 
     /**
+     * Gets the backing data array directly without copying. Test only.
+     *
+     * @return the raw backing data array
+     */
+    @TestOnly
+    public byte[] getRawData() {
+        return data;
+    }
+
+    /**
      * Sets the slave's UUID (test only).
      *
      * @param slaveUuid the slave's UUID

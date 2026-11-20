@@ -175,7 +175,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
      * @return current file index
      */
     @TestOnly
-    int getCurrentFileIndex() {
+    public int getCurrentFileIndex() {
         return currentFileIndex;
     }
 
@@ -185,7 +185,7 @@ public class Binlog implements InMemoryEstimate, NeedCleanUp {
      * @return current file offset
      */
     @TestOnly
-    long getCurrentFileOffset() {
+    public long getCurrentFileOffset() {
         return currentFileOffset;
     }
 

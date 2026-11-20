@@ -2275,7 +2275,7 @@ httl
         (reply as MultiBulkReply).replies.length == 1
         def rhhCv = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
         def savedRhh = RedisHH.decode(rhhCv.cv().getCompressedData())
-        savedRhh.mapExpireAt.get('field1') > System.currentTimeMillis()
+        savedRhh.getExpireAt('field1') > System.currentTimeMillis()
 
         when: 'test HH mode PX option'
         reply = hGroup.execute('hgetex hashA PX 3600000 FIELDS 1 field1')
@@ -2283,7 +2283,7 @@ httl
         reply instanceof MultiBulkReply
         def rhhCvPx = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
         def savedRhhPx = RedisHH.decode(rhhCvPx.cv().getCompressedData())
-        savedRhhPx.mapExpireAt.get('field1') > System.currentTimeMillis() + 3600000 - 10000
+        savedRhhPx.getExpireAt('field1') > System.currentTimeMillis() + 3600000 - 10000
 
         when: 'test HH mode PXAT option'
         def pxatTime = System.currentTimeMillis() + 3600000
@@ -2292,7 +2292,7 @@ httl
         reply instanceof MultiBulkReply
         def rhhCvPxat = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
         def savedRhhPxat = RedisHH.decode(rhhCvPxat.cv().getCompressedData())
-        savedRhhPxat.mapExpireAt.get('field1') == pxatTime
+        savedRhhPxat.getExpireAt('field1') == pxatTime
 
         when: 'test HH mode EXAT option'
         def exatTime = ((System.currentTimeMillis() / 1000) as long) + 3600
@@ -2301,7 +2301,7 @@ httl
         reply instanceof MultiBulkReply
         def rhhCvExat = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
         def savedRhhExat = RedisHH.decode(rhhCvExat.cv().getCompressedData())
-        savedRhhExat.mapExpireAt.get('field1') == exatTime * 1000
+        savedRhhExat.getExpireAt('field1') == exatTime * 1000
 
         when: 'test HH mode PERSIST option'
         reply = hGroup.execute('hgetex hashA PERSIST FIELDS 1 field1')
@@ -2309,7 +2309,7 @@ httl
         reply instanceof MultiBulkReply
         def rhhCvPersist = inMemoryGetSet.getBuf(slot, 'hashA', 0, 0)
         def savedRhhPersist = RedisHH.decode(rhhCvPersist.cv().getCompressedData())
-        !savedRhhPersist.mapExpireAt.containsKey('field1')
+        savedRhhPersist.getExpireAt('field1') == 0
 
         when: 'test HH mode with null rhh (key does not exist)'
         inMemoryGetSet.remove(slot, 'hashA')

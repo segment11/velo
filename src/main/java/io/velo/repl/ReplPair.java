@@ -485,7 +485,8 @@ public class ReplPair {
     /**
      * @param flag connection status flag
      */
-    private void addLinkUpFlag(boolean flag) {
+    @VisibleForTesting
+    public void addLinkUpFlag(boolean flag) {
         for (int i = 1; i < linkUpFlagArray.length; i++) {
             linkUpFlagArray[i - 1] = linkUpFlagArray[i];
         }

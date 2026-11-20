@@ -70,7 +70,7 @@ class ReplRequestTest extends Specification {
     def 'test partial request preallocates and reuses backing array'() {
         given:
         def req = new ReplRequest(1L, slot, ReplType.test, [1, 2, 3] as byte[], 5)
-        def dataRef = req.@data
+        def dataRef = req.rawData
 
         expect:
         req.leftToRead() == 2
@@ -81,7 +81,7 @@ class ReplRequestTest extends Specification {
 
         then:
         req.fullyRead
-        req.@data.is(dataRef)
+        req.rawData.is(dataRef)
         req.data == [1, 2, 3, 4, 5] as byte[]
     }
 }

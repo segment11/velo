@@ -1,10 +1,6 @@
 package io.velo.persist;
 
-import io.velo.CompressedValue;
-import io.velo.ConfForGlobal;
-import io.velo.ConfForSlot;
-import io.velo.KeyHash;
-import io.velo.NullableOnlyTest;
+import io.velo.*;
 import io.velo.metric.InSlotMetricCollector;
 import io.velo.repl.SlaveNeedReplay;
 import io.velo.repl.SlaveReplay;
@@ -39,14 +35,31 @@ public class BigStringFiles implements InMemoryEstimate, InSlotMetricCollector, 
     public record IdWithKey(long uuid, int bucketIndex, long keyHash, String key) {
     }
 
-
     private final short slot;
+
     final File bigStringDir;
+
+    @TestOnly
+    public File getBigStringDir() {
+        return bigStringDir;
+    }
 
     long diskUsage = 0L;
 
     long readByteLengthTotal = 0L;
+
+    @TestOnly
+    public long getReadByteLengthTotal() {
+        return readByteLengthTotal;
+    }
+
     long readFileCountTotal = 0L;
+
+    @TestOnly
+    public long getReadFileCountTotal() {
+        return readFileCountTotal;
+    }
+
     long readFileCostTotalUs = 0L;
 
     long writeByteLengthTotal = 0L;

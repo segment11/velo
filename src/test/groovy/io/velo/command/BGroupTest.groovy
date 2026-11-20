@@ -4,6 +4,7 @@ import io.activej.eventloop.Eventloop
 import io.activej.bytebuf.ByteBuf
 import io.activej.promise.Promise
 import io.velo.MultiWorkerServer
+import io.velo.RequestHandler
 import io.velo.decode.Request
 import com.github.luben.zstd.Zstd
 import com.github.luben.zstd.ZstdOutputStream
@@ -1492,7 +1493,7 @@ class BGroupTest extends Specification {
         def loop1 = workers[0][0]
         def loop2 = workers[1][0]
         LocalPersistTest.prepareLocalPersist(2 as byte, 2 as short)
-        localPersist.initSlotRuntimeBindings([loop1, loop2] as Eventloop[], new io.velo.RequestHandler[2],
+        localPersist.initSlotRuntimeBindings([loop1, loop2] as Eventloop[], new RequestHandler[2],
                 [workers[0][1] as long, workers[1][1] as long] as long[])
         localPersist.oneSlot(0 as short)
         localPersist.oneSlot(1 as short)

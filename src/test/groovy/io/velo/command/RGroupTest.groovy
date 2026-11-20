@@ -396,7 +396,7 @@ class RGroupTest extends Specification {
 
         rGroup.crossRequestWorker = true
         inMemoryGetSet.put(slot, 'a', 0, cv)
-        reply = rGroup.rename(false)
+        reply = rGroup.execute('rename a b')
         eventloopCurrent.run()
         then:
         reply instanceof AsyncReply
