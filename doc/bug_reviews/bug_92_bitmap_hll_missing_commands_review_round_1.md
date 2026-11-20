@@ -388,8 +388,8 @@ register array, so no manual sparse-key decoding exists in the production code.
 
 | Bug | Failing test evidence | Fix commit | Focused test | JaCoCo |
 |---|---|---|---|---|
-| 92.1 BITOP | `BGroupTest.test bitop` RED at the first `then:` — got `ErrorReply{message='unknown command 'bitop''}` expected `ErrorReply.FORMAT` (test report 2026-11-20) | `996e7e40` `feat: implement bitop command (bug 92.1)` | green (`BGroupTest` 51/51) | bitop lines 570-800: 107/119 covered; every semantic line/branch covered (compute paths, both store paths, cross-worker WRONGTYPE line 734 both branches, NOT/AND/OR/XOR, case-insensitive op); uncovered = defensive promise/catch paths (724-726, 750-757) |
-| 92.2 PFDEBUG | `PGroupTest.test pfdebug` RED at the first `then:` — got `unknown command 'pfdebug'` expected `ErrorReply.FORMAT` | `1ce0a857` `feat: implement pfdebug command (bug 92.2)` | green (`PGroupTest` 23/23 → 24/24) | pfdebug lines 664-800: 63/68 covered; uncovered = the two `saveHll` IOException catches (757-758, 769-770 after the pfselftest commit shifted lines, was 752-753/764-765 at `1ce0a857`) and the empty-opcode-string guard (713), all defensive |
+| 92.1 BITOP | `BGroupTest.test bitop` RED at the first `then:` — got `ErrorReply{message='unknown command 'bitop''}` expected `ErrorReply.FORMAT` (test report 2026-11-20) | `996e7e40` `feat: implement bitop command (bug 92.1)` | green (`BGroupTest` 51/51) | bitop lines 570-800: 108/119 covered at HEAD (107/119 at `996e7e40` before the follow-up); every semantic line/branch covered (compute paths, both store paths, cross-worker WRONGTYPE line 734 both branches, NOT/AND/OR/XOR, case-insensitive op); uncovered = defensive promise/catch paths (724-726, 750-757) |
+| 92.2 PFDEBUG | `PGroupTest.test pfdebug` RED at the first `then:` — got `unknown command 'pfdebug'` expected `ErrorReply.FORMAT` | `1ce0a857` `feat: implement pfdebug command (bug 92.2)` | green (`PGroupTest` 23/23 → 24/24) | pfdebug lines 664-800: 64/69 covered at HEAD (63/68 at `1ce0a857`, line numbers shifted +5 by the pfselftest commit); uncovered = the two `saveHll` IOException catches (757-758, 769-770 at HEAD) and the empty-opcode-string guard (718 at HEAD, partial — the true branch needs a 0-length register array, unreachable through the command), all defensive |
 | 92.3 PFSELFTEST | `PGroupTest.test pfselftest` RED — `unknown command 'pfselftest'`; second RED `TESTFAILED sparse encoding not used` before the 1500 bound fix | `1ee44833` `feat: implement pfselftest command (bug 92.3)` | green (`PGroupTest` 24/24) | pfselftest lines 814-891: arity + happy path + `selfTestMaxerrExceeded` failure/success branches covered; uncovered (849/863/869/886) = TESTFAILED internal branches that cannot fire with a correct implementation (Redis' own suite cannot cover them either) |
 | registry count | — | `e9c081bf` `test: bump command registry count for bitop/pfdebug/pfselftest` (211 → 214 + presence assertions) | green (`CommandRegistryPopulationTest`) | n/a (test only) |
 | re-review follow-up | — | (this commit) `test bitop` adds the missing-first-source and shorter-first-source cases from re-review residual 1 | green (`BGroupTest` 51/51) | `computeBitop` range 605-645: 21/22 lines, the only partial is the post-validation-unreachable `else` at 635; bitop range 570-765 now covers every reachable branch |
@@ -858,3 +858,322 @@ Accepted with the following residual risks (none blocks the fixes):
 | 92.1 | BITOP not implemented | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`996e7e40`) |
 | 92.2 | PFDEBUG not implemented | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`1ce0a857`) |
 | 92.3 | PFSELFTEST not implemented | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`1ee44833`) |
+
+## Re-review 2 (AI agent 2)
+
+**Re-review 2 date:** 2026-11-20 · **Branch:** `review/bitmap_hll` · **HEAD reviewed:** `227646cf`
+(base `fb4f8f29`) · **Method:** independent audit of the post-re-review follow-up commit
+(`git show`), fresh test runs (`:cleanTest` forced, so no cached `UP-TO-DATE` result is
+mistaken for a fresh green), fresh JaCoCo inspection through `scripts/jacoco_cover.py`,
+source-level comparison against the local Redis tree `/home/kerry/ws/redis/src` (`bitops.c`)
+**and** a live differential against the local `redis-server` 7.2.11 binary. The Fix Log was
+not trusted; every number below was re-derived. Append-only: no earlier section was edited.
+
+### Verdict
+
+| Commit | Content | Verdict |
+|---|---|---|
+| `227646cf` | test-only follow-up: 2 new `when:`/`then:` blocks in `test bitop` + the `STATE.md` closure entry + the new Fix Log row | **ACCEPTED** (4 non-blocking items: D1, D2 documentation corrections, D3 test-strength note, D4 traceability nit) |
+
+**Round disposition: round 1 may be CLOSED.** 3/3 findings are fixed (one commit each,
+TDD RED→GREEN + JaCoCo per commit), the re-review independently re-derived every RED, the
+focused tests and the whole command module are green at HEAD, and the JaCoCo numbers are
+re-confirmed. The only open items are documentation-level (D1/D2/D4) and one test-strength
+note (D3); the nine behavioural residuals are already recorded in the "Residual Risk" section
+above and none of them is a bug in the shipped code.
+
+### 1. Content audit of `227646cf`
+
+```
+$ git show 227646cf --stat
+ doc/bug_reviews/STATE.md                           |   2 +-
+ ...2_bitmap_hll_missing_commands_review_round_1.md | 453 ++++++++++++++++++++-
+ src/test/groovy/io/velo/command/BGroupTest.groovy  |  12 +
+```
+
+* **Test-only for `src/`** — confirmed. The only `src/` file the commit touches is
+  `src/test/groovy/io/velo/command/BGroupTest.groovy` (+12 lines); the production code is
+  byte-identical to the previously reviewed HEAD:
+
+  ```
+  $ git diff 1aba0e89..227646cf --stat -- src/main dyn/
+  (no output — production code unchanged by the follow-up)
+  ```
+
+* The two new blocks (verbatim from the commit):
+
+  ```groovy
+  +        when: 'a missing first source is zero padded too'
+  +        reply = bGroup.execute('bitop xor dst miss s3')
+  +        then:
+  +        (reply as IntegerReply).integer == 3
+  +        bGroup.get(sDst) == 'abc'.bytes
+  +
+  +        when: 'a shorter first source is zero padded on the right'
+  +        reply = bGroup.execute('bitop xor dst s4 s3')
+  +        then:
+  +        (reply as IntegerReply).integer == 3
+  +        bGroup.get(sDst) == [0x7a ^ 0x61, 0x62, 0x63] as byte[]
+  ```
+
+  (`s3` = `'abc'` and `s4` = `'z'` are set up by the preceding block "the result length is the
+  longest source length", `miss` is a key that was never written, `dst` is the destination.)
+
+* **Audit-trail note (not a defect):** the commit also carries the *body* of the first
+  "## Re-review (AI agent 2)" section (452 added report lines). At `1aba0e89` that heading
+  existed as an **empty placeholder** — the body had been written into the working tree but
+  never committed:
+
+  ```
+  $ git show 1aba0e89:doc/bug_reviews/bug_92_bitmap_hll_missing_commands_review_round_1.md | awk 'NR>=399 && NR<=401'
+  399: ## Re-review (AI agent 2)
+  400:
+  401: ## Residual Risk
+  ```
+
+  So `227646cf` is "test + STATE.md + Fix Log row" **plus** the first re-review body. The
+  content is correct; only the commit granularity differs from the message.
+
+### 2. Are the two new assertions semantically correct? — yes (Redis ground truth + live differential)
+
+Ground truth `/home/kerry/ws/redis/src/bitops.c` (`bitopCommand`):
+
+```
+645:        o = lookupKeyRead(c->db,c->argv[j+3]);
+646:        /* Handle non-existing keys as empty strings. */
+647:        if (o == NULL) {
+648:            objects[j] = NULL; src[j] = NULL; len[j] = 0; minlen = 0;
+...
+668:        if (len[j] > maxlen) maxlen = len[j];
+...
+747:        for (; j < maxlen; j++) {
+748:            output = (len[0] <= j) ? 0 : src[0][j];      <-- the FIRST source is zero padded
+749:            if (op == BITOP_NOT) output = ~output;
+750:            for (i = 1; i < numkeys; i++) {
+751:                int skip = 0;
+752:                byte = (len[i] <= j) ? 0 : src[i][j];
+```
+
+Derivation of the two new expectations:
+
+| command | src[0] | src[1] | maxlen | result |
+|---|---|---|---|---|
+| `BITOP XOR dst miss s3` | missing → `len[0]=0` → `output = 0` for every `j` | `'abc'` | 3 | `0^0x61, 0^0x62, 0^0x63` = **`"abc"`**, reply `3` |
+| `BITOP XOR dst s4 s3` | `'z'`, `len[0]=1` → `output = 0` for `j ≥ 1` | `'abc'` | 3 | `0x7a^0x61, 0x62, 0x63` = **`1b 62 63`**, reply `3` |
+
+Live differential against the local `redis-server` v=7.2.11 (`/home/kerry/bin/redis-server`):
+
+```
+$ redis-cli -p 7799 set s3 abc ; redis-cli -p 7799 set s4 z
+$ redis-cli -p 7799 bitop xor dst miss s3
+3
+$ redis-cli -p 7799 --no-raw get dst | xxd
+00000000: 2261 6263 220a   "abc".
+$ redis-cli -p 7799 bitop xor dst s4 s3
+3
+$ redis-cli -p 7799 --no-raw get dst | xxd
+00000000: 225c 7831 6262 6322 0a   "\x1bbc".
+```
+
+Both new assertions are byte-for-byte identical to Redis, and identical to what the Velo
+implementation produces (the test is green). **Verdict: the two new cases are correct.**
+
+* **D3 (non-blocking, test strength).** Because XOR is commutative, the expected bytes of
+  "a shorter first source is zero padded on the right" (`[0x7a^0x61, 0x62, 0x63]`) are
+  *identical* to the pre-existing "the result length is the longest source length" case
+  (`[0x61^0x7a, 0x62, 0x63]`). The new assertions therefore pin the **zero padding** of a
+  missing / short *first* source (they would fail with an NPE or an `ArrayIndexOutOfBounds`
+  if the guard were removed) but they would **not** detect an implementation that swapped the
+  source order. An AND/OR variant would pin the order — live Redis gives
+  `BITOP AND dst s4 s3` → `60 00 00` while `BITOP AND dst s3 s4` → `00 00 00` — and the
+  agent-2 residual item had asked for exactly that (`bitop and dst nosuchkey s3`).
+  Not blocking: the implementation itself was verified line by line against `bitops.c`, and
+  the *coverage goal* of the follow-up (the two uncovered branches of `BGroup.java:624`) is
+  met — see the JaCoCo evidence below.
+
+### 3. Test run at HEAD (`227646cf`)
+
+```
+$ ./gradlew :cleanTest :test --tests "io.velo.command.BGroupTest"
+BUILD SUCCESSFUL in 19s
+```
+
+`build/test-results/test/TEST-io.velo.command.BGroupTest.xml`:
+
+```
+suite attrs: {'name': 'io.velo.command.BGroupTest', 'tests': '51', 'skipped': '0',
+              'failures': '0', 'errors': '0', 'timestamp': '2026-11-20T09:51:38.095Z'}
+...
+PASS  test bitop  time=0.147
+```
+
+* The suite holds **51 Spock feature methods, 0 failures, 0 errors** — the headline number
+  "51/51" of the Fix Log is correct.
+* The follow-up did **not** add new test *methods*: it added 2 `when:`/`then:` blocks inside
+  the existing `test bitop` feature (20 → 22 blocks). A `when:` block is not a separate case
+  in the JUnit XML, so the XML still reports 51 test cases — the "53 cases" figure does not
+  exist in the report; the two new cases live inside `test bitop` (20 → 22 blocks, verified by
+  counting the `when:` labels in the feature body at `1aba0e89` vs at HEAD).
+
+### 4. JaCoCo — the first-source branches are now covered
+
+```
+$ python3 scripts/jacoco_cover.py io.velo.command.BGroup 605 645
+Lines: 22 | Covered: 21 | Partial: 1 | Not-covered: 0
+  610  ✓ covered
+  611  ✓ covered       All 2 branches covered.
+  612  ✓ covered       All 4 branches covered.
+  ...
+  624  ✓ covered       All 4 branches covered.
+  ...
+  635  ~ partial       1 of 2 branches missed.
+Partial lines: 635
+```
+
+* `BGroup.java:624` is `int output = srcValues[0] != null && srcValues[0].length > j ? srcValues[0][j] : 0;`
+  — the **first** source's zero-padding. At the first re-review (`1aba0e89`) it was
+  `1 of 4 branches missed` (the "first source missing" and "first source shorter" cases);
+  at HEAD it is **All 4 branches covered**. The follow-up's coverage goal is met.
+* `BGroup.java:635` (`} else if (isXor) {`) stays partial: the missed branch is the
+  "none of and/or/xor" case, which is unreachable because `bitop()` rejects an unknown
+  operation with `ErrorReply.SYNTAX` before calling `computeBitop` — the
+  "post-validation-unreachable `else`" of the Fix Log row. ✓
+
+Wider ranges at HEAD (same run):
+
+```
+$ python3 scripts/jacoco_cover.py io.velo.command.BGroup 570 765
+Lines: 101 | Covered: 90 | Partial: 3 | Not-covered: 8
+Not-covered lines: 724, 725, 726, 750, 751, 755, 756, 757
+Partial lines:     635, 723, 749
+```
+
+The 8 not-covered lines and the partials 723/749 are the cross-worker promise-failure paths
+(`if (e != null)` / `catch (Exception e1)`), i.e. defensive only — the Fix Log row's claim
+"bitop range 570-765 now covers every reachable branch" is **accurate**.
+
+```
+$ python3 scripts/jacoco_cover.py io.velo.command.BGroup 570 800
+Lines: 119 | Covered: 108 | Partial: 3 | Not-covered: 8
+```
+
+### 5. `STATE.md` closure entry — accurate
+
+```
+$ awk 'NR>=6 && NR<=8 {printf "%d: %s\n", NR, $0}' doc/bug_reviews/STATE.md
+6: ## next_bug_id
+7:
+8: 93
+$ grep -n "^| 92 " doc/bug_reviews/STATE.md
+36:| 92 | Bitmap/HLL missing commands (BITOP in BGroup; PFDEBUG/PFSELFTEST in PGroup) — …
+```
+
+* `next_bug_id` = **93** ✓ (92 is allocated, 93 is the next free id).
+* The id table contains the row **92** with the closure text: "closed — stage 5 re-review
+  ACCEPTED", the 3/3 CONFIRMED verdict, one commit per bug (92.1 `996e7e40`, 92.2 `1ce0a857`,
+  92.3 `1ee44833`), the two auxiliary commits (`e9c081bf` registry count, `1aba0e89` docs),
+  the independently re-derived REDs, "command module 590/590 green", "JaCoCo confirmed
+  (uncovered = defensive only)", the follow-up sentence, and three named residuals.
+* The three named residuals all exist in the report's "Residual Risk" section: (1) HLL
+  register values diverge from Redis (different hash function) → Residual Risk #1;
+  (2) `PFDEBUG ENCODING` replies bulk instead of status (no `StatusReply` type in Velo) →
+  Residual Risk #2; (3) BITOP big-string sources materialise the value → Residual Risk #4. ✓
+* **D4 (non-blocking, traceability).** The closure row mentions the follow-up only as
+  "re-review follow-up covered the missing/shorter-first-source computeBitop branches"
+  **without the commit hash** — adding `227646cf` would make the round traceable from
+  `STATE.md` alone.
+* Cosmetic: the row is inserted between the rows 90 and 91 although the table is otherwise
+  ordered ascending (90, 91, 92); no functional impact.
+
+### 6. Fix Log accuracy at HEAD
+
+The **new** follow-up row is accurate in every claim:
+
+| Claim | Re-derived at HEAD | Result |
+|---|---|---|
+| "`computeBitop` range 605-645: 21/22 lines, the only partial is the post-validation-unreachable `else` at 635" | `Lines: 22 | Covered: 21 | Partial: 1` — partial = 635 only | ✅ |
+| "bitop range 570-765 now covers every reachable branch" | not-covered 724-726/750-751/755-757 + partials 635/723/749 — all promise-failure / unreachable-else paths | ✅ |
+| "green (`BGroupTest` 51/51)" | `tests=51 failures=0 errors=0` | ✅ |
+
+The **pre-existing** rows of the same table were only partially refreshed by the follow-up
+commit, which edited the 92.2 cell in place:
+
+* **D1 — the 92.2 cell** still reads *"pfdebug lines 664-800: 63/68 covered; uncovered = the
+  two `saveHll` IOException catches (757-758, 769-770 …) and the empty-opcode-string guard
+  (713), all defensive"*. Re-derived at HEAD:
+
+  ```
+  $ python3 scripts/jacoco_cover.py io.velo.command.PGroup 664 800
+  Lines: 69 | Covered: 64 | Partial: 1 | Not-covered: 4
+  Not-covered lines: 757, 758, 769, 770
+  Partial lines:     718
+  ```
+
+  * The two `saveHll` catch ranges the follow-up wrote (**757-758, 769-770**) are **exactly**
+    the not-covered lines at HEAD ✓.
+  * The count "63/68" belongs to the range **665-800**, not to the labelled 664-800:
+    `python3 scripts/jacoco_cover.py io.velo.command.PGroup 665 800` →
+    `Lines: 68 | Covered: 63 | Partial: 1 | Not-covered: 4`. The label and the numbers
+    disagree by one line; for the labelled range the correct figure is **64/69**.
+  * "the empty-opcode-string guard (713)" is a misattribution: at HEAD line 713 is
+    `run -= len;` (covered). The guard is
+    `return sb.isEmpty() ? "" : sb.substring(0, sb.length() - 1);` — line **718** at HEAD
+    (line 705 at `1ce0a857`, +13 lines from the pfselftest commit) — and it is **partial**,
+    not not-covered: the `sb.isEmpty()` true-branch is unreachable (the register array is
+    never empty). This is the same deviation the first re-review already recorded in its
+    "### 3. JaCoCo" section ("line 713 is now *covered*"), but the Fix Log cell was only
+    half-updated by the follow-up.
+  * Suggested corrected cell text: *"pfdebug lines 664-800: 64/69 covered; uncovered = the two
+    `saveHll` IOException catches (757-758, 769-770; were 752-753/764-765 at `1ce0a857`),
+    plus the `sb.isEmpty()` guard of `decodeSparseRegisters` at 718 whose true-branch is
+    unreachable (partial) — all defensive."*
+
+* **D2 — the 92.1 cell** still reads *"bitop lines 570-800: 107/119 covered"*. At HEAD the
+  figure is **108/119** — the follow-up made line 624 fully branch-covered, so one more line
+  moved from "partial" to "covered" (the first re-review measured 107/119 with the partials
+  624, 635, 723, 749; HEAD has the partials 635, 723, 749 only).
+
+* D1 and D2 are **documentation-only** (no code behaviour is affected), and the correct
+  numbers are already present in the report's own "### 3. JaCoCo" section of the first
+  re-review. They do not block the round, but the Fix Log is the round's summary table and
+  should be corrected in a small doc-only follow-up commit.
+
+### 7. Final HEAD sanity at `227646cf`
+
+```
+$ ./gradlew :cleanTest :test --tests "io.velo.command.BGroupTest" \
+      --tests "io.velo.command.PGroupTest" \
+      --tests "io.velo.command.CommandRegistryPopulationTest"
+BUILD SUCCESSFUL in 23s
+io.velo.command.BGroupTest                         tests=51 failures=0 errors=0 skipped=0
+io.velo.command.CommandRegistryPopulationTest      tests=1  failures=0 errors=0 skipped=0
+io.velo.command.PGroupTest                         tests=24 failures=0 errors=0 skipped=0
+
+$ ./gradlew :cleanTest :test --tests "io.velo.command.*"
+BUILD SUCCESSFUL in 7m 37s
+classes=40 tests=590 failures=0 errors=0 skipped=0      # the Fix Log's "590 tests, 0 failures" ✓
+
+$ scripts/test_field_access_check.sh BGroupTest
+ Field issues  : 0
+[OK] No non-accessible field/property accesses found.
+
+$ git status --porcelain src/ dyn/
+?? src/test/java/JavaStyleRefer.java        # pre-existing untracked file, not part of bug 92
+```
+
+Tracked `src/` and `dyn/` files are **clean**; the only worktree dirt is the pre-existing
+submodule state (`segment_common`, `segmentweb`) and untracked files, exactly as allowed.
+
+### 8. Open items carried out of this round (none blocking)
+
+| Id | Type | Item |
+|---|---|---|
+| D1 | documentation | Fix Log 92.2 cell: "63/68" → "64/69" for the labelled range 664-800, and replace the stale "the empty-opcode-string guard (713)" by the correct attribution (line 718, `decodeSparseRegisters`, partial / unreachable true-branch) |
+| D2 | documentation | Fix Log 92.1 cell: "bitop lines 570-800: 107/119 covered" → 108/119 at HEAD |
+| D3 | test strength (optional) | add an AND/OR variant of the two new `test bitop` cases to also pin the *source order* (XOR is commutative, so the current expectations are order-insensitive) |
+| D4 | traceability | name the follow-up commit `227646cf` in the `STATE.md` row 92 |
+
+The behavioural residuals (HLL register divergence, `PFDEBUG ENCODING` reply type, big-string
+materialisation, defensive uncovered paths, PFSELFTEST budget/strength, Velo-specific length
+limits, cluster routing) remain as recorded in "Residual Risk" above — none is a bug in the
+shipped code.
