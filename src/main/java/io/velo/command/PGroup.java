@@ -3,6 +3,7 @@ package io.velo.command;
 import com.github.luben.zstd.Zstd;
 import com.github.prasanthj.hll.HyperLogLog;
 import com.github.prasanthj.hll.HyperLogLogUtils;
+import com.google.common.annotations.VisibleForTesting;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.Promise;
 import io.activej.promise.Promises;
@@ -86,6 +87,14 @@ public class PGroup extends BaseCommand {
                 "hyperloglog",
                 "Merge N different HyperLogLogs into a single one.",
                 "2.8.9", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "pfdebug", 3,
+                Set.of("write", "denyoom", "admin"),
+                2, 2, 1,
+                Set.of("@write", "@hyperloglog", "@admin", "@dangerous", "@slow"),
+                "hyperloglog",
+                "Internal commands for debugging HyperLogLog values.",
+                "2.8.9", "N/A"));
         CommandRegistry.register(new CommandEntry(
                 "psetex", 4,
                 Set.of("write", "denyoom"),
@@ -203,6 +212,15 @@ public class PGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("pfdebug".equals(cmd)) {
+            // eg. pfdebug encoding key, the key is the third argument
+            if (data.length < 3) {
+                return slotWithKeyHashList;
+            }
+            slotWithKeyHashList.add(slot(data[2], slotNumber));
+            return slotWithKeyHashList;
+        }
+
         if ("psetex".equals(cmd)) {
             if (data.length != 4) {
                 return slotWithKeyHashList;
@@ -262,6 +280,10 @@ public class PGroup extends BaseCommand {
 
         if ("pfmerge".equals(cmd)) {
             return pfmerge();
+        }
+
+        if ("pfdebug".equals(cmd)) {
+            return pfdebug();
         }
 
         if ("psetex".equals(cmd)) {
@@ -630,6 +652,131 @@ public class PGroup extends BaseCommand {
         });
 
         return asyncReply;
+    }
+
+    /**
+     * Converts a HyperLogLog to the dense encoding. The library's own sparse to dense register
+     * conversion only runs through the merge of a dense HyperLogLog, the same path a pfmerge into
+     * a dense destination takes. An already dense HyperLogLog is returned as is.
+     *
+     * @param hll the HyperLogLog to convert
+     * @return the HyperLogLog with the dense encoding
+     */
+    @VisibleForTesting
+    static HyperLogLog toDenseHll(HyperLogLog hll) {
+        if (hll.getEncoding() == HyperLogLog.EncodingType.DENSE) {
+            return hll;
+        }
+        var dense = HyperLogLog.builder().setEncoding(HyperLogLog.EncodingType.DENSE).build();
+        dense.merge(hll);
+        return dense;
+    }
+
+    /**
+     * Renders the register state in the redis sparse opcode format: {@code z:<len>} for a zero run
+     * of at most 64 registers, {@code Z:<len>} for a longer zero run and {@code v:<value>,<len>}
+     * for runs of equal nonzero values, the run length capped at 4 as the redis VAL opcode does.
+     *
+     * @param registers the dense register array, one byte per register
+     * @return the decoded opcode stream, items separated by a space
+     */
+    @VisibleForTesting
+    static String decodeSparseRegisters(byte[] registers) {
+        var sb = new StringBuilder();
+        int i = 0;
+        while (i < registers.length) {
+            int value = registers[i] & 0xff;
+            int j = i;
+            while (j < registers.length && (registers[j] & 0xff) == value) {
+                j++;
+            }
+            int run = j - i;
+            if (value == 0) {
+                sb.append(run <= 64 ? "z:" : "Z:").append(run).append(' ');
+            } else {
+                while (run > 0) {
+                    int len = Math.min(run, 4);
+                    sb.append("v:").append(value).append(',').append(len).append(' ');
+                    run -= len;
+                }
+            }
+            i = j;
+        }
+        return sb.isEmpty() ? "" : sb.substring(0, sb.length() - 1);
+    }
+
+    private Reply pfdebug() {
+        if (data.length != 3) {
+            return ErrorReply.FORMAT;
+        }
+
+        var keyBytes = data[2];
+        if (keyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
+
+        var subCmd = new String(data[1]);
+
+        // redis resolves the key and type checks it before dispatching the subcommand
+        var s = slotWithKeyHashListParsed.getFirst();
+        HllWithBytes hllWithBytes;
+        try {
+            hllWithBytes = getHllWithBytes(s);
+        } catch (TypeMismatchException e) {
+            return ErrorReply.WRONG_TYPE_HLL;
+        }
+        var hll = hllWithBytes.hll();
+        if (hll == null) {
+            return new ErrorReply("The specified key does not exist");
+        }
+
+        if ("encoding".equalsIgnoreCase(subCmd)) {
+            var encoding = hll.getEncoding() == HyperLogLog.EncodingType.DENSE ? "dense" : "sparse";
+            return new BulkReply(encoding);
+        }
+
+        if ("todense".equalsIgnoreCase(subCmd)) {
+            if (hll.getEncoding() == HyperLogLog.EncodingType.DENSE) {
+                return IntegerReply.REPLY_0;
+            }
+            try {
+                saveHll(s, toDenseHll(hll), hllWithBytes.expireAt());
+            } catch (IOException e) {
+                return new ErrorReply(e.getMessage());
+            }
+            return IntegerReply.REPLY_1;
+        }
+
+        if ("getreg".equalsIgnoreCase(subCmd)) {
+            var dense = toDenseHll(hll);
+            if (dense != hll) {
+                // redis persists the sparse to dense conversion done by getreg
+                try {
+                    saveHll(s, dense, hllWithBytes.expireAt());
+                } catch (IOException e) {
+                    return new ErrorReply(e.getMessage());
+                }
+            }
+            var registers = dense.getHLLDenseRegister().getRegister();
+            var replies = new Reply[registers.length];
+            for (int i = 0; i < registers.length; i++) {
+                replies[i] = new IntegerReply(registers[i] & 0xff);
+            }
+            return new MultiBulkReply(replies);
+        }
+
+        if ("decode".equalsIgnoreCase(subCmd)) {
+            if (hll.getEncoding() == HyperLogLog.EncodingType.DENSE) {
+                return new ErrorReply("HLL encoding is not sparse");
+            }
+
+            // the register state rendered in the redis opcode format, the same registers getreg
+            // reports, the sparse map itself is not stored in the redis opcode layout
+            var registers = toDenseHll(hll).getHLLDenseRegister().getRegister();
+            return new BulkReply(decodeSparseRegisters(registers));
+        }
+
+        return new ErrorReply("Unknown PFDEBUG subcommand '" + subCmd + "'");
     }
 
     private static final BulkReply MESSAGE = new BulkReply("message");

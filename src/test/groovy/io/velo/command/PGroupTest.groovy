@@ -659,6 +659,159 @@ class PGroupTest extends Specification {
         (wrongTypeReply as ErrorReply).message == 'WRONGTYPE Key is not a valid HyperLogLog string value.'
     }
 
+    def 'test pfdebug'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def pGroup = new PGroup('pfdebug', null, null)
+        pGroup.byPassGetSet = inMemoryGetSet
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when: 'wrong number of arguments'
+        def reply = pGroup.execute('pfdebug')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = pGroup.execute('pfdebug encoding')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = pGroup.execute('pfdebug encoding hll1 extra')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'the key does not exist'
+        inMemoryGetSet.remove(slot, 'missing')
+        reply = pGroup.execute('pfdebug encoding missing')
+        then:
+        reply == new ErrorReply('The specified key does not exist')
+
+        when: 'the key lookup and the type check run before the subcommand dispatch'
+        reply = pGroup.execute('pfdebug nosuch missing')
+        then:
+        reply == new ErrorReply('The specified key does not exist')
+
+        when: 'a wrong type key answers the HLL WRONGTYPE'
+        def cv = Mock.prepareCompressedValueList(1)[0]
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, 'wrongtype', 0, cv)
+        reply = pGroup.execute('pfdebug encoding wrongtype')
+        then:
+        reply == ErrorReply.WRONG_TYPE_HLL
+
+        when: 'key too long'
+        reply = pGroup.execute('pfdebug encoding >key')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'an unknown subcommand on a valid HLL key'
+        inMemoryGetSet.remove(slot, 'hll1')
+        pGroup.execute('pfadd hll1 a b c')
+        reply = pGroup.execute('pfdebug nosuch hll1')
+        then:
+        reply == new ErrorReply("Unknown PFDEBUG subcommand 'nosuch'")
+
+        when: 'encoding of a sparse HLL'
+        reply = pGroup.execute('pfdebug encoding hll1')
+        then:
+        reply == new BulkReply('sparse')
+
+        when: 'todense converts and replies 1'
+        reply = pGroup.execute('pfdebug todense hll1')
+        then:
+        reply == IntegerReply.REPLY_1
+
+        when: 'after the conversion the encoding is dense'
+        reply = pGroup.execute('pfdebug encoding hll1')
+        then:
+        reply == new BulkReply('dense')
+
+        when: 'todense on an already dense HLL replies 0'
+        reply = pGroup.execute('pfdebug todense hll1')
+        then:
+        reply == IntegerReply.REPLY_0
+
+        when: 'the conversion preserves the estimated cardinality'
+        reply = pGroup.execute('pfcount hll1')
+        then:
+        (reply as IntegerReply).integer == 3
+
+        when: 'getreg replies the dense register array'
+        reply = pGroup.execute('pfdebug getreg hll1')
+        then:
+        reply instanceof MultiBulkReply
+        def regs = (reply as MultiBulkReply).replies
+        regs.length == 16384
+        regs.findAll { (it as IntegerReply).integer > 0 }.size() > 0
+
+        when: 'getreg on a sparse HLL persists the dense conversion'
+        inMemoryGetSet.remove(slot, 'hll2')
+        pGroup.execute('pfadd hll2 x')
+        reply = pGroup.execute('pfdebug getreg hll2')
+        def encodingAfterGetreg = pGroup.execute('pfdebug encoding hll2')
+        then:
+        reply instanceof MultiBulkReply
+        ((reply as MultiBulkReply).replies).length == 16384
+        encodingAfterGetreg == new BulkReply('dense')
+
+        when: 'todense keeps the key expire time'
+        inMemoryGetSet.remove(slot, 'ttl_hll')
+        pGroup.execute('pfadd ttl_hll first')
+        def sTtlHll = pGroup.slot('ttl_hll'.bytes, pGroup.slotNumber)
+        def ttlCv = inMemoryGetSet.getBuf(slot, 'ttl_hll', sTtlHll.bucketIndex(), sTtlHll.keyHash()).cv()
+        def expireAt = System.currentTimeMillis() + 60_000
+        ttlCv.expireAt = expireAt
+        pGroup.execute('pfdebug todense ttl_hll')
+        def ttlCvAfter = inMemoryGetSet.getBuf(slot, 'ttl_hll', sTtlHll.bucketIndex(), sTtlHll.keyHash()).cv()
+        then:
+        ttlCvAfter.expireAt == expireAt
+
+        when: 'decode on a dense HLL'
+        reply = pGroup.execute('pfdebug decode hll1')
+        then:
+        reply == new ErrorReply('HLL encoding is not sparse')
+
+        when: 'decode on a sparse HLL renders the opcode stream'
+        inMemoryGetSet.remove(slot, 'hll3')
+        (0..<100).each { pGroup.execute("pfadd hll3 e$it") }
+        reply = pGroup.execute('pfdebug decode hll3')
+        then:
+        reply instanceof BulkReply
+        def decoded = (reply as BulkReply).asString()
+        decoded.startsWith('Z:')
+        decoded.contains('v:')
+
+        when: 'the decoded opcodes reproduce the registers getreg reports for the same HLL'
+        def regsReply = pGroup.execute('pfdebug getreg hll3')
+        def rebuilt = new int[16384]
+        def idx = 0
+        decoded.split(' ').each { token ->
+            if (token.startsWith('z:')) {
+                idx += Integer.parseInt(token.substring(2))
+            } else if (token.startsWith('Z:')) {
+                idx += Integer.parseInt(token.substring(2))
+            } else if (token.startsWith('v:')) {
+                def parts = token.substring(2).split(',')
+                def value = Integer.parseInt(parts[0])
+                def count = Integer.parseInt(parts[1])
+                count.times { rebuilt[idx++] = value }
+            }
+        }
+        then:
+        idx == 16384
+        def registerArray = (regsReply as MultiBulkReply).replies.collect { (it as IntegerReply).integer }
+        (0..<16384).every { rebuilt[it] == registerArray[it] }
+
+        when: 'the subcommand names are case-insensitive'
+        inMemoryGetSet.remove(slot, 'hll4')
+        pGroup.execute('pfadd hll4 a b')
+        reply = pGroup.execute('pfdebug ENCODING hll4')
+        then:
+        reply == new BulkReply('sparse')
+    }
+
     def 'test psetex'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()
