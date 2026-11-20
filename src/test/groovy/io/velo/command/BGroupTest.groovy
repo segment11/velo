@@ -35,6 +35,17 @@ class BGroupTest extends Specification {
     def _BGroup = new BGroup(null, null, null)
     final short slot = 0
 
+    /**
+     * Waits until the async reply is settled.
+     */
+    static Object waitForReply(AsyncReply reply, long timeoutMs = 5000) {
+        def deadline = System.currentTimeMillis() + timeoutMs
+        while (!reply.settablePromise.isComplete() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5)
+        }
+        return reply.settablePromise.getResult()
+    }
+
     def 'test parse slot - single key'() {
         given:
         int slotNumber = 128
@@ -47,11 +58,12 @@ class BGroupTest extends Specification {
         where:
         cmd           | expectedSize
         'bitcount'    | 1
-        // bitfield, bitfield_ro and bitop are not implemented, no slot is parsed for them
+        // bitfield and bitfield_ro are not implemented, no slot is parsed for them
         'bitfield'    | 0
         'bitfield_ro' | 0
         'bitpos'      | 1
         'bf.add'      | 1
+        // not enough arguments for bitop, no slot is parsed
         'bitop'       | 0
         'bgsave'      | 0
         'blmove'      | 0
@@ -82,7 +94,8 @@ class BGroupTest extends Specification {
 
         expect:
         _BGroup.parseSlots('bitcount', data1, slotNumber).size() == 0
-        _BGroup.parseSlots('bitop', data5, slotNumber).size() == 0
+        // the destination key and all the source keys are parsed, the operation name is not a key
+        _BGroup.parseSlots('bitop', data5, slotNumber).size() == 3
         _BGroup.parseSlots('blpop', data4, slotNumber).size() == 2
         _BGroup.parseSlots('brpop', data4, slotNumber).size() == 2
         _BGroup.parseSlots('blmove', data6, slotNumber).size() == 2
@@ -184,26 +197,18 @@ class BGroupTest extends Specification {
         bGroup.from(BaseCommand.mockAGroup())
 
         and:
-        def bitopData = new byte[4][]
-        bitopData[0] = 'bitop'.bytes
-        bitopData[1] = 'and'.bytes
-        bitopData[2] = 'd'.bytes
-        bitopData[3] = 's'.bytes
         def bitfieldData = new byte[2][]
         bitfieldData[0] = 'bitfield'.bytes
         bitfieldData[1] = 's'.bytes
 
-        expect: 'bitop and bitfield are not implemented, they must not answer with a nil reply'
-        (bGroup.execute('bitop and d s') as ErrorReply).message == ErrorReply.UNKNOWN_COMMAND('bitop').message
+        expect: 'bitfield and bitfield_ro are not implemented, they must not answer with a nil reply'
         (bGroup.execute('bitfield s get i8 0') as ErrorReply).message == ErrorReply.UNKNOWN_COMMAND('bitfield').message
         (bGroup.execute('bitfield_ro s get i8 0') as ErrorReply).message == ErrorReply.UNKNOWN_COMMAND('bitfield_ro').message
 
         and: 'and they must not be advertised as available commands'
-        CommandRegistry.get('bitop') == null
         CommandRegistry.get('bitfield') == null
 
         and: 'no slot is parsed for them'
-        bGroup.parseSlots('bitop', bitopData, 1).isEmpty()
         bGroup.parseSlots('bitfield', bitfieldData, 1).isEmpty()
         bGroup.parseSlots('bitfield_ro', bitfieldData, 1).isEmpty()
     }
@@ -483,6 +488,181 @@ class BGroupTest extends Specification {
         reply = bGroup.execute('bitpos >key 0')
         then:
         reply == ErrorReply.KEY_TOO_LONG
+    }
+
+    def 'test bitop'() {
+        given:
+        def inMemoryGetSet = new InMemoryGetSet()
+
+        def bGroup = new BGroup(null, null, null)
+        bGroup.byPassGetSet = inMemoryGetSet
+        bGroup.from(BaseCommand.mockAGroup())
+
+        when: 'wrong number of arguments'
+        def reply = bGroup.execute('bitop')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when:
+        reply = bGroup.execute('bitop and dst')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'unknown operation'
+        reply = bGroup.execute('bitop wrongop dst src')
+        then:
+        reply == ErrorReply.SYNTAX
+
+        when: 'NOT must be called with a single source key'
+        reply = bGroup.execute('bitop not dst s1 s2')
+        then:
+        reply == new ErrorReply('BITOP NOT must be called with a single source key.')
+
+        when: 'key too long'
+        reply = bGroup.execute('bitop and >key src')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'a too long source key is rejected too'
+        reply = bGroup.execute('bitop and dst >key')
+        then:
+        reply == ErrorReply.KEY_TOO_LONG
+
+        when: 'all sources missing, reply 0 and no destination key is created'
+        inMemoryGetSet.remove(slot, 'dst')
+        reply = bGroup.execute('bitop and dst miss1 miss2')
+        def sDst = bGroup.slot('dst'.bytes, bGroup.slotNumber)
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 0
+        inMemoryGetSet.getBuf(slot, 'dst', sDst.bucketIndex(), sDst.keyHash()) == null
+
+        when: 'xor'
+        def cvS1 = Mock.prepareCompressedValueList(1)[0]
+        cvS1.compressedData = 'a'.bytes
+        inMemoryGetSet.put(slot, 's1', 0, cvS1)
+        def cvS2 = Mock.prepareCompressedValueList(1)[0]
+        cvS2.compressedData = 'b'.bytes
+        inMemoryGetSet.put(slot, 's2', 0, cvS2)
+        reply = bGroup.execute('bitop xor dst s1 s2')
+        then:
+        reply instanceof IntegerReply
+        (reply as IntegerReply).integer == 1
+        bGroup.get(sDst) == [0x03] as byte[]
+
+        when: 'or'
+        reply = bGroup.execute('bitop or dst s1 s2')
+        then:
+        (reply as IntegerReply).integer == 1
+        bGroup.get(sDst) == [0x63] as byte[]
+
+        when: 'and'
+        reply = bGroup.execute('bitop and dst s1 s2')
+        then:
+        (reply as IntegerReply).integer == 1
+        bGroup.get(sDst) == [0x60] as byte[]
+
+        when: 'not'
+        reply = bGroup.execute('bitop not dst s1')
+        then:
+        (reply as IntegerReply).integer == 1
+        bGroup.get(sDst) == [(~0x61) & 0xff] as byte[]
+
+        when: 'the result length is the longest source length'
+        def cvAbc = Mock.prepareCompressedValueList(1)[0]
+        cvAbc.compressedData = 'abc'.bytes
+        inMemoryGetSet.put(slot, 's3', 0, cvAbc)
+        def cvZ = Mock.prepareCompressedValueList(1)[0]
+        cvZ.compressedData = 'z'.bytes
+        inMemoryGetSet.put(slot, 's4', 0, cvZ)
+        reply = bGroup.execute('bitop xor dst s3 s4')
+        then:
+        (reply as IntegerReply).integer == 3
+        bGroup.get(sDst) == [0x61 ^ 0x7a, 0x62, 0x63] as byte[]
+
+        when: 'a missing source is an all-zero string of the longest length'
+        reply = bGroup.execute('bitop xor dst s3 miss')
+        then:
+        (reply as IntegerReply).integer == 3
+        bGroup.get(sDst) == 'abc'.bytes
+
+        when: 'and with a missing source keeps the longest length with zero bytes'
+        reply = bGroup.execute('bitop and dst s3 miss')
+        then:
+        (reply as IntegerReply).integer == 3
+        bGroup.get(sDst) == [0x00, 0x00, 0x00] as byte[]
+
+        when: 'an empty result deletes an existing destination'
+        reply = bGroup.execute('bitop and dst miss1 miss2')
+        then:
+        (reply as IntegerReply).integer == 0
+        inMemoryGetSet.getBuf(slot, 'dst', sDst.bucketIndex(), sDst.keyHash()) == null
+
+        when: 'an empty string source is handled as empty too'
+        def cvEmpty = Mock.prepareCompressedValueList(1)[0]
+        cvEmpty.compressedData = new byte[0]
+        inMemoryGetSet.put(slot, 'empty', 0, cvEmpty)
+        reply = bGroup.execute('bitop or dst empty miss')
+        then:
+        (reply as IntegerReply).integer == 0
+        inMemoryGetSet.getBuf(slot, 'dst', sDst.bucketIndex(), sDst.keyHash()) == null
+
+        when: 'a non-string source answers WRONGTYPE'
+        def cvWrong = Mock.prepareCompressedValueList(1)[0]
+        cvWrong.dictSeqOrSpType = CompressedValue.SP_TYPE_HASH
+        inMemoryGetSet.put(slot, 's2', 0, cvWrong)
+        reply = bGroup.execute('bitop and dst s1 s2')
+        then:
+        reply == ErrorReply.WRONG_TYPE
+
+        when: 'the operation name is case-insensitive'
+        def cvFoobar = Mock.prepareCompressedValueList(1)[0]
+        cvFoobar.compressedData = 'foobar'.bytes
+        inMemoryGetSet.put(slot, 's1', 0, cvFoobar)
+        reply = bGroup.execute('bitop NOT dst s1')
+        then:
+        (reply as IntegerReply).integer == 6
+        def expectedNot = 'foobar'.bytes.collect { (~it) & 0xff } as byte[]
+        bGroup.get(sDst) == expectedNot
+
+        when: 'cross worker'
+        def eventloop = Eventloop.builder()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        eventloop.keepAlive(true)
+        Thread.start {
+            eventloop.run()
+        }
+        LocalPersist.instance.addOneSlot(slot, eventloop)
+        def eventloopCurrent = Eventloop.builder()
+                .withCurrentThread()
+                .withIdleInterval(Duration.ofMillis(100))
+                .build()
+        bGroup.crossRequestWorker = true
+        reply = bGroup.execute('bitop xor dst s3 s4')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        def asyncResult = waitForReply(reply as AsyncReply)
+        asyncResult instanceof IntegerReply
+        (asyncResult as IntegerReply).integer == 3
+
+        when: 'cross worker bitop on a wrong type source answers WRONGTYPE'
+        reply = bGroup.execute('bitop and dst s1 s2')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        waitForReply(reply as AsyncReply) == ErrorReply.WRONG_TYPE
+
+        when: 'cross worker empty result replies 0'
+        reply = bGroup.execute('bitop and dst miss1 miss2')
+        eventloopCurrent.run()
+        then:
+        reply instanceof AsyncReply
+        (waitForReply(reply as AsyncReply) as IntegerReply).integer == 0
+
+        cleanup:
+        bGroup.crossRequestWorker = false
     }
 
     def 'test bf add'() {

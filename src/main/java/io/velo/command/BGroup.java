@@ -4,6 +4,7 @@ import com.github.luben.zstd.Zstd;
 import com.google.common.annotations.VisibleForTesting;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.promise.Promise;
+import io.activej.promise.Promises;
 import io.activej.promise.SettablePromise;
 import io.activej.reactor.Reactor;
 import io.velo.BaseCommand;
@@ -21,8 +22,10 @@ import io.velo.type.RedisBitSet;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 /**
  * Handles Redis commands starting with letter 'B'.
@@ -45,6 +48,14 @@ public class BGroup extends BaseCommand {
                 Set.of("@read", "@bitmap", "@slow"),
                 "bitmap",
                 "Count the number of set bits (population counting) in a string.",
+                "2.6.0", "O(N)"));
+        CommandRegistry.register(new CommandEntry(
+                "bitop", -4,
+                Set.of("write", "denyoom"),
+                2, -1, 1,
+                Set.of("@write", "@bitmap", "@slow"),
+                "bitmap",
+                "Perform a bitwise operation between multiple keys and store the result in the destination key.",
                 "2.6.0", "O(N)"));
         CommandRegistry.register(new CommandEntry(
                 "bitpos", -3,
@@ -228,6 +239,16 @@ public class BGroup extends BaseCommand {
             return slotWithKeyHashList;
         }
 
+        if ("bitop".equals(cmd)) {
+            // eg. bitop and dst src1 src2
+            if (data.length < 4) {
+                return slotWithKeyHashList;
+            }
+            // the destination key and all the source keys, the operation name at index 1 is not a key
+            addToSlotWithKeyHashList(slotWithKeyHashList, data, slotNumber, BaseCommand.KeyIndexBegin2);
+            return slotWithKeyHashList;
+        }
+
         if ("blmove".equals(cmd) || "brpoplpush".equals(cmd)) {
             if ("blmove".equals(cmd) && data.length != 6) {
                 return slotWithKeyHashList;
@@ -334,6 +355,10 @@ public class BGroup extends BaseCommand {
 
         if ("bitpos".equals(cmd)) {
             return bitpos();
+        }
+
+        if ("bitop".equals(cmd)) {
+            return bitop();
         }
 
         if ("blmpop".equals(cmd)) {
@@ -539,6 +564,201 @@ public class BGroup extends BaseCommand {
         }
 
         return new IntegerReply(pos);
+    }
+
+    /**
+     * A source key read for the cross worker bitop: the parsed list position and the value bytes.
+     *
+     * @param index      the position of the source key in the parsed slot list, 1 based
+     * @param valueBytes the value bytes, null for a missing key
+     */
+    private record BitopRead(int index, byte[] valueBytes) {
+    }
+
+    /**
+     * Reads the string values of the given source keys on the calling thread, must run on the owner
+     * thread of their slot. Missing keys read as null (an all-zero string for the caller).
+     *
+     * @param subList the source keys to read
+     * @return the reads in the same order, null when one of the keys holds a value of another type
+     */
+    private ArrayList<BitopRead> readBitopSourceValues(List<MGroup.IndexAndSlotWithKeyHash> subList) {
+        var reads = new ArrayList<BitopRead>(subList.size());
+        for (var one : subList) {
+            try {
+                reads.add(new BitopRead(one.index(), get(one.slotWithKeyHash(), true)));
+            } catch (TypeMismatchException e) {
+                return null;
+            }
+        }
+        return reads;
+    }
+
+    /**
+     * Computes the bitwise operation result, redis bitops.c semantics: the result length is the
+     * longest source length, bytes past a shorter or missing source count as zero.
+     *
+     * @param isAnd      whether the operation is AND
+     * @param isOr       whether the operation is OR
+     * @param isXor      whether the operation is XOR
+     * @param isNot      whether the operation is NOT
+     * @param srcValues  the source value bytes, null for a missing key
+     * @return the result bytes, empty when all the sources are missing or empty
+     */
+    @VisibleForTesting
+    static byte[] computeBitop(boolean isAnd, boolean isOr, boolean isXor, boolean isNot, byte[][] srcValues) {
+        int maxlen = 0;
+        for (var valueBytes : srcValues) {
+            if (valueBytes != null && valueBytes.length > maxlen) {
+                maxlen = valueBytes.length;
+            }
+        }
+
+        // redis deletes the destination key and replies 0 when the result is empty
+        if (maxlen == 0) {
+            return new byte[0];
+        }
+
+        var res = new byte[maxlen];
+        for (int j = 0; j < maxlen; j++) {
+            int output = srcValues[0] != null && srcValues[0].length > j ? srcValues[0][j] : 0;
+            if (isNot) {
+                res[j] = (byte) ~output;
+                continue;
+            }
+            for (int i = 1; i < srcValues.length; i++) {
+                int b = srcValues[i] != null && srcValues[i].length > j ? srcValues[i][j] : 0;
+                if (isAnd) {
+                    output &= b;
+                } else if (isOr) {
+                    output |= b;
+                } else if (isXor) {
+                    output ^= b;
+                }
+            }
+            res[j] = (byte) output;
+        }
+        return res;
+    }
+
+    /**
+     * Writes the bitwise operation result to the destination key, an empty result deletes the key.
+     * Must run on the owner thread of the destination slot.
+     *
+     * @param dstS   the destination key slot and hash
+     * @param result the result bytes
+     * @return the integer reply with the result length
+     */
+    private Reply storeBitopResult(SlotWithKeyHash dstS, byte[] result) {
+        if (result.length > 0) {
+            set(result, dstS);
+        } else {
+            remove(dstS);
+        }
+        return new IntegerReply(result.length);
+    }
+
+    private Reply bitop() {
+        if (data.length < 4) {
+            return ErrorReply.FORMAT;
+        }
+
+        var opName = new String(data[1]);
+        var isAnd = "and".equalsIgnoreCase(opName);
+        var isOr = "or".equalsIgnoreCase(opName);
+        var isXor = "xor".equalsIgnoreCase(opName);
+        var isNot = "not".equalsIgnoreCase(opName);
+        if (!isAnd && !isOr && !isXor && !isNot) {
+            return ErrorReply.SYNTAX;
+        }
+
+        if (isNot && data.length != 4) {
+            return new ErrorReply("BITOP NOT must be called with a single source key.");
+        }
+
+        // check all key lengths before any read or write, in all modes
+        for (int i = 2; i < data.length; i++) {
+            if (data[i].length > CompressedValue.KEY_MAX_LENGTH) {
+                return ErrorReply.KEY_TOO_LONG;
+            }
+        }
+
+        // the parsed list holds the destination key first, then all the source keys
+        var dstS = slotWithKeyHashListParsed.getFirst();
+
+        if (!isCrossRequestWorker) {
+            byte[][] srcValues;
+            try {
+                srcValues = new byte[data.length - 3][];
+                for (int i = 3, j = 1; i < data.length; i++, j++) {
+                    srcValues[j - 1] = get(slotWithKeyHashListParsed.get(j), true);
+                }
+            } catch (TypeMismatchException e) {
+                return ErrorReply.WRONG_TYPE;
+            }
+
+            return storeBitopResult(dstS, computeBitop(isAnd, isOr, isXor, isNot, srcValues));
+        }
+
+        ArrayList<MGroup.IndexAndSlotWithKeyHash> list = new ArrayList<>();
+        for (int i = 3, j = 1; i < data.length; i++, j++) {
+            list.add(new MGroup.IndexAndSlotWithKeyHash(j, slotWithKeyHashListParsed.get(j)));
+        }
+
+        ArrayList<Promise<ArrayList<BitopRead>>> promises = new ArrayList<>();
+        var groupBySlot = list.stream().collect(Collectors.groupingBy(one -> one.slotWithKeyHash().slot()));
+        for (var entry : groupBySlot.entrySet()) {
+            var slot = entry.getKey();
+            var subList = entry.getValue();
+
+            var oneSlot = localPersist.oneSlot(slot);
+            var p = oneSlot.asyncCall(() -> readBitopSourceValues(subList));
+            promises.add(p);
+        }
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        Promises.all(promises).whenComplete((r, e) -> {
+            if (e != null) {
+                log.error("bitop error={}", e.getMessage());
+                finalPromise.setException(Utils.wrapException("bitop", e));
+                return;
+            }
+
+            try {
+                // assemble the reads back into the original argument order
+                var srcValues = new byte[data.length - 3][];
+                for (var p : promises) {
+                    var reads = p.getResult();
+                    if (reads == null) {
+                        // one of the source keys holds a value of another type, redis answers WRONGTYPE
+                        finalPromise.set(ErrorReply.WRONG_TYPE);
+                        return;
+                    }
+                    for (var read : reads) {
+                        srcValues[read.index() - 1] = read.valueBytes();
+                    }
+                }
+
+                // the destination key may only be touched on its owning slot worker thread,
+                // see the pfmerge bug 84.1 note
+                var dstOneSlot = localPersist.oneSlot(dstS.slot());
+                dstOneSlot.asyncCall(() -> storeBitopResult(dstS, computeBitop(isAnd, isOr, isXor, isNot, srcValues)))
+                        .whenComplete((r1, e1) -> {
+                            if (e1 != null) {
+                                finalPromise.setException(Utils.wrapException("bitop", e1));
+                                return;
+                            }
+                            finalPromise.set(r1);
+                        });
+            } catch (Exception e1) {
+                log.error("bitop error={}", e1.getMessage());
+                finalPromise.setException(Utils.wrapException("bitop", e1));
+            }
+        });
+
+        return asyncReply;
     }
 
     private Reply bf() {
