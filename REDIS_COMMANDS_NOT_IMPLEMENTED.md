@@ -12,10 +12,10 @@ as missing.
 ## Summary
 
 - **Total Redis 7.2.4 commands:** 341
-- **Velo implemented commands:** 211 registered in the `CommandRegistry` plus the connection fast paths
+- **Velo implemented commands:** 214 registered in the `CommandRegistry` plus the connection fast paths
 - **Missing commands:** the entries of the sections below
-- **Coverage:** high for the string/hash/list/set/sorted set families, missing for streams, transactions
-  and scripting
+- **Coverage:** high for the string/hash/list/set/sorted set/bitmap/hyperloglog families, missing for
+  streams, transactions and scripting
 
 **Analysis Method:** the `CommandRegistry` entries of every command group, the dynamic (groovy) commands
 and the connection fast paths were collected and compared with the Redis 7.2.4 command list.
@@ -24,9 +24,10 @@ and the connection fast paths were collected and compared with the Redis 7.2.4 c
 
 ## Missing Commands by Category
 
-### Bitmap (1 command)
+### Bitmap (0 commands)
 
-- **BITOP** - Performs bitwise operations on multiple strings, and stores result
+**Status: all implemented (verified 2026-11-20).** `BITOP` is implemented in `BGroup.java` (same-slot
+and cross-worker paths, the destination write runs on the destination slot worker thread).
 
 ---
 
@@ -79,10 +80,12 @@ as missing. `SELECT` answers `NOT_SUPPORT` (`SGroup.java`), it is listed as miss
 
 ---
 
-### HyperLogLog (2 commands)
+### HyperLogLog (0 commands)
 
-- **PFDEBUG** - Internal commands for debugging HyperLogLog values
-- **PFSELFTEST** - An internal command for testing HyperLogLog values
+**Status: all implemented (verified 2026-11-20).** `PFDEBUG` (GETREG/DECODE/ENCODING/TODENSE) and
+`PFSELFTEST` are implemented in `PGroup.java`. The register count matches Redis (16384, p=14) but the
+underlying hash function and sparse layout are Velo's HLL library, so register values diverge from
+Redis for the same elements — see `doc/bug_reviews/bug_92_bitmap_hll_missing_commands_review_round_1.md`.
 
 ---
 
@@ -270,8 +273,8 @@ derived from the two others, so the three numbers always reconcile.
 | List | 39 | 0 | 39 | 100% |
 | Set | 24 | 0 | 24 | 100% |
 | Sorted Set | 49 | 0 | 49 | 100% |
-| Bitmap | 12 | 1 | 11 | 92% |
-| HyperLogLog | 7 | 2 | 5 | 71% |
+| Bitmap | 12 | 0 | 12 | 100% |
+| HyperLogLog | 7 | 0 | 7 | 100% |
 | Geo | 12 | 0 | 12 | 100% |
 | Stream | 25 | 25 | 0 | 0% |
 | Pub/Sub | 23 | 3 | 20 | 87% |
@@ -317,11 +320,11 @@ derived from the two others, so the three numbers always reconcile.
 - **Excellent String coverage** (100%)
 - **Excellent Hash coverage** (100%)
 - **Excellent Sorted Set coverage** (100%)
-- **Excellent Bitmap coverage** (92%)
+- **Excellent Bitmap coverage** (100%)
 - **Complete Geo coverage** (100%)
 - **High Key Management coverage** (94%)
 - **Excellent List coverage** (100%, includes blocking variants)
-- **Good HyperLogLog coverage** (71%)
+- **Complete HyperLogLog coverage** (100%)
 - **Good Pub/Sub coverage** (87%)
 - **Comprehensive Cluster support** (26/27 cluster subcommands implemented)
 - **BloomFilter support** (RedisBF) - Additional data type not in standard Redis

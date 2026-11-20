@@ -363,11 +363,38 @@ number of arguments for 'pfdebug' command`, `PFSELFTEST` → `+OK`.
 
 ## Fix Log (AI agent 1, round 1 fix phase)
 
+### Agent 1 response (round 1)
+
+All four reviewer corrections accepted and adopted:
+
+- **C1**: `BITOP NOT must be called with a single source key.` is answered as a plain Velo
+  `ErrorReply` so the wire shows the `ERR ` prefix, matching live Redis 7.2.14.
+- **C2**: `pfdebug` registered with exact arity 3, the handle() path enforces `data.length == 3`
+  first (`ErrorReply.FORMAT` → the redis arity error), so the subcommand-level arity text stays
+  unreachable exactly as in Redis.
+- **C3**: `pfdebug()` resolves the key and HLL-type-checks it *before* dispatching the subcommand.
+- **C4**: `PFSELFTEST` checkpoints start at 1 and the `TESTFAILED sparse encoding not used`
+  assertion is implemented (asserted only below 1500 elements — the library promotes to dense at
+  ~2458 elements, probe `HllProbe4`; Redis asserts below `hll_sparse_max_bytes/2 = 1500`).
+
+One reviewer observation is **refuted**: *"the sparse map key is already the register index (don't
+re-mask)"*. The library's own `sparseToDenseRegister` masks `key & (2^p - 1)` (bytecode:
+`iload key; iload mask; iand; istore index`) and probe keys reached 32862801 > 16383. Moot in the
+final implementation anyway: `DECODE` renders the opcode stream from the dense register state (the
+same registers `GETREG` reports), and `test pfdebug` cross-validates decode == the `GETREG`
+register array, so no manual sparse-key decoding exists in the production code.
+
+### Fix table
+
 | Bug | Failing test evidence | Fix commit | Focused test | JaCoCo |
 |---|---|---|---|---|
-| 92.1 | | | | |
-| 92.2 | | | | |
-| 92.3 | | | | |
+| 92.1 BITOP | `BGroupTest.test bitop` RED at the first `then:` — got `ErrorReply{message='unknown command 'bitop''}` expected `ErrorReply.FORMAT` (test report 2026-11-20) | `996e7e40` `feat: implement bitop command (bug 92.1)` | green (`BGroupTest` 51/51) | bitop lines 570-800: 107/119 covered; every semantic line/branch covered (compute paths, both store paths, cross-worker WRONGTYPE line 734 both branches, NOT/AND/OR/XOR, case-insensitive op); uncovered = defensive promise/catch paths (724-726, 750-757) |
+| 92.2 PFDEBUG | `PGroupTest.test pfdebug` RED at the first `then:` — got `unknown command 'pfdebug'` expected `ErrorReply.FORMAT` | `1ce0a857` `feat: implement pfdebug command (bug 92.2)` | green (`PGroupTest` 23/23 → 24/24) | pfdebug lines 664-800: 63/68 covered; uncovered = the two `saveHll` IOException catches (752-753, 764-765) and the empty-opcode-string guard (713), all defensive |
+| 92.3 PFSELFTEST | `PGroupTest.test pfselftest` RED — `unknown command 'pfselftest'`; second RED `TESTFAILED sparse encoding not used` before the 1500 bound fix | `1ee44833` `feat: implement pfselftest command (bug 92.3)` | green (`PGroupTest` 24/24) | pfselftest lines 814-891: arity + happy path + `selfTestMaxerrExceeded` failure/success branches covered; uncovered (849/863/869/886) = TESTFAILED internal branches that cannot fire with a correct implementation (Redis' own suite cannot cover them either) |
+| registry count | — | `e9c081bf` `test: bump command registry count for bitop/pfdebug/pfselftest` (211 → 214 + presence assertions) | green (`CommandRegistryPopulationTest`) | n/a (test only) |
+
+Final regression: `io.velo.command.*` — **590 tests, 0 failures** (2026-11-20).
+Field access check: `scripts/test_field_access_check.sh BGroupTest` / `PGroupTest` — 0 issues.
 
 ## Re-review (AI agent 2)
 
@@ -377,6 +404,6 @@ number of arguments for 'pfdebug' command`, `PFSELFTEST` → `+OK`.
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 92.1 | BITOP not implemented | Medium | Redis protocol compatibility | | |
-| 92.2 | PFDEBUG not implemented | Low | Redis protocol compatibility | | |
-| 92.3 | PFSELFTEST not implemented | Low | Redis protocol compatibility | | |
+| 92.1 | BITOP not implemented | Medium | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`996e7e40`) |
+| 92.2 | PFDEBUG not implemented | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`1ce0a857`) |
+| 92.3 | PFSELFTEST not implemented | Low | Redis protocol compatibility | CONFIRMED (reproduced) | fixed (`1ee44833`) |
