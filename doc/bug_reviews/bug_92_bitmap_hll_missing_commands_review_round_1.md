@@ -1177,3 +1177,30 @@ The behavioural residuals (HLL register divergence, `PFDEBUG ENCODING` reply typ
 materialisation, defensive uncovered paths, PFSELFTEST budget/strength, Velo-specific length
 limits, cluster routing) remain as recorded in "Residual Risk" above — none is a bug in the
 shipped code.
+
+## End-to-end differential (post-merge, 2026-11-20)
+
+Method: `./gradlew jar` at `6f0b6ef0`, server run from `build/libs` (port 7379), differential against
+a local `redis-server` 7.2.x (port 6379) driving both with `redis-cli` — transcript and outputs under
+`/tmp/opencode/velo-run/` (`velo.out` / `redis.out`, normalized `velo.norm`).
+
+Result — every reply byte-identical except the two documented divergences:
+
+- **BITOP (22 cases)**: error texts (`ERR syntax error`, `ERR BITOP NOT must be called with a single
+  source key.`, arity), AND/OR/XOR/NOT results with binary `GET` values, zero padding of missing and
+  shorter sources (first and later positions), empty-result destination deletion (`EXISTS d` → 0),
+  `WRONGTYPE` on a list source, case-insensitive op names, `BITCOUNT` agreement on the result.
+- **PFDEBUG (20 cases)**: arity errors, key-missing before subcommand dispatch, the HLL `WRONGTYPE`
+  text, unknown subcommand, `ENCODING` sparse→dense transitions, `TODENSE` 1→0, `PFCOUNT` preserved
+  (3), `DECODE`-on-dense error, `GETREG` shape (16384 values, 5 nonzero for 5 elements).
+- **PFSELFTEST**: `OK` and the arity error.
+- **DECODE format**: identical opcode syntax (`"Z:7772 v:2,1 Z:5497 v:3,1 Z:3113"` vs redis
+  `"Z:3653 v:2,1 Z:9576 v:3,1 Z:3153"` — same grammar, different runs).
+
+Divergences (both expected, both in Residual Risk):
+
+1. Register **values** differ — different hash function (Murmur3 vs MurmurHash64A).
+2. `PFCOUNT` after 3000 elements: 3012 (velo) vs 3005 (redis) — both within the p=14 standard
+   error (±0.81% ≈ ±24) for exactly 3000 unique elements.
+
+Servers stopped after the run (velo via `SHUTDOWN`, redis via `SHUTDOWN NOSAVE`).
