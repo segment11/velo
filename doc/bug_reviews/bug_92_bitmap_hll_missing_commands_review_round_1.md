@@ -1181,8 +1181,9 @@ shipped code.
 ## End-to-end differential (post-merge, 2026-11-20)
 
 Method: `./gradlew jar` at `6f0b6ef0`, server run from `build/libs` (port 7379), differential against
-a local `redis-server` 7.2.x (port 6379) driving both with `redis-cli` — transcript and outputs under
-`/tmp/opencode/velo-run/` (`velo.out` / `redis.out`, normalized `velo.norm`).
+a local `redis-server` 7.2.x (port 6379) driving both with `redis-cli` — full transcript committed as
+`doc/bug_reviews/logs/20261120_041501_bitmap_hll_differential_redis72_bug_92.log` (script, normalized
+diff, both raw outputs including the GETREG dumps).
 
 Result — every reply byte-identical except the two documented divergences:
 
