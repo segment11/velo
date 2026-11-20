@@ -592,6 +592,18 @@ class BGroupTest extends Specification {
         (reply as IntegerReply).integer == 3
         bGroup.get(sDst) == [0x00, 0x00, 0x00] as byte[]
 
+        when: 'a missing first source is zero padded too'
+        reply = bGroup.execute('bitop xor dst miss s3')
+        then:
+        (reply as IntegerReply).integer == 3
+        bGroup.get(sDst) == 'abc'.bytes
+
+        when: 'a shorter first source is zero padded on the right'
+        reply = bGroup.execute('bitop xor dst s4 s3')
+        then:
+        (reply as IntegerReply).integer == 3
+        bGroup.get(sDst) == [0x7a ^ 0x61, 0x62, 0x63] as byte[]
+
         when: 'an empty result deletes an existing destination'
         reply = bGroup.execute('bitop and dst miss1 miss2')
         then:
