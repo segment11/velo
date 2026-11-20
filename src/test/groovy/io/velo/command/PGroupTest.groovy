@@ -812,6 +812,42 @@ class PGroupTest extends Specification {
         reply == new BulkReply('sparse')
     }
 
+    def 'test pfselftest'() {
+        given:
+        def pGroup = new PGroup('pfselftest', null, null)
+        pGroup.from(BaseCommand.mockAGroup())
+
+        when: 'wrong number of arguments'
+        def reply = pGroup.execute('pfselftest extra')
+        then:
+        reply == ErrorReply.FORMAT
+
+        when: 'the self test passes'
+        reply = pGroup.execute('pfselftest')
+        then:
+        reply == OKReply.INSTANCE
+
+        when: 'the error bound check reports a failure for an out of bound estimate'
+        def failure = PGroup.selfTestMaxerrExceeded(10, 13)
+        then:
+        failure == 'TESTFAILED Too big error. card:10 abserr:3'
+
+        when: 'the checkpoint 10 special case allows one unit of error'
+        failure = PGroup.selfTestMaxerrExceeded(10, 9)
+        then:
+        failure == null
+
+        when: 'the error bound scales with the checkpoint'
+        failure = PGroup.selfTestMaxerrExceeded(100000, 95000)
+        then:
+        failure == 'TESTFAILED Too big error. card:100000 abserr:5000'
+
+        when: 'a good estimate passes at a big checkpoint'
+        failure = PGroup.selfTestMaxerrExceeded(100000, 99700)
+        then:
+        failure == null
+    }
+
     def 'test psetex'() {
         given:
         def inMemoryGetSet = new InMemoryGetSet()

@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -94,6 +95,14 @@ public class PGroup extends BaseCommand {
                 Set.of("@write", "@hyperloglog", "@admin", "@dangerous", "@slow"),
                 "hyperloglog",
                 "Internal commands for debugging HyperLogLog values.",
+                "2.8.9", "N/A"));
+        CommandRegistry.register(new CommandEntry(
+                "pfselftest", 1,
+                Set.of("admin"),
+                0, 0, 0,
+                Set.of("@hyperloglog", "@admin", "@dangerous", "@slow"),
+                "hyperloglog",
+                "An internal command for testing HyperLogLog values.",
                 "2.8.9", "N/A"));
         CommandRegistry.register(new CommandEntry(
                 "psetex", 4,
@@ -284,6 +293,10 @@ public class PGroup extends BaseCommand {
 
         if ("pfdebug".equals(cmd)) {
             return pfdebug();
+        }
+
+        if ("pfselftest".equals(cmd)) {
+            return pfselftest();
         }
 
         if ("psetex".equals(cmd)) {
@@ -777,6 +790,102 @@ public class PGroup extends BaseCommand {
         }
 
         return new ErrorReply("Unknown PFDEBUG subcommand '" + subCmd + "'");
+    }
+
+    /** The register count of the default HyperLogLog, 2^14, the same as redis. */
+    private static final int SELF_TEST_REGISTERS = 1 << 14;
+
+    /** The number of unique elements the self test adds, redis runs up to 10000000 which is too heavy. */
+    private static final long SELF_TEST_MAX_ELEMENTS = 100_000;
+
+    /** The fixed random seed keeps the self test result deterministic. */
+    private static final long SELF_TEST_SEED = 0xadc83b19L;
+
+    /**
+     * Checks the approximation error bound of the self test, redis allows an absolute error of
+     * at most ceil(6 * relerr * checkpoint) with the standard error 1.04/sqrt(registers), the
+     * checkpoint 10 is special-cased to one unit of error as redis does.
+     *
+     * @param checkpoint the number of unique elements added
+     * @param estimate   the estimated cardinality
+     * @return null when the estimate is in bounds, the TESTFAILED message otherwise
+     */
+    @VisibleForTesting
+    static String selfTestMaxerrExceeded(long checkpoint, long estimate) {
+        var relerr = 1.04 / Math.sqrt(SELF_TEST_REGISTERS);
+        long maxerr = (long) Math.ceil(relerr * 6 * checkpoint);
+        if (checkpoint == 10) {
+            maxerr = 1;
+        }
+        var abserr = Math.abs(checkpoint - estimate);
+        if (abserr > maxerr) {
+            return "TESTFAILED Too big error. card:" + checkpoint + " abserr:" + abserr;
+        }
+        return null;
+    }
+
+    /**
+     * Runs the HyperLogLog self test: a dense register set/get roundtrip followed by an
+     * approximation error check over the checkpoints 1, 10, 100, ... of unique elements,
+     * both the sparse estimate and the dense conversion estimate must stay in bounds.
+     *
+     * @return null on success, the TESTFAILED message on failure
+     */
+    @VisibleForTesting
+    static String runSelfTest() {
+        // test 1: the dense registers retain the set values and do not affect adjacent values
+        var dense = HyperLogLog.builder().setEncoding(HyperLogLog.EncodingType.DENSE).build();
+        var denseRegister = dense.getHLLDenseRegister();
+        var random = new Random(SELF_TEST_SEED);
+        var expected = new byte[SELF_TEST_REGISTERS];
+        for (int i = 0; i < SELF_TEST_REGISTERS; i++) {
+            var value = (byte) random.nextInt(64);
+            expected[i] = value;
+            denseRegister.set(i, value);
+        }
+        var registers = denseRegister.getRegister();
+        for (int i = 0; i < SELF_TEST_REGISTERS; i++) {
+            if (registers[i] != expected[i]) {
+                return "TESTFAILED Register " + i + " should be " + expected[i] + " but is " + registers[i];
+            }
+        }
+
+        // test 2: the approximation error stays in bounds at every checkpoint
+        var hll = emptyHll();
+        var checkpoint = 1L;
+        for (long j = 1; j <= SELF_TEST_MAX_ELEMENTS; j++) {
+            hll.addLong(j ^ SELF_TEST_SEED);
+
+            if (j == checkpoint) {
+                // redis asserts the sparse encoding is still used for the small checkpoints,
+                // below sparse max bytes over two, the library promotes at ~2450 elements
+                if (checkpoint < 1_500 && hll.getEncoding() != HyperLogLog.EncodingType.SPARSE) {
+                    return "TESTFAILED sparse encoding not used";
+                }
+
+                for (var estimate : new long[]{hll.count(), toDenseHll(hll).count()}) {
+                    var failure = selfTestMaxerrExceeded(checkpoint, estimate);
+                    if (failure != null) {
+                        return failure;
+                    }
+                }
+
+                checkpoint *= 10;
+            }
+        }
+        return null;
+    }
+
+    private Reply pfselftest() {
+        if (data.length != 1) {
+            return ErrorReply.FORMAT;
+        }
+
+        var failure = runSelfTest();
+        if (failure != null) {
+            return new ErrorReply(failure);
+        }
+        return OKReply.INSTANCE;
     }
 
     private static final BulkReply MESSAGE = new BulkReply("message");
