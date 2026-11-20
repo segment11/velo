@@ -3,10 +3,7 @@ package io.velo.command;
 import io.activej.net.socket.tcp.ITcpSocket;
 import io.activej.net.socket.tcp.TcpSocket;
 import io.activej.promise.SettablePromise;
-import io.velo.BaseCommand;
-import io.velo.ConfForGlobal;
-import io.velo.SocketInspector;
-import io.velo.VeloUserDataInSocket;
+import io.velo.*;
 import io.velo.dyn.CachedGroovyClassLoader;
 import io.velo.dyn.RefreshLoader;
 import io.velo.reply.*;
@@ -613,6 +610,9 @@ public class CGroup extends BaseCommand {
 
         var srcKeyBytes = data[1];
         var dstKeyBytes = data[2];
+        if (srcKeyBytes.length > CompressedValue.KEY_MAX_LENGTH || dstKeyBytes.length > CompressedValue.KEY_MAX_LENGTH) {
+            return ErrorReply.KEY_TOO_LONG;
+        }
 
         boolean replace = false;
         for (int i = 3; i < data.length; i++) {
@@ -640,7 +640,7 @@ public class CGroup extends BaseCommand {
         }
 
         // Redis rejects copying onto the same key (checked after option parsing, before the source lookup)
-        if (Arrays.equals(data[1], data[2])) {
+        if (Arrays.equals(srcKeyBytes, dstKeyBytes)) {
             return new ErrorReply("source and destination objects are the same");
         }
 
@@ -651,36 +651,7 @@ public class CGroup extends BaseCommand {
         }
 
         var dstSlotWithKeyHash = slotWithKeyHashListParsed.getLast();
-        if (isCrossRequestWorker) {
-            // current slot worker is src key slot's slot worker
-            var dstSlot = dstSlotWithKeyHash.slot();
-            var dstOneSlot = localPersist.oneSlot(dstSlot);
-
-            SettablePromise<Reply> finalPromise = new SettablePromise<>();
-            var asyncReply = new AsyncReply(finalPromise);
-
-            boolean finalReplace = replace;
-            dstOneSlot.asyncExecute(() -> {
-                try {
-                    if (exists(dstSlotWithKeyHash) && !finalReplace) {
-                        finalPromise.set(IntegerReply.REPLY_0);
-                        return;
-                    }
-
-                    setCv(srcCv, dstSlotWithKeyHash);
-                    finalPromise.set(IntegerReply.REPLY_1);
-                } catch (Exception e) {
-                    log.error("Copy cross slot error, dst slot={}", dstSlot, e);
-                    // the promise must always complete or the client connection hangs;
-                    // transferAsyncReply builds the error reply from getMessage(), and
-                    // e.g. CannotReadException carries a null message, so wrap with one
-                    finalPromise.setException(new RuntimeException(
-                            e.getMessage() != null ? e.getMessage() : "copy failed: " + e.getClass().getSimpleName(), e));
-                }
-            });
-
-            return asyncReply;
-        } else {
+        if (!isCrossRequestWorker) {
             if (exists(dstSlotWithKeyHash) && !replace) {
                 return IntegerReply.REPLY_0;
             }
@@ -688,5 +659,34 @@ public class CGroup extends BaseCommand {
             setCv(srcCv, dstSlotWithKeyHash);
             return IntegerReply.REPLY_1;
         }
+
+        // current slot worker is src key slot's slot worker
+        var dstSlot = dstSlotWithKeyHash.slot();
+        var dstOneSlot = localPersist.oneSlot(dstSlot);
+
+        SettablePromise<Reply> finalPromise = new SettablePromise<>();
+        var asyncReply = new AsyncReply(finalPromise);
+
+        boolean finalReplace = replace;
+        dstOneSlot.asyncExecute(() -> {
+            try {
+                if (exists(dstSlotWithKeyHash) && !finalReplace) {
+                    finalPromise.set(IntegerReply.REPLY_0);
+                    return;
+                }
+
+                setCv(srcCv, dstSlotWithKeyHash);
+                finalPromise.set(IntegerReply.REPLY_1);
+            } catch (Exception e) {
+                log.error("Copy cross slot error, dst slot={}", dstSlot, e);
+                // the promise must always complete or the client connection hangs;
+                // transferAsyncReply builds the error reply from getMessage(), and
+                // e.g. CannotReadException carries a null message, so wrap with one
+                finalPromise.setException(new RuntimeException(
+                        e.getMessage() != null ? e.getMessage() : "copy failed: " + e.getClass().getSimpleName(), e));
+            }
+        });
+
+        return asyncReply;
     }
 }
