@@ -878,6 +878,16 @@ public class CompressedValue {
     }
 
     /**
+     * Gets the real dict seq or special type marker without loading an external big-string file.
+     * When {@link #isBigString()} is true, reads the real marker from the 12-byte big-string pointer header.
+     *
+     * @return the real dict seq or special type marker
+     */
+    public int getRealDictSeqOrSpType() {
+        return isBigString() ? ByteBuffer.wrap(compressedData).getInt(8) : dictSeqOrSpType;
+    }
+
+    /**
      * Gets the big string UUID from the encoded bytes.
      *
      * @param encodedBytes the encoded bytes

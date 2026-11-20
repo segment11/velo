@@ -764,6 +764,20 @@ public abstract class BaseCommand {
      * @throws DictMissingException if the compression dictionary is missing
      */
     public CompressedValue getCv(SlotWithKeyHash s) {
+        return getCv(s, true);
+    }
+
+    /**
+     * Gets the CompressedValue for a key, optionally deferring big-string file loading.
+     * When {@code loadBigString} is false, a big-string key is returned as its 12-byte pointer header
+     * (whose real type can be inspected via {@link CompressedValue#getRealDictSeqOrSpType()}) without
+     * reading the big-string file from disk or LRU cache.
+     *
+     * @param s             the precomputed slot and hash information
+     * @param loadBigString whether to eagerly load the external big-string file body
+     * @return the CompressedValue, or null if expired or not found
+     */
+    public CompressedValue getCv(SlotWithKeyHash s, boolean loadBigString) {
         var key = s.rawKey();
         var slot = s.slot();
 
@@ -788,23 +802,38 @@ public abstract class BaseCommand {
             return null;
         }
 
-        if (cv.isBigString()) {
-            var oneSlot = localPersist.oneSlot(slot);
-
-            var buffer = ByteBuffer.wrap(cv.getCompressedData());
-            var uuid = buffer.getLong();
-            var realDictSeq = buffer.getInt();
-
-            var bigStringBytes = oneSlot.getBigStringFiles().getBigStringBytes(uuid, s.bucketIndex, s.keyHash, true);
-            if (bigStringBytes == null) {
-                throw new BigStringFileMissingException("data inconsistency: big string file missing for key=" + key);
-            }
-
-            cv.setCompressedData(bigStringBytes);
-            cv.setDictSeqOrSpType(realDictSeq);
+        if (loadBigString) {
+            loadBigStringBody(cv, s);
         }
 
         return cv;
+    }
+
+    /**
+     * Hydrates an external big-string pointer {@link CompressedValue} by loading its file bytes
+     * and restoring its real dict seq / special type marker. No-op when {@code cv.isBigString()} is false.
+     *
+     * @param cv the compressed value to hydrate
+     * @param s  the precomputed slot and hash information
+     */
+    public void loadBigStringBody(CompressedValue cv, SlotWithKeyHash s) {
+        if (!cv.isBigString()) {
+            return;
+        }
+
+        var oneSlot = localPersist.oneSlot(s.slot());
+
+        var buffer = ByteBuffer.wrap(cv.getCompressedData());
+        var uuid = buffer.getLong();
+        var realDictSeq = buffer.getInt();
+
+        var bigStringBytes = oneSlot.getBigStringFiles().getBigStringBytes(uuid, s.bucketIndex, s.keyHash, true);
+        if (bigStringBytes == null) {
+            throw new BigStringFileMissingException("data inconsistency: big string file missing for key=" + s.rawKey());
+        }
+
+        cv.setCompressedData(bigStringBytes);
+        cv.setDictSeqOrSpType(realDictSeq);
     }
 
     /**
@@ -863,6 +892,9 @@ public abstract class BaseCommand {
      * @throws DictMissingException if the compression dictionary is missing
      */
     public byte[] getValueBytesByCv(CompressedValue cv, SlotWithKeyHash slotWithKeyHash) {
+        if (cv.isBigString()) {
+            loadBigStringBody(cv, slotWithKeyHash);
+        }
         if (cv.isTypeNumber()) {
             return String.valueOf(cv.numberValue()).getBytes();
         }

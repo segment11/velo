@@ -193,6 +193,14 @@ class CompressedValueTest extends Specification {
         cv.dictSeqOrSpType = Dict.SELF_ZSTD_DICT_SEQ
         then:
         cv.isCompressed()
+        cv.getRealDictSeqOrSpType() == Dict.SELF_ZSTD_DICT_SEQ
+
+        when:
+        cv.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cv.setCompressedDataAsBigString(999L, CompressedValue.SP_TYPE_SET)
+        then:
+        cv.isBigString()
+        cv.getRealDictSeqOrSpType() == CompressedValue.SP_TYPE_SET
     }
 
     def 'test expire'() {

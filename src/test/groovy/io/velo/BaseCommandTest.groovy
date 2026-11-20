@@ -342,6 +342,27 @@ class BaseCommandTest extends Specification {
         then:
         c.getCv(sBigString).compressedData == bigStringBytes
 
+        when: 'getCv(s, false) defers big-string file loading until getValueBytesByCv is called'
+        oneSlot.bigStringFiles.clearLRUCache()
+        def readCountBefore = oneSlot.bigStringFiles.readFileCountTotal
+        def readBytesBefore = oneSlot.bigStringFiles.readByteLengthTotal
+        def deferredCv = c.getCv(sBigString, false)
+        def readCountAfterHeader = oneSlot.bigStringFiles.readFileCountTotal
+        def readBytesAfterHeader = oneSlot.bigStringFiles.readByteLengthTotal
+        def deferredValueBytes = c.getValueBytesByCv(deferredCv, sBigString)
+        def readCountAfterBody = oneSlot.bigStringFiles.readFileCountTotal
+        def readBytesAfterBody = oneSlot.bigStringFiles.readByteLengthTotal
+        // loadBigStringBody is a no-op once hydrated
+        c.loadBigStringBody(deferredCv, sBigString)
+        then:
+        deferredCv != null
+        deferredValueBytes == bigStringBytes
+        readCountAfterHeader == readCountBefore
+        readBytesAfterHeader == readBytesBefore
+        readCountAfterBody == readCountBefore + 1
+        readBytesAfterBody == readBytesBefore + bigStringBytes.length
+        oneSlot.bigStringFiles.readFileCountTotal == readCountAfterBody
+
         when:
         // simulate external file deletion - data corruption scenario
         def bigStringFile = new File(oneSlot.bigStringFiles.bigStringDir,
