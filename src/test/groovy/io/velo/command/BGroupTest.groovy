@@ -11,6 +11,7 @@ import io.activej.promise.SettablePromise
 import io.velo.BaseCommand
 import io.velo.CompressedValue
 import io.velo.mock.InMemoryGetSet
+import io.velo.persist.Consts
 import io.velo.persist.LocalPersist
 import io.velo.persist.LocalPersistTest
 import io.velo.persist.Mock
@@ -802,6 +803,68 @@ class BGroupTest extends Specification {
         (reply as MultiBulkReply).replies.length == 1
         (reply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
         bfReads.get() == 1
+
+        when: 'bf.insert rejects already-exists and wrong-type on a 1 MiB big string without loading big-string body bytes'
+        def localPersist = LocalPersist.instance
+        LocalPersistTest.prepareLocalPersist()
+        localPersist.fixSlotThreadId(slot, Thread.currentThread().threadId())
+        def oneSlot = localPersist.oneSlot(slot)
+        def realGroup = new BGroup(null, null, null)
+        realGroup.from(BaseCommand.mockAGroup())
+
+        def bigStrKey = 'kerry-test-big-string-bf-str'
+        def sBigStr = BaseCommand.slot(bigStrKey, 1)
+        oneSlot.bigStringFiles.writeBigStringBytes(9301L, sBigStr.bucketIndex(), sBigStr.keyHash(), new byte[1024 * 1024])
+        def cvBigStr = Mock.prepareCompressedValueList(1)[0]
+        cvBigStr.keyHash = sBigStr.keyHash()
+        cvBigStr.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigStr.setCompressedDataAsBigString(9301L, CompressedValue.NULL_DICT_SEQ)
+        oneSlot.put(bigStrKey, sBigStr.bucketIndex(), cvBigStr)
+
+        def bigBfKey = 'kerry-test-big-string-bf-val'
+        def sBigBf = BaseCommand.slot(bigBfKey, 1)
+        def bigBf = new RedisBF(true)
+        bigBf.put('existing-bf-item')
+        oneSlot.bigStringFiles.writeBigStringBytes(9302L, sBigBf.bucketIndex(), sBigBf.keyHash(), bigBf.encode())
+        def cvBigBf = Mock.prepareCompressedValueList(1)[0]
+        cvBigBf.keyHash = sBigBf.keyHash()
+        cvBigBf.dictSeqOrSpType = CompressedValue.SP_TYPE_BIG_STRING
+        cvBigBf.setCompressedDataAsBigString(9302L, CompressedValue.SP_TYPE_BLOOM_BITMAP)
+        oneSlot.put(bigBfKey, sBigBf.bucketIndex(), cvBigBf)
+        oneSlot.bigStringFiles.clearLRUCache()
+
+        def alreadyExistsStrReply = realGroup.execute("bf.insert ${bigStrKey} capacity 100 items x")
+        long readsAfterAlreadyExists = oneSlot.bigStringFiles.readFileCountTotal
+        long bytesAfterAlreadyExists = oneSlot.bigStringFiles.readByteLengthTotal
+
+        def wrongTypeStrReply = realGroup.execute("bf.insert ${bigStrKey} items x")
+        long readsAfterWrongType = oneSlot.bigStringFiles.readFileCountTotal
+        long bytesAfterWrongType = oneSlot.bigStringFiles.readByteLengthTotal
+
+        def alreadyExistsBfReply = realGroup.execute("bf.insert ${bigBfKey} capacity 100 items x")
+        long readsAfterBfAlreadyExists = oneSlot.bigStringFiles.readFileCountTotal
+
+        def missingNoCreateReply = realGroup.execute('bf.insert bf-missing-nocreate capacity 100 nocreate items x')
+
+        def validBigBfReply = realGroup.execute("bf.insert ${bigBfKey} items new-bf-item")
+        long readsAfterValidBigBf = oneSlot.bigStringFiles.readFileCountTotal
+        then:
+        alreadyExistsStrReply == ErrorReply.BF_ALREADY_EXISTS
+        readsAfterAlreadyExists == 0
+        bytesAfterAlreadyExists == 0
+        wrongTypeStrReply == ErrorReply.WRONG_TYPE
+        readsAfterWrongType == 0
+        bytesAfterWrongType == 0
+        alreadyExistsBfReply == ErrorReply.BF_ALREADY_EXISTS
+        readsAfterBfAlreadyExists == 0
+        missingNoCreateReply == ErrorReply.BF_NOT_EXISTS
+        validBigBfReply instanceof MultiBulkReply
+        (validBigBfReply as MultiBulkReply).replies[0] == IntegerReply.REPLY_1
+        readsAfterValidBigBf == 1
+
+        cleanup:
+        localPersist?.cleanUp()
+        Consts.persistDir.deleteDir()
     }
 
     def 'test bf scandump and loadchunk'() {

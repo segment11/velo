@@ -857,22 +857,30 @@ public class BGroup extends BaseCommand {
         }
 
         var slotWithKeyHash = slotWithKeyHashListParsed.getFirst();
-        var cv = getCv(slotWithKeyHash);
-
         RedisBF redisBF;
-        if (cv != null) {
-            if (needCreateNew) {
+        if (needCreateNew) {
+            // metadata-only existence check: never load value or big-string body just to reject BF_ALREADY_EXISTS
+            if (exists(slotWithKeyHash)) {
                 return ErrorReply.BF_ALREADY_EXISTS;
             }
-            if (!cv.isBloomFilter()) {
-                return ErrorReply.WRONG_TYPE;
-            }
-            redisBF = RedisBF.decode(cv.getCompressedData());
-        } else {
             if (noCreate) {
                 return ErrorReply.BF_NOT_EXISTS;
             }
             redisBF = new RedisBF(initCapacity, initFpp, initExpansion, nonScaling);
+        } else {
+            var cv = getCv(slotWithKeyHash, false);
+            if (cv != null) {
+                if (cv.getRealDictSeqOrSpType() != CompressedValue.SP_TYPE_BLOOM_BITMAP) {
+                    return ErrorReply.WRONG_TYPE;
+                }
+                loadBigStringBody(cv, slotWithKeyHash);
+                redisBF = RedisBF.decode(cv.getCompressedData());
+            } else {
+                if (noCreate) {
+                    return ErrorReply.BF_NOT_EXISTS;
+                }
+                redisBF = new RedisBF(initCapacity, initFpp, initExpansion, nonScaling);
+            }
         }
 
         boolean isPut = false;
