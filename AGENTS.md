@@ -235,8 +235,44 @@ User can add new commands besides redis existing commands. Take ManageCommand as
 2. Run full test suite if changes are significant
 3. Check the line coverage of the class you changed with `python3 scripts/jacoco_cover.py <FullyQualifiedClassName> <startLine> <endLine>`. Do NOT judge coverage by the aggregate Total row in `build/reports/jacocoHtml/index.html` — that number only reflects whatever test class ran last, so it is not a property of the codebase. If the changed class is below 80% line coverage, show warnings and consider adding more tests
 4. After running relevant tests, inspect the JaCoCo HTML report under `build/reports/jacocoHtml/` and confirm the changed code lines or branches were actually executed; a passing test alone is not enough
-5. Test Redis protocol compatibility if applicable
+5. Test Redis protocol compatibility if applicable — for command changes run a live differential
+   against a real Redis (see "Live Velo-vs-Redis differential" below)
 6. Verify performance with JMH benchmarks if relevant
+
+### Live Velo-vs-Redis differential
+
+For bug fixes / new commands whose observable behavior is a Redis reply, a live differential is the
+strongest protocol evidence (ranked #2 after a Spock temp spec in the velo-bug-review skill). How to
+run one:
+
+```bash
+# 1. Build and start Velo (port comes from build/libs/velo.properties, default 7379)
+./gradlew jar
+cd build/libs && setsid nohup java -XX:+UseZGC -XX:+ZGenerational -XX:MaxDirectMemorySize=64m \
+    -jar velo-1.2.0.jar > /tmp/opencode/velo-run/velo.log 2>&1 < /dev/null &
+redis-cli -p 7379 ping   # wait for PONG
+
+# 2. Start an oracle Redis (7.2.x; source tree at ~/ws/redis is 7.2.14)
+redis-server --port 6379 --daemonize yes --save "" --appendonly no
+
+# 3. Drive BOTH servers with the same redis-cli commands from one script:
+#    echo "### $*" + redis-cli -p 7379 ... into velo.out, same into redis.out
+# 4. diff the two transcripts (cat -v for binary GET replies); for huge array replies
+#    (PFDEBUG GETREG = 16384 lines) collapse the dump to shape stats before diffing
+# 5. Stop both: redis-cli -p 7379 shutdown (Velo implements SHUTDOWN) and
+#    redis-cli -p 6379 shutdown nosave
+```
+
+Rules:
+
+- Every reply should be byte-identical; any divergence must be either fixed or recorded as a
+  documented residual in the bug report (e.g. HLL register values differ — different hash function)
+- Probabilistic replies (PFCOUNT estimates) compare within the standard error, not exactly
+- Ground truth for expected replies: the local Redis source `~/ws/redis/src` (7.2.14) and
+  `~/ws/redis/src/commands/*.json` (arity, flags)
+- Commit the evidence: script + transcripts + diff into
+  `doc/bug_reviews/logs/<YYYYMMDD_HHMMSS>_<module>_differential_redis72_bug_<N>.log` and reference
+  it from the bug report (see the existing 36 logs there for examples)
 
 ### Testing Guidelines
 
