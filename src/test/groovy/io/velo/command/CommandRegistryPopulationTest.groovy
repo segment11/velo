@@ -36,7 +36,7 @@ class CommandRegistryPopulationTest extends Specification {
         def size = CommandRegistry.size()
 
         then:
-        size == 211
+        size == 214
 
         and: 'a representative known command is present'
         CommandRegistry.get('get') != null
@@ -44,6 +44,9 @@ class CommandRegistryPopulationTest extends Specification {
         CommandRegistry.get('bf.add') != null
         CommandRegistry.get('clusterx') != null
         CommandRegistry.get('sort_ro') != null
+        CommandRegistry.get('bitop') != null
+        CommandRegistry.get('pfdebug') != null
+        CommandRegistry.get('pfselftest') != null
 
         and: 'all names are unique and lowercase-keyed'
         CommandRegistry.all().collect { it.name() } as Set ==
