@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1 (feature commit `33458c51`, no separate stage-1 discovery report — this document was written directly by the reviewer)
 **Reviewer:** AI agent 2
-**Status:** **agent-2 C1-C5 re-review (2026-11-19, HEAD `fa086da7`): C1/C2/C3/C5 fixed; C4 partially fixed.** All 76 focused tests/probes passed and cleanup coverage was inspected. Remaining changes requested concern the command-gap document's CLIENT REPLY claims and inconsistent totals; see the latest appended re-review. Earlier feedback is retained as history.
+**Status:** **agent-2 re-review complete (2026-11-19, HEAD `a80f744f`): C1-C5 fixed within their reviewed scope.** C1/C2/C3/C5 were verified with 76 passing focused tests/probes and inspected coverage at `fa086da7`; C4's final documentation correction passed independent inventory/arithmetic checks at `a80f744f`. No blocking findings remain for these commits. Earlier feedback is retained as history; see the latest residual-risk section.
 **Review branch:** `main` (feature commit is on `main`)
 **Reviewed commit:** `33458c51ca6f55a8e4c4aded5becabe3f3396f34`
 **Follow-up commit reviewed for context:** `cf50f306547621f486d39dd37516cbe614537384` (fixes 90.3)
@@ -239,7 +239,8 @@ Add `BlockingZSet.blockingClientCount()` / `BlockingZSet.blockingKeyCount()` to 
 
 **Severity:** Low
 **Class:** Documentation
-**Status:** `PARTIALLY CONFIRMED` — `f54c0703` removes some false positives, but supported subcommands remain listed as missing (C4); no final fixed disposition.
+**Status:** `CONFIRMED (inspection)`
+**Disposition:** `fixed` for the reported false positives and inconsistent aggregates (`f54c0703`, `3b37482a`, `930b12b1`); the final C4 re-review verified stale CLIENT REPLY claims are gone and listed/derived counts reconcile. This is not certification of every command-support estimate.
 
 ### Cited files / lines
 ```markdown
@@ -846,7 +847,8 @@ error path as well as on successful delivery.
 
 ### C4 — Low: the corrected gap document still labels supported subcommands missing
 
-**Status:** `PARTIALLY CONFIRMED` — `3b37482a` corrects the detailed lists, but the remaining CLIENT REPLY claims and inconsistent totals prevent closing this item; see the latest re-review.
+**Status:** `CONFIRMED (inspection)`
+**Disposition:** `fixed` (`3b37482a` plus `930b12b1`); independent final checks passed for section counts, coverage-row arithmetic and removal of stale CLIENT REPLY claims. Earlier defect details below are retained as history.
 
 **90.6 remains partially open.** `REDIS_COMMANDS_NOT_IMPLEMENTED.md:49-58` still lists ID, KILL,
 LIST, REPLY, SETINFO and SETNAME as missing, even though `CGroup.client()` implements them
@@ -1220,4 +1222,62 @@ inspection prevents assigning it a fixed disposition. Historical checkouts were 
   does not validate all such assertions or claim that cleanup was performed.
 - No full-suite run, live Redis TCP differential, independent historical per-commit replay, or
   broader numeric-argument matrix was performed. Only this review document changed in the repo.
+
+## Re-review — final C4 documentation correction (AI agent 2, 2026-11-19)
+
+**Skill:** `doc/skills/velo-bug-review/SKILL.md`, Stage 5.
+**Reviewed range:** `fa086da7..a80f744fcffd606efdcce79ce1f5b2af852c08cb`.
+
+### Review Feedback
+
+| Item | Commit | Verdict | Disposition | Evidence |
+|---|---|---|---|---|
+| C4 / remaining 90.6 documentation correction | `930b12b1` | CONFIRMED (inspection) | fixed | Both stale CLIENT REPLY statements removed; every missing-section header matches its entries; all 15 table rows reconcile with listed missing counts and rounded percentages. Estimated totals and derived columns are explicitly labelled. |
+| Fix-phase/review bookkeeping | `a80f744f` | CONFIRMED (inspection) | no change needed | Report and STATE.md record the C4 correction and retain prior test/coverage evidence and residual limitations; no production or test source changed. |
+
+**No blocking findings remain for these two commits.** C1/C2/C3/C5 retain their prior fixed
+dispositions, supported by the 76-test successful run documented above. This pass closes the
+remaining C4 request rather than repeating the completed code review. The original 90.6/C4
+Status fields are updated in place; intermediate conclusions remain review history.
+
+### Pasted independent check output
+
+The check inspected the predecessor via `git show fa086da7:REDIS_COMMANDS_NOT_IMPLEMENTED.md`
+and parsed current Markdown. It counted section command-entry bullets, compared them with each
+heading, matched coverage-row missing counts to sections, checked `total == missing + implemented`
+and rounded percentages, and checked Major Gaps/Recommendations for stale REPLY entries:
+
+```text
+Before 930b12b1: stale CLIENT REPLY claims present = True
+Current: all 18 section headers match listed missing entries
+Current: all 15 coverage rows match missing lists, sums and rounded percentages
+Current: no stale CLIENT REPLY claims in Major Gaps/Recommendations
+Connection: 8 missing; 23 = 8 + 15; 65%
+Server: 16 missing; 58 = 16 + 42; 72%
+```
+
+The document now states that family totals are estimates including container subcommands,
+missing counts count listed entries, and implementation/coverage counts are derived. This meets
+the earlier request to reconcile **or explicitly qualify** the aggregates; arithmetic validation
+does not establish a complete Redis command census.
+
+### Evidence gate and recommended fix order
+
+Both reviewed commits change documentation only. Applicable evidence is the commit diff and the
+independent text/count check above; production RED/GREEN tests and JaCoCo are not applicable to
+these edits. No tests were rerun and no new coverage claim is made.
+
+No further fix is required for C1-C5 within the reviewed scope.
+
+## Residual Risk
+
+- Aggregate command totals remain estimates. Closing C4 does not certify every command/subcommand
+  inventory entry or older prose claim in the document.
+- Minor older count prose remains outside the two reported C4 corrections: the Stream paragraph
+  says 23 despite a 25-entry heading/list, and the Sentinel Major Gaps paragraph says 16 despite
+  an 18-entry heading/list. These are nonblocking editorial follow-ups.
+- Prior integration-test permanence, live RESP2 timeout capture, broader numeric argument checks,
+  and `.result`/`whenResult` assertion cleanup remain outside this documentation pass.
+- No new Java/Groovy tests, live Redis differential, full suite or historical per-commit replay
+  were executed. Only this review report was edited by agent 2 in this pass.
 

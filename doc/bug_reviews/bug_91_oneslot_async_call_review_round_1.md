@@ -4,7 +4,7 @@
 **Round:** 1
 **Author:** AI agent 1
 **Reviewer:** AI agent 2
-**Status:** Stage 4 complete — 91.1 fixed (`e56ed7a8`), 91.3 fixed (`3fca457a`), 91.4 fixed (`01b5b74a`); 91.2/91.5 no change needed. Test helper follow-up `7f0cf850`. Formal Stage 5 re-review pending.
+**Status:** closed — round 1: 91.1 fixed (`e56ed7a8` + `7f0cf850`), 91.3 fixed (`3fca457a` + `0e88d0a6`), 91.4 fixed (`01b5b74a`); 91.2/91.5 `NOT A BUG` (no change needed). Stage 5 re-review ACCEPTED at HEAD `0e88d0a6` (independent per-commit RED/GREEN + JaCoCo, 97/97 focused tests green).
 **Review branch:** `main`
 **Reviewed commit:** `a17223f4807b26ff12ad7e3e240191db65d17dab`
 
@@ -458,9 +458,9 @@ All other production call sites were audited and confirmed **genuinely needed** 
 
 | # | Finding | Severity | Class | Verdict | Disposition |
 |---|---|---|---|---|---|
-| 91.1 | `AGroup.appendAclUpdateBinlog()` calls `firstOneSlot.asyncCall()` + sync `p.getResult()` — redundant on worker 0 (`SETUSER`/`DELUSER` standalone), broken on cross-thread paths (`ACL SAVE`, `ACL LOAD`, cluster mode) | High | Concurrency / Correctness | `CONFIRMED (reproduced)` | fixed (`e56ed7a8`) |
+| 91.1 | `AGroup.appendAclUpdateBinlog()` calls `firstOneSlot.asyncCall()` + sync `p.getResult()` — redundant on worker 0 (`SETUSER`/`DELUSER` standalone), broken on cross-thread paths (`ACL SAVE`, `ACL LOAD`, cluster mode) | High | Concurrency / Correctness | `CONFIRMED (reproduced)` | fixed (`e56ed7a8`, `7f0cf850`) |
 | 91.2 | `PGroup.pfmerge()` wraps dst merge/write in `dstOneSlot.asyncCall()` even though production always executes and bounces back onto `dstOneSlot`'s worker thread | Low | Concurrency / Redundant dispatch | `NOT A BUG` | no change needed |
-| 91.3 | `BGroup` multi-key blocking pops (`BLPOP`/`BRPOP`, `BLMPOP`, `BZPOPMIN`/`BZPOPMAX`, `BZMPOP`) never check `isCrossRequestWorker`, unnecessarily using `asyncCall()` on same-worker commands | Low | Redis protocol compatibility / Documentation | `CONFIRMED (reproduced)` | fixed (`3fca457a`) |
+| 91.3 | `BGroup` multi-key blocking pops (`BLPOP`/`BRPOP`, `BLMPOP`, `BZPOPMIN`/`BZPOPMAX`, `BZMPOP`) never check `isCrossRequestWorker`, unnecessarily using `asyncCall()` on same-worker commands | Low | Redis protocol compatibility / Documentation | `CONFIRMED (reproduced)` | fixed (`3fca457a`, `0e88d0a6`) |
 | 91.4 | `ZGroup.zmpop()` includes `i = 0` (`firstSlot`, always owned by current thread) in its cross-worker `asyncCall()` fan-out | Low | Performance / Redundant dispatch | `CONFIRMED (inspection)` | fixed (`01b5b74a`) |
 | 91.5 | Cross-worker `groupBySlot` loops (`DEL`, `EXISTS`, `MGET`, `MSETNX`, `MIGRATE`, `PFCOUNT`) submit `firstSlot` and same-worker slots through `asyncCall()` | Low | Performance / Redundant dispatch | `NOT A BUG` | no change needed |
 
@@ -1013,3 +1013,45 @@ and reran the focused tests successfully. No empty-pipeline behavior was changed
 [Follow-up test output, baseline failure, and coverage](logs/20261119_bug_91_direct_reply_encoder.log).
 Earlier reflection-based reproduction snippets are retained as historical evidence; current permanent
 tests use the direct call.
+
+---
+
+## Re-review (Stage 5)
+
+**Re-reviewed at:** HEAD `0e88d0a698081996ed5b8df792072f5af621b8b3` (reviewing commits `a80f744f..0e88d0a6`: `e56ed7a8`, `7f0cf850`, `3fca457a`, `01b5b74a`, `e462e74b`, `0e88d0a6`).
+**Method:** line-by-line diff review of all 6 commits + full focused test suite run at HEAD (`0e88d0a6`) + independent JaCoCo inspection via `scripts/jacoco_cover.py` + independent per-commit RED re-derivation in a detached temporary git worktree (`/tmp/velo-bug91-rereview`, removed after verification) with only the production file reverted to each fix commit's parent (`<sha>^`).
+
+### Per-commit verification (3/3 bug fixes RED + GREEN independently re-derived)
+
+| Bug | Commits | Independent RED re-derivation (production reverted to parent) | Focused GREEN at HEAD `0e88d0a6` | Independent JaCoCo at HEAD `0e88d0a6` |
+|---|---|---|---|---|
+| **91.1** | `e56ed7a8` (`fix: await acl binlog appends`) + `7f0cf850` (`test: use slot thread binding helper`) | `AGroup.java` reverted to `e56ed7a8^`: `AGroupTest.test acl` **FAILED** at `AGroupTest.groovy:527` (`assert pending instanceof AsyncReply` failed — logged `Append binlog success, acl line=acl save, result=null` and returned `OKReply` before target worker ran) | `AGroupTest` 13/13 + `XAclUpdateTest` 2/2 (0 failures) | `AGroup` 490–515: 14/15 covered, 1 partial (`496` `firstOneSlot == null`), 0 uncovered; `505` and `513` all branches covered; whole class 298/307 executed (**97.1%**) |
+| **91.3** | `3fca457a` (`fix: preserve blocking list wrong type replies`) + `0e88d0a6` (`refactor: expose async reply encoder for tests`) | `BGroup.java` reverted to `3fca457a^`: BOTH `BGroupTest.test blpop` (`BGroupTest.groovy:1213`: `getException() == null` failed with `TypeMismatchException`) and `BGroupTest.test blmpop` (`BGroupTest.groovy:1884`: encoded `-ERR Expect sp type array=[-2048], but got sp type=-1024` instead of `-WRONGTYPE ...`) **FAILED** | `BGroupTest` 50/50 + `MultiWorkerServerTest.test transfer async reply` 1/1 (0 failures) | `BGroup` 1085–1105: 10/10 covered, 5/5 branch lines fully covered; 1396–1445: 29/30 covered, 1 partial (`1436`, see observation below), 0 uncovered; whole class 997/1007 executed (**99.0%**). `MultiWorkerServer` 695–713 (`transferAsyncReply`): 10/10 covered, 5/5 branch lines fully covered |
+| **91.4** | `01b5b74a` (`fix: check first zmpop key before remote reads`) | `ZGroup.java` reverted to `01b5b74a^`: `ZGroupPart2Test.test zmpop` **FAILED** at `ZGroupPart2Test.groovy:1489` (`reply instanceof MultiBulkReply` failed — returned `AsyncReply`) | `ZGroupPart2Test` 18/18 + `ZGroupTest` 13/13 (0 failures) | `ZGroup` 2800–2845: 29/30 covered, 1 partial (`2813` pre-existing `rz == null` guard), 0 uncovered; `2802`, `2803`, `2828`, `2836`, `2876` all branches covered; whole class 1648/1686 executed (**97.7%**) |
+
+**Combined focused test run at HEAD `0e88d0a6`:** **97 tests, 0 failures, 0 errors, 0 skipped** (`BUILD SUCCESSFUL in 29s`).
+
+### Code review strengths & non-blocking observations
+
+- **Strengths:**
+  - Clean commit separation (one bug fix per commit + clean test-only `7f0cf850` and access-refactor `0e88d0a6`; 91.2 and 91.5 properly left untouched).
+  - `AGroup.appendAclUpdateBinlog` (`e56ed7a8`) captures `firstOneSlot`, `update`, and `reply` into locals before `asyncCall` (no reused-field races on `@ThreadNeedLocal` `AGroup`) and unwraps completed inline promises so `XAclUpdate.apply` remains synchronous on the binlog slot's worker.
+  - `BGroupTest` (`0e88d0a6`) exercises the real `MultiWorkerServer.transferAsyncReply` directly without reflection, and `MultiWorkerServerTest.test transfer async reply` covers every branch of the encoder.
+  - `ZGroup.zmpop` (`01b5b74a`) reuses the existing local scan loop (`localKeyCount = isCrossRequestWorker ? 1 : numKeys`) without code duplication and safely handles the degenerate `numKeys == 1` + `isCrossRequestWorker` case.
+- **Non-blocking observations:**
+  1. **Dead defensive branch in `BGroup.blmpop()` (`BGroup.java:1436`)** (and pre-existing sibling in `bzmpop()` at `1821`): `return exception instanceof TypeMismatchException ? ErrorReply.WRONG_TYPE : new ErrorReply(exception.getMessage());` is now partial in JaCoCo (`1 of 2 branches missed`) because lines `1399-1400` already settle `TypeMismatchException` as a normal `ErrorReply.WRONG_TYPE` result rather than via `finalPromise.setException(...)`. Harmless; optional future cleanup.
+  2. **Redundant `localPersist.firstOneSlot()` / `isBinlogOn()` check in `AGroup.acl()` (`load` branch, `AGroup.java:294-295` vs `495-496`)**: harmless and intentional in `load` so the `lines` list is not constructed when binlog is off.
+
+### Verdict
+
+**ACCEPTED — all 3 bug fixes (`e56ed7a8`, `3fca457a`, `01b5b74a`) and follow-ups (`7f0cf850`, `0e88d0a6`) verified.** Independent RED/GREEN re-derivation, focused regression suite (97/97), and JaCoCo line/branch coverage all pass at HEAD `0e88d0a6`. Round 1 is **CLOSED**.
+
+## Residual Risk
+
+1. **ACL updates remain non-transactional on binlog append failure (91.1):** `ACL SETUSER`, `DELUSER`, `SAVE`, and `LOAD` apply their in-memory snapshot or file mutation before appending `XAclUpdate`. If `firstOneSlot.getBinlog().append(...)` fails, the client now receives an `ErrorReply`, but the local ACL state / file change is not rolled back (explicitly agreed out of scope).
+2. **No live multi-shard cluster integration test for nonzero `firstOneSlot().slot()` (91.1):** `AGroupTest` proves remote-owner dispatch using slot 0 bound to a separate worker thread; a live cluster shard whose first owned inner slot is nonzero is verified by inspection and by the same `firstOneSlot.asyncCall(...)` path.
+3. **Optional local-reply unwrapping omitted in `BLPOP`/`BRPOP`/`BZPOP` (91.3):** same-worker secondary-key hits/errors in `BLPOP`/`BRPOP`/`BZPOP` still return an already-settled `AsyncReply` (wire output is identical to a synchronous reply; consciously omitted to keep the fix minimal).
+4. **Dead `TypeMismatchException` check in `BGroup.blmpop()` (`BGroup.java:1436`) and `bzmpop()` (`1821`):** unreachable after moving `TypeMismatchException` conversion into `whenComplete`; harmless defensive code.
+5. **Pre-existing `ZGroup.zmpop` speculative remote reads (`i = 1..numKeys-1`) and mutable-field reads in `whenComplete` (`ZGroup.java:2890, 2894`):** when key 0 is empty, `zmpop` still reads keys `1..numKeys-1` in parallel and reads `slotWithKeyHashListParsed` / `data` in the callback (pre-existing codebase-wide pattern, not introduced by `01b5b74a`).
+6. **Pre-existing `MultiWorkerServerTest.test mock inject and handle` empty-pipeline `NoSuchElementException`:** documented in `0e88d0a6` and verified identical on pre-fix code; unrelated to Bug 91.
+7. **91.2 (`PGroup.pfmerge` `dstOneSlot.asyncCall`) and 91.5 (`groupBySlot` local slots):** closed as `NOT A BUG` / `no change needed` by consensus.
